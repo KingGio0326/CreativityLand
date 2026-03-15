@@ -1,7 +1,10 @@
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 import { type NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
+  const supabase = getSupabase();
   const params = request.nextUrl.searchParams;
   const ticker = params.get("ticker");
   const sentiment = params.get("sentiment");

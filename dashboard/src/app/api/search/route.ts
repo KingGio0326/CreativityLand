@@ -1,7 +1,10 @@
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
+  const supabase = getSupabase();
   const body = await request.json();
   const { query, ticker } = body as { query: string; ticker?: string };
 
