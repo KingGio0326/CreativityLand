@@ -5,6 +5,7 @@ def signal_agent(state):
     fundamental = state.get("fundamental_analysis", {})
     momentum = state.get("momentum_analysis", {})
     social = state.get("social_analysis", {})
+    ml = state.get("ml_prediction", {})
     s_signal = sentiment.get("signal", "HOLD")
     s_conf = sentiment.get("confidence", 0.0)
     risk_level = risk.get("risk_level", "MEDIUM")
@@ -52,6 +53,19 @@ def signal_agent(state):
         confidence += 0.06
     if soc_hype > 0.7 and soc_signal != final and final != "HOLD":
         confidence -= 0.05
+    # ML prediction integration
+    ml_signal = ml.get("signal", "HOLD")
+    ml_override = False
+    if ml_signal == s_signal and s_signal != "HOLD":
+        confidence += 0.10
+    if (ml_signal != "HOLD" and final != "HOLD"
+            and ml_signal != final
+            and ml_signal != t_signal
+            and ml_signal != f_signal
+            and ml_signal != m_signal):
+        final = "HOLD"
+        confidence = 0.35
+        ml_override = True
     confidence = round(max(0.0, min(confidence, 1.0)), 3)
     state["proposed_signal"] = final
     state["confidence"] = confidence
@@ -60,10 +74,13 @@ def signal_agent(state):
         extra += " [TRIPLE CONFIRMATION]"
     if trend_filtered:
         extra += " [TREND FILTER]"
+    if ml_override:
+        extra += " [ML OVERRIDE]"
     state["reasoning"].append(
         f"SignalAgent: {s_signal} + risk={risk_level} "
         f"+ tech={t_signal} + fund={f_signal} "
-        f"+ mom={m_signal}({m_trend}) + social={soc_signal} → "
+        f"+ mom={m_signal}({m_trend}) + social={soc_signal} "
+        f"+ ml={ml_signal} → "
         f"{final} ({confidence:.0%}){extra}"
     )
     return state

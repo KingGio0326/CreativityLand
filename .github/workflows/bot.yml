@@ -2,6 +2,7 @@ name: Run Trading Bot
 on:
   schedule:
     - cron: "0 */6 * * *"
+    - cron: "0 2 * * 0"
   workflow_dispatch:
 
 jobs:
@@ -47,4 +48,13 @@ jobs:
               engine.save_signal(s)
               print(f\"{s['ticker']}: {s['signal']} ({s['confidence']:.0%})\")
           print(f'Generati e salvati {len(signals)} segnali')
+          "
+      - name: Retrain ML models
+        if: github.event.schedule == '0 2 * * 0'
+        run: |
+          python -c "
+          from agents.ml_prediction_agent import MLPredictionAgent
+          MLPredictionAgent().retrain_all(
+              ['AAPL','TSLA','NVDA','BTC-USD','ETH-USD','MSFT']
+          )
           "
