@@ -7,6 +7,7 @@ from agents.risk_agent import risk_agent
 from agents.fundamental_agent import fundamental_agent_node
 from agents.technical_agent import technical_agent_node
 from agents.momentum_agent import momentum_agent_node
+from agents.mean_reversion_agent import mean_reversion_agent_node
 from agents.macro_agent import macro_agent_node
 from agents.signal_agent import signal_agent
 from agents.critic_agent import critic_agent
@@ -27,6 +28,7 @@ def build_graph():
     graph.add_node("fundamental", fundamental_agent_node)
     graph.add_node("technical", technical_agent_node)
     graph.add_node("momentum", momentum_agent_node)
+    graph.add_node("mean_reversion", mean_reversion_agent_node)
     graph.add_node("macro", macro_agent_node)
     graph.add_node("signal", signal_agent)
     graph.add_node("critic", critic_agent)
@@ -37,7 +39,8 @@ def build_graph():
     graph.add_edge("risk", "fundamental")
     graph.add_edge("fundamental", "technical")
     graph.add_edge("technical", "momentum")
-    graph.add_edge("momentum", "macro")
+    graph.add_edge("momentum", "mean_reversion")
+    graph.add_edge("mean_reversion", "macro")
     graph.add_edge("macro", "signal")
     graph.add_edge("signal", "critic")
     graph.add_conditional_edges("critic", should_retry)
