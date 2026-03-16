@@ -36,7 +36,7 @@ interface Article {
   published_at: string;
 }
 
-const TICKERS = ["AAPL", "TSLA", "NVDA", "BTC-USD"];
+const TICKERS = ["AAPL", "TSLA", "NVDA", "BTC-USD", "ETH-USD", "MSFT", "XOM", "GLD"];
 
 const signalColor = (s: string) =>
   s === "BUY" ? "bg-green-600" : s === "SELL" ? "bg-red-600" : "bg-gray-500";
