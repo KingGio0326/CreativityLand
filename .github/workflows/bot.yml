@@ -4,15 +4,14 @@ on:
     - cron: "0 */6 * * *"
     - cron: "0 2 * * 0"
   workflow_dispatch:
+    inputs:
+      tickers:
+        description: "Ticker da analizzare (comma separated)"
+        default: "AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD"
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,39 +21,62 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Scrape news
         run: python -m scraper.news_scraper
-      - name: Process sentiment
+      - name: Process NLP
         run: |
           python -c "
           from nlp.sentiment import SentimentAnalyzer
-          n = SentimentAnalyzer().process_unanalyzed(limit=200)
-          print(f'Processati {n} articoli')
-          "
-      - name: Generate embeddings
-        run: |
-          python -c "
           from nlp.embeddings import EmbeddingEngine
-          n = EmbeddingEngine().process_unembedded(limit=200)
-          print(f'Embeddati {n} articoli')
+          n1 = SentimentAnalyzer().process_unanalyzed(200)
+          n2 = EmbeddingEngine().process_unembedded(200)
+          print(f'NLP: {n1} sentiment, {n2} embeddings processati')
           "
-      - name: Generate signals
+      - name: Run multi-agent system
         run: |
           python -c "
+          import os
+          from agents.orchestrator import TradingOrchestrator
+
+          tickers_input = os.getenv('INPUT_TICKERS',
+              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD')
+          tickers = [t.strip() for t in tickers_input.split(',')]
+
+          bot = TradingOrchestrator()
           from engine.signals import SignalEngine
-          engine = SignalEngine()
-          tickers = ['AAPL','TSLA','NVDA','BTC-USD','ETH-USD',
-                     'MSFT','XOM','GLD']
-          signals = engine.generate_all_signals(tickers)
-          for s in signals:
-              engine.save_signal(s)
-              print(f\"{s['ticker']}: {s['signal']} ({s['confidence']:.0%})\")
-          print(f'Generati e salvati {len(signals)} segnali')
+          se = SignalEngine()
+
+          print(f'Analisi di {len(tickers)} ticker...')
+          for ticker in tickers:
+              try:
+                  result = bot.decide(ticker)
+                  signal_dict = {
+                      'ticker': ticker,
+                      'signal': result['signal'],
+                      'confidence': result['confidence'],
+                      'reasoning': ' | '.join(result['reasoning'][-3:]),
+                  }
+                  se.save_signal(signal_dict)
+                  print(f'{ticker}: {result[\"signal\"]} '
+                        f'({result[\"confidence\"]:.0%}) '
+                        f'consensus={result[\"consensus_level\"]}')
+              except Exception as e:
+                  print(f'{ticker}: ERRORE - {e}')
+          print('Done.')
           "
-      - name: Retrain ML models
+      - name: Retrain ML (domenica)
         if: github.event.schedule == '0 2 * * 0'
         run: |
           python -c "
           from agents.ml_prediction_agent import MLPredictionAgent
-          MLPredictionAgent().retrain_all(
-              ['AAPL','TSLA','NVDA','BTC-USD','ETH-USD','MSFT']
-          )
+          MLPredictionAgent().retrain_all([
+              'AAPL','TSLA','NVDA','BTC-USD','ETH-USD','MSFT','XOM'
+          ])
           "
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+      REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+      REDDIT_USER_AGENT: "trading-bot/1.0"
+      INPUT_TICKERS: ${{ inputs.tickers }}

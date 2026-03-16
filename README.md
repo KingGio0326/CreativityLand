@@ -46,6 +46,32 @@
           └────────────────────────────────────────────────────┘
 ```
 
+## Agent System
+
+The bot uses a **multi-agent LangGraph pipeline** with weighted voting:
+
+```
+scraper -> social -> sentiment -> research -> fundamental -> technical
+-> momentum -> mean_reversion -> ml -> risk -> macro -> weighted -> critic
+```
+
+| Agent | Data Source | Signal | Weight |
+|---|---|---|---|
+| SentimentAgent | FinBERT + news articles | BUY/SELL/HOLD | 22% |
+| SocialAgent | Reddit/WSB keyword sentiment | BUY/SELL/HOLD | 8% |
+| FundamentalAgent | yfinance P/E, ROE, PEG, growth | BUY/SELL/HOLD | 18% |
+| TechnicalAgent | RSI, MACD, Bollinger Bands, SMA | BUY/SELL/HOLD | 15% |
+| MomentumAgent | Multi-timeframe returns, RS vs SPY | BUY/SELL/HOLD | 12% |
+| MeanReversionAgent | Z-score, Bollinger %B, half-life | BUY/SELL/HOLD | 6% |
+| MLPredictionAgent | XGBoost 5-day price prediction | BUY/SELL/HOLD | 11% |
+| MacroAgent | Claude Haiku causal analysis | BUY/SELL/HOLD | 8% |
+| RiskAgent | Volatility, VaR, drawdown | Risk level | - |
+| ResearchAgent | pgvector semantic search history | Context | - |
+| CriticAgent | Confidence/quality validation | Approve/Retry | - |
+
+**WeightedVote** aggregates all signals with confidence-weighted voting.
+Consensus levels: **strong** (>=70% agree), **moderate** (>=50%), **weak** (<50% -> forced HOLD).
+
 ## Tech Stack
 
 | Component | Technology |
@@ -112,7 +138,7 @@ Required for CI/CD (Settings > Secrets > Actions):
 |----------|---------|--------------|
 | `test.yml` | Push/PR to main | Lint (flake8), pytest, Next.js build |
 | `deploy.yml` | Push to main (dashboard/**) | Deploy dashboard to Vercel |
-| `bot.yml` | Cron every 6h / manual | Scrape → Sentiment → Embeddings → Signals |
+| `bot.yml` | Cron every 6h / manual | Scrape → NLP → Multi-agent analysis → Signals |
 
 ## Tests
 
@@ -124,9 +150,11 @@ flake8 scraper/ nlp/ engine/ --max-line-length=100 --ignore=E501,W503
 ## Project Structure
 
 ```
+├── agents/           # Multi-agent LangGraph system (11 agents)
 ├── scraper/          # News scraping (NewsAPI, RSS feeds)
 ├── nlp/              # Sentiment (FinBERT) + Embeddings (MiniLM)
 ├── engine/           # Signal generation + Backtesting
+├── models/           # Trained ML models (.pkl)
 ├── dashboard/        # Next.js frontend
 ├── supabase/         # Database migrations
 ├── tests/            # pytest test suite

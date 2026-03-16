@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from('signals')
-      .select('*')
+      .select('id,ticker,signal,confidence,reasoning,created_at,vote_breakdown,consensus_level,agents_agree,agents_total,dominant_factor,macro_adjusted,macro_events')
       .order('created_at', { ascending: false })
       .limit(50)
 
