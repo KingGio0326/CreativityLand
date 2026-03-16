@@ -4,6 +4,7 @@ from agents.scraper_agent import scraper_agent
 from agents.sentiment_agent import sentiment_agent
 from agents.research_agent import research_agent
 from agents.risk_agent import risk_agent
+from agents.fundamental_agent import fundamental_agent_node
 from agents.technical_agent import technical_agent_node
 from agents.macro_agent import macro_agent_node
 from agents.signal_agent import signal_agent
@@ -22,6 +23,7 @@ def build_graph():
     graph.add_node("sentiment", sentiment_agent)
     graph.add_node("research", research_agent)
     graph.add_node("risk", risk_agent)
+    graph.add_node("fundamental", fundamental_agent_node)
     graph.add_node("technical", technical_agent_node)
     graph.add_node("macro", macro_agent_node)
     graph.add_node("signal", signal_agent)
@@ -30,7 +32,8 @@ def build_graph():
     graph.add_edge("scraper", "sentiment")
     graph.add_edge("sentiment", "research")
     graph.add_edge("research", "risk")
-    graph.add_edge("risk", "technical")
+    graph.add_edge("risk", "fundamental")
+    graph.add_edge("fundamental", "technical")
     graph.add_edge("technical", "macro")
     graph.add_edge("macro", "signal")
     graph.add_edge("signal", "critic")
