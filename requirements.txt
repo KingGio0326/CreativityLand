@@ -18,3 +18,4 @@ langchain-anthropic
 anthropic
 ta>=0.11
 statsmodels
+praw>=7.7

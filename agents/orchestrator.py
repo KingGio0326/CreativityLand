@@ -9,6 +9,7 @@ from agents.technical_agent import technical_agent_node
 from agents.momentum_agent import momentum_agent_node
 from agents.mean_reversion_agent import mean_reversion_agent_node
 from agents.macro_agent import macro_agent_node
+from agents.social_sentiment_agent import social_agent_node
 from agents.signal_agent import signal_agent
 from agents.critic_agent import critic_agent
 
@@ -30,10 +31,12 @@ def build_graph():
     graph.add_node("momentum", momentum_agent_node)
     graph.add_node("mean_reversion", mean_reversion_agent_node)
     graph.add_node("macro", macro_agent_node)
+    graph.add_node("social", social_agent_node)
     graph.add_node("signal", signal_agent)
     graph.add_node("critic", critic_agent)
     graph.set_entry_point("scraper")
-    graph.add_edge("scraper", "sentiment")
+    graph.add_edge("scraper", "social")
+    graph.add_edge("social", "sentiment")
     graph.add_edge("sentiment", "research")
     graph.add_edge("research", "risk")
     graph.add_edge("risk", "fundamental")

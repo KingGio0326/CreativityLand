@@ -4,6 +4,7 @@ def signal_agent(state):
     technical = state.get("technical_analysis", {})
     fundamental = state.get("fundamental_analysis", {})
     momentum = state.get("momentum_analysis", {})
+    social = state.get("social_analysis", {})
     s_signal = sentiment.get("signal", "HOLD")
     s_conf = sentiment.get("confidence", 0.0)
     risk_level = risk.get("risk_level", "MEDIUM")
@@ -44,6 +45,13 @@ def signal_agent(state):
     # Momentum + sentiment agreement bonus
     if m_signal == s_signal and s_signal != "HOLD":
         confidence += 0.08
+    # Social sentiment agreement bonus
+    soc_signal = social.get("signal", "HOLD")
+    soc_hype = social.get("hype_score", 0.0)
+    if soc_signal == final and final != "HOLD":
+        confidence += 0.06
+    if soc_hype > 0.7 and soc_signal != final and final != "HOLD":
+        confidence -= 0.05
     confidence = round(max(0.0, min(confidence, 1.0)), 3)
     state["proposed_signal"] = final
     state["confidence"] = confidence
@@ -55,7 +63,7 @@ def signal_agent(state):
     state["reasoning"].append(
         f"SignalAgent: {s_signal} + risk={risk_level} "
         f"+ tech={t_signal} + fund={f_signal} "
-        f"+ mom={m_signal}({m_trend}) → "
+        f"+ mom={m_signal}({m_trend}) + social={soc_signal} → "
         f"{final} ({confidence:.0%}){extra}"
     )
     return state
