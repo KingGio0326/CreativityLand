@@ -52,8 +52,9 @@ export default function ArticlesPage() {
     try {
       const res = await fetch(`/api/articles?${params}`);
       const json = await res.json();
-      setArticles(json.data ?? []);
-      setCount(json.count ?? 0);
+      const arr = Array.isArray(json) ? json : [];
+      setArticles(arr);
+      setCount(arr.length);
     } catch {
       /* ignore */
     } finally {

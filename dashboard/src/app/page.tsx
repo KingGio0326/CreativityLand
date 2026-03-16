@@ -52,7 +52,7 @@ export default function DashboardPage() {
       const sigData = await sigRes.json();
       const artData = await artRes.json();
       setSignals(Array.isArray(sigData) ? sigData : []);
-      setArticles(artData?.data ?? []);
+      setArticles(Array.isArray(artData) ? artData : []);
       setLastUpdate(new Date().toLocaleString());
     } catch {
       /* ignore */

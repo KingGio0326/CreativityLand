@@ -195,3 +195,13 @@ class Backtester:
             "trades_count": 0,
             "final_value": self.initial_capital,
         }
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    tickers = ["AAPL", "TSLA", "NVDA", "MSFT"]
+    bt_engine = Backtester()
+    for t in tickers:
+        result = bt_engine.run(t, "2024-01-01", "2025-01-01")
+        bt_engine.save_results(t, result)
+    print(f"Backtest complete for {len(tickers)} tickers")

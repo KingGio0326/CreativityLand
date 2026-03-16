@@ -98,3 +98,10 @@ class EmbeddingEngine:
         results = response.data or []
         logger.info("Semantic search returned %d results", len(results))
         return results
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    engine = EmbeddingEngine()
+    count = engine.process_unembedded()
+    print(f"Embeddings complete: {count} articles embedded")

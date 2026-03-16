@@ -68,3 +68,10 @@ class SentimentAnalyzer:
 
         logger.info("Processed %d articles for sentiment", updated)
         return updated
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    analyzer = SentimentAnalyzer()
+    count = analyzer.process_unanalyzed()
+    print(f"Sentiment analysis complete: {count} articles processed")

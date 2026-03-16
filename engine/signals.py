@@ -115,3 +115,13 @@ class SignalEngine:
         }
         self.supabase.table("signals").insert(row).execute()
         logger.info("Saved signal for %s to Supabase", signal["ticker"])
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    tickers = ["AAPL", "TSLA", "NVDA", "BTC-USD", "ETH-USD", "MSFT", "XOM", "GLD"]
+    engine = SignalEngine()
+    signals = engine.generate_all_signals(tickers)
+    for s in signals:
+        engine.save_signal(s)
+    print(f"Signals complete: {len(signals)} signals generated and saved")
