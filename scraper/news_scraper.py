@@ -15,12 +15,14 @@ load_dotenv()
 logger = logging.getLogger("scraper")
 
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
-YAHOO_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}"
-GOOGLE_RSS = "https://news.google.com/rss/search?q={ticker}+stock&hl=en"
+YAHOO_RSS = "https://finance.yahoo.com/rss/headline?s={ticker}"
+GOOGLE_RSS = "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en"
+SEEKING_ALPHA_RSS = "https://seekingalpha.com/api/sa/combined/{ticker}.xml"
+MARKETWATCH_RSS = "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/"
 
 
 class NewsScraper:
-    """Scrapes financial news from NewsAPI, Yahoo Finance RSS and Google News RSS."""
+    """Scrapes financial news from NewsAPI, RSS feeds and alternative sources."""
 
     def __init__(self):
         self.newsapi_key = os.getenv("NEWS_API_KEY", "")
@@ -33,11 +35,14 @@ class NewsScraper:
         """Fetch articles from all sources in parallel and deduplicate."""
         yahoo_url = YAHOO_RSS.format(ticker=ticker)
         google_url = GOOGLE_RSS.format(ticker=ticker)
+        seeking_url = SEEKING_ALPHA_RSS.format(ticker=ticker)
 
         results = await asyncio.gather(
             self.fetch_newsapi(ticker, days_back),
             self.fetch_rss(yahoo_url, ticker),
             self.fetch_rss(google_url, ticker),
+            self.fetch_rss(seeking_url, ticker),
+            self.fetch_rss(MARKETWATCH_RSS, ticker),
             return_exceptions=True,
         )
 
@@ -89,7 +94,7 @@ class NewsScraper:
 
     async def fetch_rss(self, url: str, ticker: str) -> list[dict]:
         """Fetch and parse an RSS feed."""
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
             resp = await client.get(url)
             resp.raise_for_status()
 
