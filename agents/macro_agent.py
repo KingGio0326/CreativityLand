@@ -19,7 +19,7 @@ class MacroAgent:
         self.enabled = bool(api_key)
         if self.enabled:
             self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-20250514"
+        self.model = "claude-haiku-4-5-20251001"
 
     def is_macro_relevant(self, articles: list[dict]) -> bool:
         count = sum(
@@ -43,7 +43,8 @@ class MacroAgent:
                 "causal_chain": "ANTHROPIC_API_KEY non configurata",
                 "confidence": 0.0,
                 "relevant_events": [],
-                "time_horizon": "short_term"
+                "time_horizon": "short_term",
+                "signal": "HOLD"
             }
         top = articles[:5]
         prompt = f"""Sei un analista finanziario esperto.
@@ -72,7 +73,28 @@ Rispondi SOLO con JSON valido, niente altro:
             )
             text = response.content[0].text.strip()
             text = text.replace("```json", "").replace("```", "").strip()
-            return json.loads(text)
+            # Find JSON object in response
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            if start >= 0 and end > start:
+                text = text[start:end]
+            result = json.loads(text)
+            # Ensure required keys
+            result.setdefault("has_macro_impact", False)
+            result.setdefault("impact_direction", "neutral")
+            result.setdefault("impact_magnitude", "low")
+            result.setdefault("causal_chain", "")
+            result.setdefault("confidence", 0.0)
+            result.setdefault("relevant_events", [])
+            result.setdefault("time_horizon", "short_term")
+            # Derive signal from direction
+            direction = result.get("impact_direction", "neutral")
+            result.setdefault("signal",
+                "BUY" if direction == "positive"
+                else "SELL" if direction == "negative"
+                else "HOLD"
+            )
+            return result
         except Exception as e:
             return {
                 "has_macro_impact": False,
@@ -81,7 +103,8 @@ Rispondi SOLO con JSON valido, niente altro:
                 "causal_chain": f"Errore analisi: {e}",
                 "confidence": 0.0,
                 "relevant_events": [],
-                "time_horizon": "short_term"
+                "time_horizon": "short_term",
+                "signal": "HOLD"
             }
 
     def get_adjusted_signal(
@@ -134,8 +157,12 @@ def macro_agent_node(state: TradingState) -> TradingState:
         state["macro_analysis"] = {
             "has_macro_impact": False,
             "impact_direction": "neutral",
+            "impact_magnitude": "low",
             "confidence": 0.0,
-            "causal_chain": "Nessun evento macro rilevante"
+            "causal_chain": "Nessun evento macro rilevante",
+            "relevant_events": [],
+            "time_horizon": "short_term",
+            "signal": "HOLD"
         }
         state["reasoning"].append(
             "MacroAgent: nessun evento geopolitico/macro rilevato"
