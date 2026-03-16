@@ -1,27 +1,42 @@
-import { getSupabase } from "@/lib/supabase";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const supabase = getSupabase();
-  const params = request.nextUrl.searchParams;
-  const ticker = params.get("ticker");
-  const sentiment = params.get("sentiment");
-  const page = parseInt(params.get("page") || "1", 10);
-  const limit = parseInt(params.get("limit") || "20", 10);
-  const offset = (page - 1) * limit;
+  try {
+    const { searchParams } = new URL(request.url)
+    const ticker = searchParams.get('ticker')
+    const sentiment = searchParams.get('sentiment')
+    const page = parseInt(searchParams.get('page') ?? '1')
+    const limit = parseInt(searchParams.get('limit') ?? '20')
+    const offset = (page - 1) * limit
 
-  let query = supabase
-    .from("articles")
-    .select("*", { count: "exact" })
-    .order("published_at", { ascending: false });
+    let query = supabase
+      .from('articles')
+      .select('*')
+      .order('published_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
-  if (ticker) query = query.eq("ticker", ticker);
-  if (sentiment) query = query.eq("sentiment_label", sentiment);
+    if (ticker) query = query.eq('ticker', ticker)
+    if (sentiment) query = query.eq('sentiment_label', sentiment)
 
-  const { data, error, count } = await query.range(offset, offset + limit - 1);
+    const { data, error } = await query
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data, count, page, limit });
+    if (error) {
+      console.error('Supabase error:', error)
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(data ?? [])
+  } catch (err) {
+    console.error('API error:', err)
+    return NextResponse.json(
+      { error: String(err) },
+      { status: 500 }
+    )
+  }
 }
