@@ -3,10 +3,7 @@
 import logging
 import os
 import random
-from datetime import datetime, timezone
-
 import backtrader as bt
-import numpy as np
 import yfinance as yf
 from dotenv import load_dotenv
 from supabase import create_client
@@ -131,8 +128,10 @@ class Backtester:
             "final_value": round(final_value, 2),
         }
 
-        logger.info("Backtest %s: return=%.2f%% sharpe=%.2f trades=%d",
-                     ticker, total_return * 100, sharpe_ratio, trades_count)
+        logger.info(
+            "Backtest %s: return=%.2f%% sharpe=%.2f trades=%d",
+            ticker, total_return * 100, sharpe_ratio, trades_count
+        )
         return result
 
     def save_results(self, ticker: str, results: dict) -> None:

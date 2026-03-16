@@ -1,0 +1,50 @@
+name: Run Trading Bot
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - name: Scrape news
+        run: python -m scraper.news_scraper
+      - name: Process sentiment
+        run: |
+          python -c "
+          from nlp.sentiment import SentimentAnalyzer
+          n = SentimentAnalyzer().process_unanalyzed(limit=200)
+          print(f'Processati {n} articoli')
+          "
+      - name: Generate embeddings
+        run: |
+          python -c "
+          from nlp.embeddings import EmbeddingEngine
+          n = EmbeddingEngine().process_unembedded(limit=200)
+          print(f'Embeddati {n} articoli')
+          "
+      - name: Generate signals
+        run: |
+          python -c "
+          from engine.signals import SignalEngine
+          engine = SignalEngine()
+          tickers = ['AAPL','TSLA','NVDA','BTC-USD','ETH-USD',
+                     'MSFT','XOM','GLD']
+          signals = engine.generate_all_signals(tickers)
+          for s in signals:
+              engine.save_signal(s)
+              print(f\"{s['ticker']}: {s['signal']} ({s['confidence']:.0%})\")
+          print(f'Generati e salvati {len(signals)} segnali')
+          "
