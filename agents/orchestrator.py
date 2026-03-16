@@ -1,17 +1,17 @@
 from langgraph.graph import StateGraph, END
 from agents import TradingState
 from agents.scraper_agent import scraper_agent
+from agents.social_sentiment_agent import social_agent_node
 from agents.sentiment_agent import sentiment_agent
 from agents.research_agent import research_agent
-from agents.risk_agent import risk_agent
 from agents.fundamental_agent import fundamental_agent_node
 from agents.technical_agent import technical_agent_node
 from agents.momentum_agent import momentum_agent_node
 from agents.mean_reversion_agent import mean_reversion_agent_node
-from agents.macro_agent import macro_agent_node
 from agents.ml_prediction_agent import ml_agent_node
-from agents.social_sentiment_agent import social_agent_node
-from agents.signal_agent import signal_agent
+from agents.risk_agent import risk_agent
+from agents.macro_agent import macro_agent_node
+from agents.weighted_signal_agent import weighted_signal_node
 from agents.critic_agent import critic_agent
 
 
@@ -22,35 +22,37 @@ def should_retry(state: TradingState) -> str:
 
 
 def build_graph():
-    graph = StateGraph(TradingState)
-    graph.add_node("scraper", scraper_agent)
-    graph.add_node("sentiment", sentiment_agent)
-    graph.add_node("research", research_agent)
-    graph.add_node("risk", risk_agent)
-    graph.add_node("fundamental", fundamental_agent_node)
-    graph.add_node("technical", technical_agent_node)
-    graph.add_node("momentum", momentum_agent_node)
-    graph.add_node("mean_reversion", mean_reversion_agent_node)
-    graph.add_node("ml", ml_agent_node)
-    graph.add_node("macro", macro_agent_node)
-    graph.add_node("social", social_agent_node)
-    graph.add_node("signal", signal_agent)
-    graph.add_node("critic", critic_agent)
-    graph.set_entry_point("scraper")
-    graph.add_edge("scraper", "social")
-    graph.add_edge("social", "sentiment")
-    graph.add_edge("sentiment", "research")
-    graph.add_edge("research", "risk")
-    graph.add_edge("risk", "fundamental")
-    graph.add_edge("fundamental", "technical")
-    graph.add_edge("technical", "momentum")
-    graph.add_edge("momentum", "mean_reversion")
-    graph.add_edge("mean_reversion", "ml")
-    graph.add_edge("ml", "macro")
-    graph.add_edge("macro", "signal")
-    graph.add_edge("signal", "critic")
-    graph.add_conditional_edges("critic", should_retry)
-    return graph.compile()
+    g = StateGraph(TradingState)
+    # Nodi
+    g.add_node("scraper",        scraper_agent)
+    g.add_node("social",         social_agent_node)
+    g.add_node("sentiment",      sentiment_agent)
+    g.add_node("research",       research_agent)
+    g.add_node("fundamental",    fundamental_agent_node)
+    g.add_node("technical",      technical_agent_node)
+    g.add_node("momentum",       momentum_agent_node)
+    g.add_node("mean_reversion", mean_reversion_agent_node)
+    g.add_node("ml",             ml_agent_node)
+    g.add_node("risk",           risk_agent)
+    g.add_node("macro",          macro_agent_node)
+    g.add_node("weighted",       weighted_signal_node)
+    g.add_node("critic",         critic_agent)
+    # Edges
+    g.set_entry_point("scraper")
+    g.add_edge("scraper",        "social")
+    g.add_edge("social",         "sentiment")
+    g.add_edge("sentiment",      "research")
+    g.add_edge("research",       "fundamental")
+    g.add_edge("fundamental",    "technical")
+    g.add_edge("technical",      "momentum")
+    g.add_edge("momentum",       "mean_reversion")
+    g.add_edge("mean_reversion", "ml")
+    g.add_edge("ml",             "risk")
+    g.add_edge("risk",           "macro")
+    g.add_edge("macro",          "weighted")
+    g.add_edge("weighted",       "critic")
+    g.add_conditional_edges("critic", should_retry)
+    return g.compile()
 
 
 class TradingOrchestrator:
@@ -67,14 +69,22 @@ class TradingOrchestrator:
             macro_adjusted=False, technical_analysis={},
             fundamental_analysis={}, momentum_analysis={},
             mean_reversion_analysis={}, ml_prediction={},
-            social_analysis={}
+            social_analysis={}, vote_breakdown={}
         )
         result = self.graph.invoke(state)
+        vb = result.get("vote_breakdown", {})
         return {
             "ticker": ticker,
             "signal": result["final_signal"] or "HOLD",
             "confidence": result["confidence"],
-            "reasoning": result["reasoning"],
-            "risk_level": result["risk_assessment"].get("risk_level"),
-            "articles_analyzed": len(result["articles"])
+            "consensus_level": vb.get("consensus_level", "?"),
+            "agents_agree": vb.get("agents_agree", 0),
+            "agents_total": vb.get("agents_total", 0),
+            "dominant_factor": vb.get("dominant_factor", "?"),
+            "vote_breakdown": vb.get("vote_breakdown", {}),
+            "risk_level": result["risk_assessment"].get(
+                "risk_level", "?"
+            ),
+            "articles_analyzed": len(result["articles"]),
+            "reasoning": result["reasoning"]
         }

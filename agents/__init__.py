@@ -20,3 +20,4 @@ class TradingState(TypedDict):
     mean_reversion_analysis: dict
     ml_prediction: dict
     social_analysis: dict
+    vote_breakdown: dict
