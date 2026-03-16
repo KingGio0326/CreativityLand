@@ -16,3 +16,4 @@ yfinance>=0.2.31
 langgraph
 langchain-anthropic
 anthropic
+ta>=0.11
