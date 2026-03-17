@@ -51,20 +51,6 @@ function extractKV(line: string, key: string): string | undefined {
 
 /* ── per-agent detail extractors ───────────────────────── */
 
-function parseSentiment(
-  line: string,
-  stats: ApiStats | null,
-): Record<string, string | number> {
-  const d: Record<string, string | number> = {};
-  d["Positive"] = stats?.positive ?? extractKV(line, "'positive'") ?? "—";
-  d["Negative"] = stats?.negative ?? extractKV(line, "'negative'") ?? "—";
-  d["Neutral"] = stats?.neutral ?? extractKV(line, "'neutral'") ?? "—";
-  const ws = stats?.weighted_score;
-  const score = extractKV(line, "score");
-  d["Weighted Score"] = ws != null ? ws : score ?? "—";
-  return d;
-}
-
 function parseTechnical(line: string): Record<string, string | number> {
   return {
     RSI: extractKV(line, "RSI") ?? "—",
@@ -147,6 +133,22 @@ interface ApiStats {
   articles_with_embedding: number;
 }
 
+interface TopArticle {
+  title: string;
+  label: string;
+  score: number;
+  source: string;
+}
+
+interface SentimentData {
+  articles_analyzed: number;
+  positive: number;
+  negative: number;
+  neutral: number;
+  weighted_score: number;
+  top_articles: TopArticle[];
+}
+
 interface HistoryEntry {
   signal: string;
   confidence: number;
@@ -162,34 +164,54 @@ interface ApiData {
     created_at: string;
     reasoning: string[];
   } | null;
+  sentiment: SentimentData;
   stats: ApiStats;
   history: HistoryEntry[];
+}
+
+/* ── check if parsed details are all empty ─────────────── */
+function hasRealData(details: Record<string, string | number>): boolean {
+  return Object.values(details).some((v) => v !== "—" && v !== "");
 }
 
 /* ── build cards from API data ─────────────────────────── */
 function buildCards(data: ApiData): AgentCardProps[] {
   const reasoning = data.signal?.reasoning ?? [];
+  const sent = data.sentiment;
 
-  const parsers: Record<string, (line: string, stats: ApiStats | null) => Record<string, string | number>> = {
-    SentimentAgent: parseSentiment,
-    TechnicalAgent: (l) => parseTechnical(l),
-    FundamentalAgent: (l) => parseFundamental(l),
-    MacroAgent: (l) => parseMacro(l),
-    MomentumAgent: (l) => parseMomentum(l),
-    MeanReversionAgent: (l) => parseMeanReversion(l),
-    MLAgent: (l) => parseML(l),
-    ResearchAgent: (l) => parseResearch(l),
-    RiskAgent: (l) => parseRisk(l),
+  const parsers: Record<string, (line: string) => Record<string, string | number>> = {
+    TechnicalAgent: parseTechnical,
+    FundamentalAgent: parseFundamental,
+    MacroAgent: parseMacro,
+    MomentumAgent: parseMomentum,
+    MeanReversionAgent: parseMeanReversion,
+    MLAgent: parseML,
+    ResearchAgent: parseResearch,
+    RiskAgent: parseRisk,
   };
 
   return AGENTS.map((agent) => {
-    const line = reasoning.find((r) => r.startsWith(agent.prefix + ":")) ?? "";
+    // Find all reasoning lines for this agent
+    const matchingLines = reasoning.filter((r) => r.startsWith(agent.prefix + ":"));
+    const line = matchingLines[0] ?? "";
 
-    const details = line
-      ? parsers[agent.prefix](line, data.stats)
-      : {};
+    // SentimentAgent: use server-side data directly
+    let details: Record<string, string | number> = {};
+    if (agent.prefix === "SentimentAgent") {
+      details = {
+        "Articoli": sent.articles_analyzed,
+        "Positivi": sent.positive,
+        "Negativi": sent.negative,
+        "Neutrali": sent.neutral,
+        "Score pesato": sent.weighted_score,
+      };
+    } else if (line && parsers[agent.prefix]) {
+      const parsed = parsers[agent.prefix](line);
+      // Only show details grid if we got real data, otherwise fallback to raw log
+      details = hasRealData(parsed) ? parsed : {};
+    }
 
-    // Research and Risk don't have a BUY/SELL vote
+    // Extract vote
     let vote = extractVote(line);
     if (agent.prefix === "RiskAgent") {
       const level = line.match(/→\s*(HIGH|MEDIUM|LOW)/)?.[1];
@@ -208,7 +230,9 @@ function buildCards(data: ApiData): AgentCardProps[] {
       vote,
       confidence: extractConfidence(line),
       details,
-      reasoning: line ? [line] : [],
+      reasoning: matchingLines,
+      // Pass top articles for SentimentAgent
+      ...(agent.prefix === "SentimentAgent" ? { topArticles: sent.top_articles } : {}),
     };
   });
 }

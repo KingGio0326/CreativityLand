@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 
+export interface TopArticle {
+  title: string;
+  label: string;
+  score: number;
+  source: string;
+}
+
 export interface AgentCardProps {
   name: string;
   initials: string;
@@ -12,6 +19,7 @@ export interface AgentCardProps {
   confidence?: number;
   details: Record<string, string | number>;
   reasoning: string[];
+  topArticles?: TopArticle[];
 }
 
 const voteConfig = {
@@ -30,9 +38,21 @@ export default function AgentCard({
   confidence,
   details,
   reasoning,
+  topArticles,
 }: AgentCardProps) {
   const [open, setOpen] = useState(false);
   const v = voteConfig[vote];
+
+  const labelColor = (label: string) =>
+    label === "positive"
+      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+      : label === "negative"
+        ? "bg-red-500/15 text-red-400 border-red-500/30"
+        : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
+
+  // If no structured details but reasoning exists, auto-open raw log
+  const hasDetails = Object.keys(details).length > 0;
+  const showRawByDefault = !hasDetails && reasoning.length > 0;
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
@@ -69,7 +89,7 @@ export default function AgentCard({
       </div>
 
       {/* Details grid */}
-      {Object.keys(details).length > 0 && (
+      {hasDetails && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-4 py-3 border-b">
           {Object.entries(details).map(([key, val]) => (
             <div key={key} className="flex items-baseline justify-between gap-1">
@@ -80,16 +100,34 @@ export default function AgentCard({
         </div>
       )}
 
-      {/* Accordion: Raw log */}
+      {/* Top articles (SentimentAgent only) */}
+      {topArticles && topArticles.length > 0 && (
+        <div className="px-4 py-3 border-b space-y-1.5">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Top articoli</p>
+          {topArticles.map((a, i) => (
+            <div key={i} className="flex items-center gap-2 text-[11px]">
+              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${labelColor(a.label)}`}>
+                {a.label.slice(0, 3)}
+              </span>
+              <span className="flex-1 text-muted-foreground truncate">{a.title}</span>
+              <span className="font-mono text-muted-foreground/60 shrink-0">{a.source}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Accordion: Raw log — auto-open when no structured details */}
       {reasoning.length > 0 && (
         <div>
           <button
             onClick={() => setOpen(!open)}
             className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            <span className="font-medium">Raw log ({reasoning.length})</span>
+            <span className="font-medium">
+              {showRawByDefault ? `Reasoning (${reasoning.length})` : `Raw log (${reasoning.length})`}
+            </span>
             <svg
-              className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${open || showRawByDefault ? "rotate-180" : ""}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -98,11 +136,11 @@ export default function AgentCard({
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          {open && (
+          {(open || showRawByDefault) && (
             <div className="px-4 pb-3">
               <div className="bg-muted/30 rounded-lg p-3 space-y-1 max-h-48 overflow-auto">
                 {reasoning.map((line, i) => (
-                  <p key={i} className="text-[11px] font-mono text-muted-foreground leading-relaxed">
+                  <p key={i} className="text-[11px] font-mono text-muted-foreground leading-relaxed break-all">
                     <span className="text-muted-foreground/50 mr-2 select-none">{i + 1}.</span>
                     {line}
                   </p>

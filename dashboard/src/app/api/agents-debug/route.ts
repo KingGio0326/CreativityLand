@@ -52,40 +52,54 @@ export async function GET(request: NextRequest) {
             : [];
     }
 
-    // Article stats
-    const distribution = { positive: 0, negative: 0, neutral: 0 };
-    let sumContribution = 0;
-    let sumWeight = 0;
+    // Debug log — temporary
+    console.log("=== REASONING ARRAY ===");
+    console.log(JSON.stringify(signal?.reasoning, null, 2));
+
+    // Sentiment stats from articles (server-side, not from reasoning)
+    const positive = articles.filter(
+      (a) => a.sentiment_label === "positive",
+    ).length;
+    const negative = articles.filter(
+      (a) => a.sentiment_label === "negative",
+    ).length;
+    const neutral = articles.filter(
+      (a) => a.sentiment_label === "neutral",
+    ).length;
+
+    let weightedSum = 0;
+    let weightTotal = 0;
     let articlesWithEmbedding = 0;
 
     for (const a of articles) {
-      const label = a.sentiment_label as string;
-      if (label in distribution) {
-        distribution[label as keyof typeof distribution]++;
-      }
-
-      const publishedAt = a.published_at
-        ? new Date(a.published_at as string)
-        : new Date();
       const hoursAgo =
-        (Date.now() - publishedAt.getTime()) / (1000 * 60 * 60);
-      const decayWeight = Math.exp(-hoursAgo / 24);
-      const score = (a.sentiment_score as number) ?? 0;
-      const direction =
-        label === "positive" ? 1 : label === "negative" ? -1 : 0;
-
-      sumContribution += score * direction * decayWeight;
-      sumWeight += decayWeight;
+        (Date.now() - new Date(a.published_at as string).getTime()) / 3600000;
+      const w = Math.exp(-hoursAgo / 24);
+      const dir =
+        a.sentiment_label === "positive"
+          ? 1
+          : a.sentiment_label === "negative"
+            ? -1
+            : 0;
+      weightedSum += ((a.sentiment_score as number) ?? 0) * dir * w;
+      weightTotal += w;
 
       if (a.embedding != null) {
         articlesWithEmbedding++;
       }
     }
 
-    const weightedScore =
-      sumWeight > 0
-        ? Math.round((sumContribution / sumWeight) * 10000) / 10000
+    const sentimentScore =
+      weightTotal > 0
+        ? Math.round((weightedSum / weightTotal) * 10000) / 10000
         : 0;
+
+    const topArticles = articles.slice(0, 5).map((a) => ({
+      title: ((a.title as string) ?? "").substring(0, 60),
+      label: a.sentiment_label as string,
+      score: a.sentiment_score as number,
+      source: a.source as string,
+    }));
 
     // Build history from all signals
     const history = allSignals.map((s) => {
@@ -121,12 +135,20 @@ export async function GET(request: NextRequest) {
             reasoning,
           }
         : null,
+      sentiment: {
+        articles_analyzed: articles.length,
+        positive,
+        negative,
+        neutral,
+        weighted_score: sentimentScore,
+        top_articles: topArticles,
+      },
       stats: {
         total: articles.length,
-        positive: distribution.positive,
-        negative: distribution.negative,
-        neutral: distribution.neutral,
-        weighted_score: weightedScore,
+        positive,
+        negative,
+        neutral,
+        weighted_score: sentimentScore,
         articles_with_embedding: articlesWithEmbedding,
       },
       history,
