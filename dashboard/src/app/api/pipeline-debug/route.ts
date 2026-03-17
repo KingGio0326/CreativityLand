@@ -38,7 +38,20 @@ export async function GET(request: NextRequest) {
       const sentimentLabel = (r.sentiment_label as string) ?? null;
       const sentimentScore = (r.sentiment_score as number) ?? 0;
       const processed = !!(r.processed ?? (sentimentLabel !== null));
-      const embedding = r.embedding as number[] | null;
+
+      // pgvector returns embedding as string "[0.1,0.2,...]", parse it
+      let embedding: number[] | null = null;
+      if (r.embedding) {
+        if (Array.isArray(r.embedding)) {
+          embedding = r.embedding as number[];
+        } else if (typeof r.embedding === "string") {
+          try {
+            embedding = JSON.parse(r.embedding as string);
+          } catch {
+            embedding = null;
+          }
+        }
+      }
 
       // --- PHASE 1: SCRAPING ---
       const scraping = {
