@@ -25,6 +25,7 @@ const navLinks = [
   { href: "/backtest", label: "Backtest" },
   { href: "/search", label: "Search" },
   { href: "/agents", label: "Agents" },
+  { href: "/patterns", label: "Patterns" },
 ];
 
 export default function RootLayout({
