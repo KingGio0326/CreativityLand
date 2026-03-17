@@ -1,0 +1,263 @@
+export const dynamic = "force-dynamic";
+
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+
+/* ── Alpha Vantage: fetch last 30 daily closes ────────── */
+interface AVDaily {
+  [date: string]: {
+    "1. open": string;
+    "2. high": string;
+    "3. low": string;
+    "4. close": string;
+    "5. volume": string;
+  };
+}
+
+async function fetchPrices(
+  ticker: string,
+): Promise<{ dates: string[]; prices: number[] } | null> {
+  const key = process.env.ALPHA_VANTAGE_KEY ?? process.env.ALPHA_VANTAGE_API_KEY;
+  if (!key) {
+    console.error("ALPHA_VANTAGE_KEY not set");
+    return null;
+  }
+
+  const url =
+    `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY` +
+    `&symbol=${encodeURIComponent(ticker)}&outputsize=compact&apikey=${key}`;
+
+  const res = await fetch(url, { next: { revalidate: 0 } });
+  if (!res.ok) return null;
+
+  const json = await res.json();
+  const series: AVDaily | undefined = json["Time Series (Daily)"];
+  if (!series) {
+    console.error("Alpha Vantage no data:", JSON.stringify(json).slice(0, 200));
+    return null;
+  }
+
+  // Sorted descending by date — take 30 most recent then reverse to ascending
+  const entries = Object.entries(series).slice(0, 30).reverse();
+  return {
+    dates: entries.map(([d]) => d),
+    prices: entries.map(([, v]) => parseFloat(v["4. close"])),
+  };
+}
+
+/* ── Normalize prices to [-1,1] relative to first, resample to 30 ── */
+function normalizePattern(prices: number[]): number[] {
+  const base = prices[0];
+  const returns = prices.map((p) => (p - base) / base);
+
+  // Simple linear interpolation to exactly 30 points
+  if (returns.length === 30) return returns;
+
+  const out: number[] = [];
+  for (let i = 0; i < 30; i++) {
+    const srcIdx = (i / 29) * (returns.length - 1);
+    const lo = Math.floor(srcIdx);
+    const hi = Math.min(lo + 1, returns.length - 1);
+    const frac = srcIdx - lo;
+    out.push(returns[lo] * (1 - frac) + returns[hi] * frac);
+  }
+  return out;
+}
+
+/* ── Stats helper ──────────────────────────────────────── */
+function outcomeStats(vals: number[]) {
+  if (vals.length === 0) return null;
+  const sorted = [...vals].sort((a, b) => a - b);
+  const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+  const median =
+    vals.length % 2 === 1
+      ? sorted[Math.floor(vals.length / 2)]
+      : (sorted[vals.length / 2 - 1] + sorted[vals.length / 2]) / 2;
+  const positiveRate = (vals.filter((v) => v > 0).length / vals.length) * 100;
+
+  return {
+    mean: Math.round(mean * 100) / 100,
+    median: Math.round(median * 100) / 100,
+    positive_rate: Math.round(positiveRate * 10) / 10,
+    count: vals.length,
+  };
+}
+
+/* ── Recommendation logic ─────────────────────────────── */
+function generateRecommendation(stats10d: ReturnType<typeof outcomeStats>) {
+  if (!stats10d || stats10d.count < 3) {
+    return {
+      signal: "HOLD" as const,
+      reason: stats10d
+        ? `Solo ${stats10d.count} pattern simili — confidenza bassa`
+        : "Dati insufficienti",
+    };
+  }
+
+  const { mean, positive_rate, count } = stats10d;
+
+  if (mean > 2.0 && positive_rate > 65) {
+    return {
+      signal: "BUY" as const,
+      mean_return: mean,
+      positive_rate,
+      sample_size: count,
+      reason:
+        `Pattern simili hanno prodotto +${mean.toFixed(1)}% ` +
+        `in media nei 10gg successivi ` +
+        `(${positive_rate.toFixed(0)}% dei casi positivi)`,
+    };
+  }
+
+  if (mean < -2.0 && positive_rate < 35) {
+    return {
+      signal: "SELL" as const,
+      mean_return: mean,
+      positive_rate,
+      sample_size: count,
+      reason:
+        `Pattern simili hanno prodotto ${mean.toFixed(1)}% ` +
+        `in media nei 10gg successivi ` +
+        `(${(100 - positive_rate).toFixed(0)}% dei casi negativi)`,
+    };
+  }
+
+  return {
+    signal: "HOLD" as const,
+    mean_return: mean,
+    positive_rate,
+    sample_size: count,
+    reason:
+      `Pattern simili con rendimento medio ${mean.toFixed(1)}% ` +
+      `— segnale non chiaro`,
+  };
+}
+
+/* ── Combined signal logic ────────────────────────────── */
+function combineSignals(
+  pipelineSignal: string | null,
+  patternSignal: string,
+): string {
+  if (!pipelineSignal) return patternSignal;
+
+  if (pipelineSignal === "BUY" && patternSignal === "BUY") return "STRONG BUY";
+  if (pipelineSignal === "SELL" && patternSignal === "SELL")
+    return "STRONG SELL";
+  if (pipelineSignal === patternSignal) return pipelineSignal;
+  return "HOLD";
+}
+
+/* ── Main handler ─────────────────────────────────────── */
+export async function GET(request: NextRequest) {
+  const ticker =
+    request.nextUrl.searchParams.get("ticker")?.toUpperCase() ?? "AAPL";
+
+  try {
+    // 1. Fetch current prices + latest pipeline signal in parallel
+    const [priceData, signalRes] = await Promise.all([
+      fetchPrices(ticker),
+      supabase
+        .from("signals")
+        .select("signal, confidence")
+        .eq("ticker", ticker)
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ]);
+
+    if (!priceData || priceData.prices.length < 5) {
+      return NextResponse.json(
+        { error: `Dati prezzi non disponibili per ${ticker}` },
+        { status: 404 },
+      );
+    }
+
+    const { dates, prices } = priceData;
+    const currentPrice = prices[prices.length - 1];
+    const change30d = ((currentPrice - prices[0]) / prices[0]) * 100;
+
+    // 2. Normalize and search similar patterns via RPC
+    const vector = normalizePattern(prices);
+
+    const matchRes = await supabase.rpc("match_patterns", {
+      query_vector: vector,
+      match_ticker: ticker,
+      match_count: 5,
+    });
+
+    const similar = matchRes.data ?? [];
+
+    // 3. Compute outcome stats
+    const o5 = similar
+      .filter((p: { outcome_5d: number | null }) => p.outcome_5d != null)
+      .map((p: { outcome_5d: number }) => p.outcome_5d);
+    const o10 = similar
+      .filter((p: { outcome_10d: number | null }) => p.outcome_10d != null)
+      .map((p: { outcome_10d: number }) => p.outcome_10d);
+    const o20 = similar
+      .filter((p: { outcome_20d: number | null }) => p.outcome_20d != null)
+      .map((p: { outcome_20d: number }) => p.outcome_20d);
+
+    const stats10 = outcomeStats(o10);
+    const recommendation = generateRecommendation(stats10);
+
+    const bestMatch = similar[0] ?? null;
+
+    // 4. Pipeline signal
+    const pipelineRow = signalRes.data?.[0] ?? null;
+
+    const combinedSignal = combineSignals(
+      pipelineRow?.signal ?? null,
+      recommendation.signal,
+    );
+
+    return NextResponse.json({
+      ticker,
+      current: {
+        prices,
+        dates,
+        current_price: Math.round(currentPrice * 100) / 100,
+        change_30d_pct: Math.round(change30d * 100) / 100,
+      },
+      similar: similar.slice(0, 3).map(
+        (p: {
+          start_date: string;
+          end_date: string;
+          pattern_vector: number[];
+          outcome_5d: number | null;
+          outcome_10d: number | null;
+          outcome_20d: number | null;
+          similarity: number;
+        }) => ({
+          start_date: p.start_date,
+          end_date: p.end_date,
+          prices: p.pattern_vector,
+          outcome_5d: p.outcome_5d,
+          outcome_10d: p.outcome_10d,
+          outcome_20d: p.outcome_20d,
+          similarity: Math.round(p.similarity * 10000) / 10000,
+        }),
+      ),
+      analysis: {
+        patterns_found: similar.length,
+        best_similarity: bestMatch
+          ? Math.round(bestMatch.similarity * 10000) / 10000
+          : 0,
+        best_match_date: bestMatch?.end_date ?? null,
+        outcomes: {
+          "5d": outcomeStats(o5),
+          "10d": stats10,
+          "20d": outcomeStats(o20),
+        },
+        recommendation,
+      },
+      pipeline_signal: {
+        signal: pipelineRow?.signal ?? null,
+        confidence: pipelineRow?.confidence ?? null,
+        combined_signal: combinedSignal,
+      },
+    });
+  } catch (err) {
+    console.error("Pattern API error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
