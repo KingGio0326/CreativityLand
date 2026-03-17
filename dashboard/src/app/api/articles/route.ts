@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    console.log('Articles found:', data?.length ?? 0)
     return NextResponse.json(data ?? [])
   } catch (err) {
     console.error('API error:', err)

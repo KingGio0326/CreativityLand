@@ -252,6 +252,9 @@ class NewsScraper:
     def fetch_finnhub(self, ticker: str, days_back: int) -> list[dict]:
         if not self.finnhub:
             return []
+        if is_crypto(ticker):
+            self.logger.debug("Finnhub: skip crypto %s", ticker)
+            return []
         try:
             finnhub_ticker = convert_ticker_finnhub(ticker)
             from_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
@@ -448,45 +451,18 @@ if __name__ == "__main__":
 
     async def main():
         scraper = NewsScraper()
-        print("=== TEST SCRAPER PROFESSIONALE ===\n")
+        tickers_input = os.getenv(
+            "INPUT_TICKERS",
+            "AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD",
+        )
+        tickers = [t.strip() for t in tickers_input.split(",")]
 
-        # Test AAPL
-        print("Test AAPL (stock)...")
-        articles = await scraper.fetch_by_ticker("AAPL", days_back=1)
-        with_content = [a for a in articles if len(a.get("content", "")) > 100]
-        print(f"  Trovati: {len(articles)}")
-        print(f"  Con contenuto pulito: {len(with_content)}")
-        fonti: dict[str, int] = {}
-        for a in articles:
-            fonti[a["source"]] = fonti.get(a["source"], 0) + 1
-        for fonte, count in sorted(fonti.items()):
-            print(f"    {fonte}: {count}")
-        if articles:
-            a = articles[0]
-            print("\n  Esempio articolo:")
-            print(f"    Titolo:    {a['title'][:70]}")
-            print(f"    Fonte:     {a['source']}")
-            print(f"    URL:       {a['url'][:80]}")
-            print(f"    Contenuto: {a['content'][:200]}...")
+        print(f"Scraping {len(tickers)} ticker...")
+        results = await scraper.run_all(tickers=tickers, days_back=2)
 
-        # Test BTC-USD
-        print("\nTest BTC-USD (crypto)...")
-        btc = await scraper.fetch_by_ticker("BTC-USD", days_back=1)
-        print(f"  Trovati: {len(btc)}")
-        fonti_btc: dict[str, int] = {}
-        for a in btc:
-            fonti_btc[a["source"]] = fonti_btc.get(a["source"], 0) + 1
-        for fonte, count in sorted(fonti_btc.items()):
-            print(f"    {fonte}: {count}")
+        for ticker, r in results.items():
+            print(f"{ticker}: trovati={r['found']}, salvati={r['saved']}")
 
-        print("\n=== RISULTATI ===")
-        pct = len(with_content) / max(len(articles), 1) * 100
-        print(f"AAPL: {len(articles)} articoli, {len(with_content)} con contenuto pulito ({pct:.0f}%)")
-        print(f"BTC:  {len(btc)} articoli")
-
-        if len(articles) >= 50 and pct >= 60:
-            print("\n=== SCRAPER PROFESSIONALE FUNZIONANTE ===")
-        else:
-            print("\n!!!  Qualita' bassa -- controlla le fonti fallite nei log")
+        print("Scraping completato.")
 
     asyncio.run(main())
