@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 const navLinks = [
   { href: "/", label: "Dashboard" },
   { href: "/articles", label: "Articles" },
+  { href: "/finbert", label: "FinBERT Debug" },
   { href: "/backtest", label: "Backtest" },
   { href: "/search", label: "Search" },
 ];
