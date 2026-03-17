@@ -21,31 +21,31 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Scrape news
         run: python -m scraper.news_scraper
-      - name: Process NLP
+      - name: Process Sentiment
         run: |
           python -c "
           from nlp.sentiment import SentimentAnalyzer
-          from nlp.embeddings import EmbeddingEngine
-
           sa = SentimentAnalyzer()
-          ee = EmbeddingEngine()
-
-          total_s = 0
+          total = 0
           while True:
               n = sa.process_unanalyzed(limit=100)
-              total_s += n
+              total += n
               if n == 0:
                   break
-          print(f'Sentiment processati: {total_s}')
-
-          total_e = 0
+          print(f'Sentiment processati: {total}')
+          "
+      - name: Process Embeddings
+        run: |
+          python -c "
+          from nlp.embeddings import EmbeddingEngine
+          ee = EmbeddingEngine()
+          total = 0
           while True:
               n = ee.process_unembedded(limit=100)
-              total_e += n
+              total += n
               if n == 0:
                   break
-          print(f'Embedding generati: {total_e}')
-          print(f'NLP completo: {total_s} sentiment, {total_e} embeddings')
+          print(f'Embedding generati: {total}')
           "
       - name: Run multi-agent system
         run: |
