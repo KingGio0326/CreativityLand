@@ -30,7 +30,7 @@ class PatternExtractor:
         )
         if df.empty or len(df) < 5:
             return None
-        closes = df["Close"].values[-days:]
+        closes = df["Close"].values.flatten()[-days:]
         return closes
 
     def normalize_pattern(self, prices: np.ndarray) -> list[float]:
@@ -51,7 +51,7 @@ class PatternExtractor:
             logger.warning("Nessun dato per %s", ticker)
             return 0
 
-        closes = df["Close"].values
+        closes = df["Close"].values.flatten()
         dates = df.index
 
         patterns_saved = 0
