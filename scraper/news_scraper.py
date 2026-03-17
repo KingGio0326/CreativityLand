@@ -58,19 +58,25 @@ def convert_ticker_finnhub(ticker: str) -> str:
     return crypto_map.get(ticker, ticker)
 
 
-async def resolve_redirect(url: str) -> str:
-    try:
-        async with httpx.AsyncClient(
-            follow_redirects=True, timeout=10,
-            headers={"User-Agent": "Mozilla/5.0"},
-        ) as client:
-            r = await client.head(url)
-            return str(r.url)
-    except Exception:
-        return url
+def clean_html_text(text: str) -> str:
+    """Clean residual HTML tags and entities from extracted text."""
+    import re
+    if not text:
+        return ""
+    if "<" in text and ">" in text:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(text, "html.parser")
+        text = soup.get_text(separator=" ")
+    text = text.replace("&nbsp;", " ")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 
 def extract_clean_text(url: str, html: str) -> str:
+    """Extract clean article text using trafilatura with BS4 fallback."""
     # Priority 1: trafilatura
     try:
         text = trafilatura.extract(
@@ -79,7 +85,7 @@ def extract_clean_text(url: str, html: str) -> str:
             favor_precision=True, deduplicate=True,
         )
         if text and len(text) > 100:
-            return text.strip()
+            return clean_html_text(text)
     except Exception:
         pass
 
@@ -93,7 +99,7 @@ def extract_clean_text(url: str, html: str) -> str:
         text = soup.get_text(separator=" ")
         text = re.sub(r"\s+", " ", text).strip()
         if len(text) > 100:
-            return text[:3000]
+            return clean_html_text(text[:3000])
     except Exception:
         pass
 
@@ -121,6 +127,54 @@ class NewsScraper:
         )
         finnhub_key = os.getenv("FINNHUB_API_KEY")
         self.finnhub = finnhub.Client(api_key=finnhub_key) if finnhub_key else None
+
+    # ── URL resolution ──
+
+    async def resolve_redirect(self, url: str) -> str:
+        """Resolve redirects, with special handling for Google News URLs."""
+        if "news.google.com" in url:
+            try:
+                from googlenewsdecoder import GoogleDecoder
+                decoder = GoogleDecoder()
+                result = decoder.decode_google_news_url(url)
+                if result and result.get("status"):
+                    decoded = result.get("decoded_url", url)
+                    self.logger.debug(
+                        "Google decoded: %s", decoded[:80],
+                    )
+                    return decoded
+            except Exception as e:
+                self.logger.debug("GoogleDecoder failed: %s", e)
+            # Fallback: try GET with follow_redirects
+            try:
+                async with httpx.AsyncClient(
+                    follow_redirects=True, timeout=10,
+                    headers={
+                        "User-Agent": (
+                            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/120.0.0.0 Safari/537.36"
+                        ),
+                    },
+                ) as client:
+                    r = await client.get(url)
+                    final_url = str(r.url)
+                    if "news.google.com" not in final_url:
+                        return final_url
+            except Exception:
+                pass
+            return url
+
+        # For all other URLs: follow redirects normally
+        try:
+            async with httpx.AsyncClient(
+                follow_redirects=True, timeout=10,
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as client:
+                r = await client.head(url)
+                return str(r.url)
+        except Exception:
+            return url
 
     # ── SOURCE 1: RSS with trafilatura full-text ──
 
@@ -152,10 +206,15 @@ class NewsScraper:
 
                 content = entry.get("summary", "")
 
+                # For Google News, force fulltext and ignore RSS summary
+                if source_name == "Google News":
+                    use_fulltext = True
+                    content = ""
+
                 # Full text extraction via trafilatura
                 if use_fulltext and entry.get("link"):
                     try:
-                        real_url = await resolve_redirect(entry.link)
+                        real_url = await self.resolve_redirect(entry.link)
                         async with httpx.AsyncClient(
                             follow_redirects=True, timeout=12,
                             headers={"User-Agent": "Mozilla/5.0"},
