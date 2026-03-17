@@ -147,6 +147,13 @@ interface ApiStats {
   articles_with_embedding: number;
 }
 
+interface HistoryEntry {
+  signal: string;
+  confidence: number;
+  created_at: string;
+  sentiment_score: number | null;
+}
+
 interface ApiData {
   ticker: string;
   signal: {
@@ -156,6 +163,7 @@ interface ApiData {
     reasoning: string[];
   } | null;
   stats: ApiStats;
+  history: HistoryEntry[];
 }
 
 /* ── build cards from API data ─────────────────────────── */
@@ -455,6 +463,142 @@ function WeightedVotingCard({
   );
 }
 
+/* ── Pipeline Log: syntax-highlighted reasoning list ───── */
+function highlightLine(line: string) {
+  // Split into tokens and colorize BUY/SELL/numbers
+  return line.split(/(\bBUY\b|\bSELL\b|\bHOLD\b|\bHIGH\b|\bMEDIUM\b|\bLOW\b|\bAPPROVATO\b|\bRIGETTATO\b|\d+\.?\d*%?)/g).map((token, i) => {
+    if (token === "BUY" || token === "APPROVATO")
+      return <span key={i} className="text-emerald-400 font-bold">{token}</span>;
+    if (token === "SELL" || token === "RIGETTATO" || token === "HIGH")
+      return <span key={i} className="text-red-400 font-bold">{token}</span>;
+    if (token === "HOLD" || token === "MEDIUM")
+      return <span key={i} className="text-zinc-400 font-bold">{token}</span>;
+    if (token === "LOW")
+      return <span key={i} className="text-emerald-400/70 font-medium">{token}</span>;
+    if (/^\d+\.?\d*%?$/.test(token))
+      return <span key={i} className="font-mono text-sky-400">{token}</span>;
+    return <span key={i}>{token}</span>;
+  });
+}
+
+function PipelineLog({ reasoning }: { reasoning: string[] }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(reasoning.join("\n")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  if (reasoning.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <p className="text-sm font-semibold">Pipeline Log</p>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-lg border bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {copied ? (
+            <>
+              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Copiato
+            </>
+          ) : (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              Copia
+            </>
+          )}
+        </button>
+      </div>
+      <div className="p-4 space-y-0.5 max-h-[400px] overflow-auto">
+        {reasoning.map((line, i) => (
+          <div key={i} className="flex gap-3 py-1 text-[11px] leading-relaxed group hover:bg-muted/20 rounded px-2 -mx-2">
+            <span className="text-muted-foreground/40 font-mono select-none shrink-0 w-5 text-right tabular-nums">
+              {i + 1}
+            </span>
+            <p className="font-mono text-muted-foreground min-w-0">
+              {highlightLine(line)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Signal History table ─────────────────────────────── */
+function SignalHistory({ history, ticker }: { history: HistoryEntry[]; ticker: string }) {
+  if (history.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="px-5 py-3 border-b">
+        <p className="text-sm font-semibold">
+          Storico segnali{" "}
+          <span className="text-muted-foreground font-normal">— {ticker}</span>
+        </p>
+      </div>
+      <div className="overflow-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b bg-muted/30">
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Data</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Segnale</th>
+              <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Confidence</th>
+              <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Sentiment Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.map((h, i) => {
+              const sigColor =
+                h.signal === "BUY"
+                  ? "text-emerald-400"
+                  : h.signal === "SELL"
+                    ? "text-red-400"
+                    : "text-zinc-400";
+              const sentColor =
+                h.sentiment_score != null
+                  ? h.sentiment_score > 0
+                    ? "text-emerald-400"
+                    : h.sentiment_score < 0
+                      ? "text-red-400"
+                      : "text-zinc-400"
+                  : "text-muted-foreground";
+              return (
+                <tr
+                  key={i}
+                  className={`border-b last:border-0 hover:bg-muted/20 transition-colors ${i === 0 ? "bg-muted/10" : ""}`}
+                >
+                  <td className="px-4 py-2.5 font-mono tabular-nums text-muted-foreground">
+                    {new Date(h.created_at).toLocaleString()}
+                  </td>
+                  <td className={`px-4 py-2.5 font-bold ${sigColor}`}>
+                    {h.signal}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                    {Math.round(h.confidence * 100)}%
+                  </td>
+                  <td className={`px-4 py-2.5 text-right font-mono tabular-nums ${sentColor}`}>
+                    {h.sentiment_score != null ? h.sentiment_score.toFixed(3) : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ── page ──────────────────────────────────────────────── */
 export default function AgentsPage() {
   const [ticker, setTicker] = useState("AAPL");
@@ -584,6 +728,12 @@ export default function AgentsPage() {
             overall={data?.signal ?? null}
             reasoning={data?.signal?.reasoning ?? []}
           />
+
+          {/* Pipeline Log */}
+          <PipelineLog reasoning={data?.signal?.reasoning ?? []} />
+
+          {/* Signal History */}
+          <SignalHistory history={data?.history ?? []} ticker={ticker} />
         </>
       )}
 

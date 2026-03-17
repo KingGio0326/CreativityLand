@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
         .select("*")
         .eq("ticker", ticker)
         .order("created_at", { ascending: false })
-        .limit(1),
+        .limit(10),
       supabase
         .from("articles")
         .select("*")
@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const signal = signalRes.data?.[0] ?? null;
+    const allSignals = signalRes.data ?? [];
+    const signal = allSignals[0] ?? null;
     const articles = articlesRes.data ?? [];
 
     // Parse reasoning
@@ -86,6 +87,30 @@ export async function GET(request: NextRequest) {
         ? Math.round((sumContribution / sumWeight) * 10000) / 10000
         : 0;
 
+    // Build history from all signals
+    const history = allSignals.map((s) => {
+      let r: string[] = [];
+      if (s.reasoning) {
+        r =
+          typeof s.reasoning === "string"
+            ? s.reasoning.split(" | ")
+            : Array.isArray(s.reasoning)
+              ? s.reasoning
+              : [];
+      }
+      // Extract sentiment score from SentimentAgent reasoning line
+      const sentLine = r.find((l: string) => l.startsWith("SentimentAgent:")) ?? "";
+      const scoreMatch = sentLine.match(/score=([\d.-]+)/);
+      const sentimentScore = scoreMatch ? parseFloat(scoreMatch[1]) : null;
+
+      return {
+        signal: s.signal,
+        confidence: s.confidence,
+        created_at: s.created_at,
+        sentiment_score: sentimentScore,
+      };
+    });
+
     return NextResponse.json({
       ticker,
       signal: signal
@@ -104,6 +129,7 @@ export async function GET(request: NextRequest) {
         weighted_score: weightedScore,
         articles_with_embedding: articlesWithEmbedding,
       },
+      history,
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
