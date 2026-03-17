@@ -106,6 +106,385 @@ function fmtDateFull(d: string) {
   });
 }
 
+/* ── portfolio types ───────────────────────────────────── */
+interface Position {
+  symbol: string;
+  qty: number;
+  side: string;
+  avg_entry_price: number;
+  current_price: number;
+  market_value: number;
+  unrealized_pl: number;
+  unrealized_plpc: number;
+  change_today: number;
+}
+
+/* ── TradingPanel ─────────────────────────────────────── */
+function TradingPanel({
+  ticker,
+  currentPrice,
+}: {
+  ticker: string;
+  currentPrice: number;
+}) {
+  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [qty, setQty] = useState(1);
+  const [stopLossPct, setStopLossPct] = useState(3);
+  const [takeProfitPct, setTakeProfitPct] = useState(8);
+  const [orderType, setOrderType] = useState<"market" | "limit">("market");
+  const [limitPrice, setLimitPrice] = useState(currentPrice);
+  const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    setLimitPrice(currentPrice);
+  }, [currentPrice]);
+
+  const stopLossPrice =
+    side === "buy"
+      ? Math.round(currentPrice * (1 - stopLossPct / 100) * 100) / 100
+      : Math.round(currentPrice * (1 + stopLossPct / 100) * 100) / 100;
+
+  const takeProfitPrice =
+    side === "buy"
+      ? Math.round(currentPrice * (1 + takeProfitPct / 100) * 100) / 100
+      : Math.round(currentPrice * (1 - takeProfitPct / 100) * 100) / 100;
+
+  const riskPerShare = Math.abs(currentPrice - stopLossPrice);
+  const rewardPerShare = Math.abs(takeProfitPrice - currentPrice);
+  const maxRisk = Math.round(riskPerShare * qty * 100) / 100;
+  const targetGain = Math.round(rewardPerShare * qty * 100) / 100;
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setToast(null);
+    try {
+      const res = await fetch("/api/trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker,
+          side,
+          qty,
+          stop_loss_pct: stopLossPct,
+          take_profit_pct: takeProfitPct,
+          order_type: orderType,
+          limit_price: orderType === "limit" ? limitPrice : undefined,
+          current_price: currentPrice,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Errore ordine");
+      setToast({
+        type: "success",
+        message: `Ordine eseguito: ${side.toUpperCase()} ${qty} ${ticker} | Stop Loss: $${data.stop_loss_price} | Take Profit: $${data.take_profit_price}`,
+      });
+    } catch (err) {
+      setToast({ type: "error", message: String(err) });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <p className="text-sm font-semibold">Esegui Ordine</p>
+        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+          PAPER MODE
+        </span>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* Side + Qty */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-[11px] text-muted-foreground">Direzione</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSide("buy")}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${
+                  side === "buy"
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50"
+                }`}
+              >
+                BUY
+              </button>
+              <button
+                onClick={() => setSide("sell")}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${
+                  side === "sell"
+                    ? "bg-red-500/20 text-red-400 border-red-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50"
+                }`}
+              >
+                SELL
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] text-muted-foreground">Quantita</label>
+            <input
+              type="number"
+              min={1}
+              value={qty}
+              onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        {/* Stop Loss slider */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[11px]">
+            <span className="text-muted-foreground">Stop Loss</span>
+            <span className="font-mono text-red-400">
+              -{stopLossPct}% (${stopLossPrice})
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={15}
+            step={0.5}
+            value={stopLossPct}
+            onChange={(e) => setStopLossPct(parseFloat(e.target.value))}
+            className="w-full h-1.5 rounded-full appearance-none bg-muted/40 accent-red-500"
+          />
+        </div>
+
+        {/* Take Profit slider */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[11px]">
+            <span className="text-muted-foreground">Take Profit</span>
+            <span className="font-mono text-emerald-400">
+              +{takeProfitPct}% (${takeProfitPrice})
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={30}
+            step={0.5}
+            value={takeProfitPct}
+            onChange={(e) => setTakeProfitPct(parseFloat(e.target.value))}
+            className="w-full h-1.5 rounded-full appearance-none bg-muted/40 accent-emerald-500"
+          />
+        </div>
+
+        {/* Order type */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-[11px] text-muted-foreground">Tipo ordine</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setOrderType("market")}
+                className={`flex-1 py-1.5 text-[11px] font-medium rounded-lg border transition-all ${
+                  orderType === "market"
+                    ? "bg-primary/10 text-foreground border-primary/40"
+                    : "bg-muted/30 text-muted-foreground border-border"
+                }`}
+              >
+                Market
+              </button>
+              <button
+                onClick={() => setOrderType("limit")}
+                className={`flex-1 py-1.5 text-[11px] font-medium rounded-lg border transition-all ${
+                  orderType === "limit"
+                    ? "bg-primary/10 text-foreground border-primary/40"
+                    : "bg-muted/30 text-muted-foreground border-border"
+                }`}
+              >
+                Limit
+              </button>
+            </div>
+          </div>
+          {orderType === "limit" && (
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-muted-foreground">Prezzo limite</label>
+              <input
+                type="number"
+                step={0.01}
+                value={limitPrice}
+                onChange={(e) => setLimitPrice(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Order summary */}
+        <div className="rounded-lg bg-muted/20 border p-3 space-y-1 text-[11px]">
+          <p className="font-medium text-foreground">
+            {side.toUpperCase()} {qty} {ticker} @{" "}
+            {orderType === "market" ? "Market" : `$${limitPrice}`}
+          </p>
+          <p className="text-muted-foreground">
+            Stop Loss: <span className="font-mono text-red-400">${stopLossPrice}</span> (-
+            {stopLossPct}%)
+          </p>
+          <p className="text-muted-foreground">
+            Take Profit:{" "}
+            <span className="font-mono text-emerald-400">${takeProfitPrice}</span> (+
+            {takeProfitPct}%)
+          </p>
+          <div className="flex gap-4 pt-1 border-t border-border/50 mt-1">
+            <p className="text-red-400 font-mono">
+              Rischio max: -${maxRisk}
+            </p>
+            <p className="text-emerald-400 font-mono">
+              Target: +${targetGain}
+            </p>
+          </div>
+        </div>
+
+        {/* Submit */}
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className={`w-full py-2.5 rounded-lg text-xs font-bold transition-all ${
+            side === "buy"
+              ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+              : "bg-red-500 hover:bg-red-600 text-white"
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          {submitting ? "Invio in corso..." : "CONFERMA ORDINE"}
+        </button>
+        <p className="text-[10px] text-center text-amber-400/70">
+          Paper Trading Mode — nessun denaro reale
+        </p>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`mx-5 mb-4 p-3 rounded-lg text-[11px] font-mono ${
+            toast.type === "success"
+              ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+              : "bg-red-500/10 border border-red-500/30 text-red-400"
+          }`}
+        >
+          {toast.type === "success" ? "+" : "x"} {toast.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── PortfolioPanel ───────────────────────────────────── */
+function PortfolioPanel() {
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/portfolio")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) throw new Error(d.error);
+        setPositions(d.positions ?? []);
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <p className="text-sm font-semibold">Portfolio Aperto</p>
+        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+          PAPER MODE
+        </span>
+      </div>
+
+      {loading && (
+        <div className="p-5">
+          <div className="h-16 rounded-lg bg-muted/30 animate-pulse" />
+        </div>
+      )}
+
+      {error && (
+        <div className="p-5 text-xs text-red-400">{error}</div>
+      )}
+
+      {!loading && !error && positions.length === 0 && (
+        <div className="p-5 text-xs text-muted-foreground text-center">
+          Nessuna posizione aperta
+        </div>
+      )}
+
+      {!loading && !error && positions.length > 0 && (
+        <div className="overflow-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                  Simbolo
+                </th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                  Qty
+                </th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                  Ingresso
+                </th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                  Attuale
+                </th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                  P&L
+                </th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                  P&L %
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {positions.map((p) => {
+                const plColor =
+                  p.unrealized_pl >= 0 ? "text-emerald-400" : "text-red-400";
+                return (
+                  <tr
+                    key={p.symbol}
+                    className="border-b last:border-0 hover:bg-muted/20 transition-colors"
+                  >
+                    <td className="px-4 py-2.5 font-bold">{p.symbol}</td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      {p.qty}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-muted-foreground">
+                      ${p.avg_entry_price.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      ${p.current_price.toFixed(2)}
+                    </td>
+                    <td
+                      className={`px-4 py-2.5 text-right font-mono font-medium ${plColor}`}
+                    >
+                      {p.unrealized_pl >= 0 ? "+" : ""}$
+                      {p.unrealized_pl.toFixed(2)}
+                    </td>
+                    <td
+                      className={`px-4 py-2.5 text-right font-mono font-medium ${plColor}`}
+                    >
+                      {p.unrealized_plpc >= 0 ? "+" : ""}
+                      {(p.unrealized_plpc * 100).toFixed(2)}%
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── page ──────────────────────────────────────────────── */
 export default function PatternsPage() {
   const [ticker, setTicker] = useState("AAPL");
@@ -531,6 +910,15 @@ export default function PatternsPage() {
               </p>
             </div>
           )}
+
+          {/* ── SECTION 6: Trading Panel + Portfolio ──── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <TradingPanel
+              ticker={ticker}
+              currentPrice={data.current.current_price}
+            />
+            <PortfolioPanel />
+          </div>
         </>
       )}
 
