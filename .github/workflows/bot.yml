@@ -26,9 +26,26 @@ jobs:
           python -c "
           from nlp.sentiment import SentimentAnalyzer
           from nlp.embeddings import EmbeddingEngine
-          n1 = SentimentAnalyzer().process_unanalyzed(200)
-          n2 = EmbeddingEngine().process_unembedded(200)
-          print(f'NLP: {n1} sentiment, {n2} embeddings processati')
+
+          sa = SentimentAnalyzer()
+          ee = EmbeddingEngine()
+
+          total_s = 0
+          while True:
+              n = sa.process_unanalyzed(limit=100)
+              total_s += n
+              if n == 0:
+                  break
+          print(f'Sentiment processati: {total_s}')
+
+          total_e = 0
+          while True:
+              n = ee.process_unembedded(limit=100)
+              total_e += n
+              if n == 0:
+                  break
+          print(f'Embedding generati: {total_e}')
+          print(f'NLP completo: {total_s} sentiment, {total_e} embeddings')
           "
       - name: Run multi-agent system
         run: |
