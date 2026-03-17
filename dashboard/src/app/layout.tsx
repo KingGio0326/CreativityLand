@@ -24,6 +24,7 @@ const navLinks = [
   { href: "/finbert", label: "FinBERT Debug" },
   { href: "/backtest", label: "Backtest" },
   { href: "/search", label: "Search" },
+  { href: "/agents", label: "Agents" },
 ];
 
 export default function RootLayout({
