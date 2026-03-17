@@ -3,6 +3,49 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+// Known agent prefixes for reconstructing fragmented pipe-separated reasoning
+const AGENT_PREFIXES = [
+  "SentimentAgent:", "SocialAgent:", "TechnicalAgent:",
+  "FundamentalAgent:", "MacroAgent:", "MomentumAgent:",
+  "MeanReversionAgent:", "MLAgent:", "ResearchAgent:",
+  "RiskAgent:", "WeightedVote:", "CriticAgent:",
+];
+
+function parseReasoning(raw: unknown): string[] {
+  if (!raw) return [];
+
+  // Already a proper array (jsonb column or parsed)
+  if (Array.isArray(raw)) return raw;
+
+  if (typeof raw !== "string") return [];
+
+  // Try JSON parse first (new format: json.dumps([...]))
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // Not JSON — fall through to legacy pipe split
+  }
+
+  // Legacy format: pipe-separated string
+  // Problem: WeightedVote lines contain " | " internally
+  // Fix: split then rejoin fragments that don't start with a known prefix
+  const fragments = raw.split(" | ");
+  const lines: string[] = [];
+
+  for (const frag of fragments) {
+    const isAgentLine = AGENT_PREFIXES.some((p) => frag.startsWith(p));
+    if (isAgentLine || lines.length === 0) {
+      lines.push(frag);
+    } else {
+      // Append to previous line (it was fragmented by the split)
+      lines[lines.length - 1] += " | " + frag;
+    }
+  }
+
+  return lines;
+}
+
 export async function GET(request: NextRequest) {
   const ticker =
     request.nextUrl.searchParams.get("ticker")?.toUpperCase() ?? "AAPL";
@@ -41,20 +84,8 @@ export async function GET(request: NextRequest) {
     const signal = allSignals[0] ?? null;
     const articles = articlesRes.data ?? [];
 
-    // Parse reasoning
-    let reasoning: string[] = [];
-    if (signal?.reasoning) {
-      reasoning =
-        typeof signal.reasoning === "string"
-          ? signal.reasoning.split(" | ")
-          : Array.isArray(signal.reasoning)
-            ? signal.reasoning
-            : [];
-    }
-
-    // Debug log — temporary
-    console.log("=== REASONING ARRAY ===");
-    console.log(JSON.stringify(signal?.reasoning, null, 2));
+    // Parse reasoning — handles JSON array, JSON string, or legacy pipe-separated
+    const reasoning = parseReasoning(signal?.reasoning);
 
     // Sentiment stats from articles (server-side, not from reasoning)
     const positive = articles.filter(
@@ -103,25 +134,17 @@ export async function GET(request: NextRequest) {
 
     // Build history from all signals
     const history = allSignals.map((s) => {
-      let r: string[] = [];
-      if (s.reasoning) {
-        r =
-          typeof s.reasoning === "string"
-            ? s.reasoning.split(" | ")
-            : Array.isArray(s.reasoning)
-              ? s.reasoning
-              : [];
-      }
+      const r = parseReasoning(s.reasoning);
       // Extract sentiment score from SentimentAgent reasoning line
       const sentLine = r.find((l: string) => l.startsWith("SentimentAgent:")) ?? "";
       const scoreMatch = sentLine.match(/score=([\d.-]+)/);
-      const sentimentScore = scoreMatch ? parseFloat(scoreMatch[1]) : null;
+      const histSentScore = scoreMatch ? parseFloat(scoreMatch[1]) : null;
 
       return {
         signal: s.signal,
         confidence: s.confidence,
         created_at: s.created_at,
-        sentiment_score: sentimentScore,
+        sentiment_score: histSentScore,
       };
     });
 

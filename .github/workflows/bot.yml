@@ -50,7 +50,7 @@ jobs:
       - name: Run multi-agent system
         run: |
           python -c "
-          import os
+          import os, json
           from agents.orchestrator import TradingOrchestrator
 
           tickers_input = os.getenv('INPUT_TICKERS',
@@ -69,7 +69,7 @@ jobs:
                       'ticker': ticker,
                       'signal': result['signal'],
                       'confidence': result['confidence'],
-                      'reasoning': ' | '.join(result['reasoning'][-3:]),
+                      'reasoning': json.dumps(result['reasoning']),
                   }
                   se.save_signal(signal_dict)
                   print(f'{ticker}: {result[\"signal\"]} '
