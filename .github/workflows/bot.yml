@@ -123,12 +123,13 @@ jobs:
           ALPHA_VANTAGE_KEY: ${{ secrets.ALPHA_VANTAGE_KEY }}
         run: |
           python -c "
-          from engine.pattern_extractor import PatternExtractor
+          from engine.pattern_extractor import PatternExtractor, TICKER_START_DATES
           pe = PatternExtractor()
-          tickers = ['AAPL','TSLA','NVDA','MSFT',
-                     'XOM','GLD','BTC-USD','ETH-USD']
+          tickers = list(TICKER_START_DATES.keys())
+          total = 0
           for t in tickers:
-              n = pe.build_historical_patterns(t, years=3)
+              n = pe.build_historical_patterns(t)
               print(f'{t}: {n} pattern storici salvati')
-          print('Pattern build completato.')
+              total += n
+          print(f'Pattern build completato: {total} totali')
           "

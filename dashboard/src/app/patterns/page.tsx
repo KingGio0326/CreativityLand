@@ -44,6 +44,9 @@ interface PatternData {
     current_price: number;
     change_30d_pct: number;
   };
+  market_regime?: string;
+  vix_approx?: number | null;
+  spy_trend_30d?: number | null;
   similar: SimilarPattern[];
   analysis: {
     patterns_found: number;
@@ -67,6 +70,37 @@ interface PatternData {
     confidence: number | null;
     combined_signal: string;
   };
+}
+
+/* ── regime badge helper ────────────────────────────────── */
+function regimeStyle(regime: string) {
+  switch (regime) {
+    case "bull":
+      return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
+    case "bear":
+      return "bg-red-500/15 text-red-400 border-red-500/30";
+    case "sideways":
+      return "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
+    case "volatile_bull":
+      return "bg-amber-500/15 text-amber-400 border-amber-500/30";
+    default:
+      return "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
+  }
+}
+
+function regimeLabel(regime: string) {
+  switch (regime) {
+    case "bull":
+      return "Bull Market";
+    case "bear":
+      return "Bear Market";
+    case "sideways":
+      return "Sideways";
+    case "volatile_bull":
+      return "Volatile Bull";
+    default:
+      return "Unknown";
+  }
 }
 
 /* ── signal color helpers ─────────────────────────────── */
@@ -570,9 +604,18 @@ export default function PatternsPage() {
         </div>
       </div>
 
-      {/* Signal badges */}
+      {/* Signal badges + Regime */}
       {data && (
         <div className="flex items-center gap-4 flex-wrap">
+          {/* Regime badge */}
+          {data.market_regime && data.market_regime !== "unknown" && (
+            <span
+              className={`px-3 py-1 rounded-full text-[11px] font-bold border ${regimeStyle(data.market_regime)}`}
+            >
+              {regimeLabel(data.market_regime)}
+            </span>
+          )}
+
           {/* Pipeline signal */}
           <div className="flex items-center gap-2 text-xs">
             <span className={`w-2 h-2 rounded-full ${signalDot(data.pipeline_signal.signal)}`} />
@@ -794,6 +837,42 @@ export default function PatternsPage() {
                   />
                 </ComposedChart>
               </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* ── Regime context note ────────────────────── */}
+          {data.market_regime && data.market_regime !== "unknown" && (
+            <div className="rounded-xl border bg-card p-4">
+              <div className="flex items-center gap-3 flex-wrap text-xs">
+                <span
+                  className={`px-2.5 py-1 rounded-md font-bold border ${regimeStyle(data.market_regime)}`}
+                >
+                  {regimeLabel(data.market_regime)}
+                </span>
+                <span className="text-muted-foreground">
+                  Pattern cercati in regime:{" "}
+                  <span className="text-foreground font-medium">{data.market_regime}</span>
+                </span>
+                {data.vix_approx != null && (
+                  <span className="text-muted-foreground">
+                    VIX stimato:{" "}
+                    <span className="text-foreground font-mono">{data.vix_approx}%</span>
+                  </span>
+                )}
+                {data.spy_trend_30d != null && (
+                  <span className="text-muted-foreground">
+                    SPY trend 30gg:{" "}
+                    <span
+                      className={`font-mono font-medium ${
+                        data.spy_trend_30d >= 0 ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {data.spy_trend_30d >= 0 ? "+" : ""}
+                      {data.spy_trend_30d}%
+                    </span>
+                  </span>
+                )}
+              </div>
             </div>
           )}
 

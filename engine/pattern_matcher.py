@@ -23,25 +23,42 @@ class PatternMatcher:
         )
         self.extractor = PatternExtractor()
 
-    def find_similar_patterns(self, ticker: str, top_k: int = 5) -> dict:
+    def find_similar_patterns(self, ticker: str, top_k: int = 10) -> dict:
         """Find historical patterns similar to the current one."""
         current = self.extractor.get_current_pattern(ticker)
         if not current:
             return {"error": "Dati non disponibili"}
 
         vector = current["normalized"]
+        current_regime = current.get("market_regime", None)
 
-        # Search similar patterns with pgvector via RPC
+        # Prima cerca nel regime corrente
         result = self.supabase.rpc(
             "match_patterns",
             {
                 "query_vector": vector,
                 "match_ticker": ticker,
                 "match_count": top_k,
+                "filter_regime": current_regime,
+                "include_crises": True,
             },
         ).execute()
 
         similar = result.data or []
+
+        # Se trova meno di 5 risultati, allarga a tutti i regimi
+        if len(similar) < 5:
+            result = self.supabase.rpc(
+                "match_patterns",
+                {
+                    "query_vector": vector,
+                    "match_ticker": ticker,
+                    "match_count": top_k,
+                    "filter_regime": None,
+                    "include_crises": True,
+                },
+            ).execute()
+            similar = result.data or []
 
         if not similar:
             return {

@@ -178,13 +178,39 @@ export async function GET(request: NextRequest) {
     // 2. Normalize and search similar patterns via RPC
     const vector = normalizePattern(prices);
 
+    // Detect current market regime from SPY trend
+    // Simple heuristic: use the regime from matched patterns or default
     const matchRes = await supabase.rpc("match_patterns", {
       query_vector: vector,
       match_ticker: ticker,
-      match_count: 5,
+      match_count: 10,
     });
 
-    const similar = matchRes.data ?? [];
+    interface MatchedPattern {
+      start_date: string;
+      end_date: string;
+      pattern_vector: number[];
+      outcome_5d: number | null;
+      outcome_10d: number | null;
+      outcome_20d: number | null;
+      similarity: number;
+      market_regime?: string;
+      vix_approx?: number;
+      spy_trend_30d?: number;
+      is_crisis?: boolean;
+    }
+
+    const similar: MatchedPattern[] = matchRes.data ?? [];
+
+    // Detect regime from best matching patterns or default
+    const regimeCounts: Record<string, number> = {};
+    for (const p of similar) {
+      const r = p.market_regime ?? "unknown";
+      regimeCounts[r] = (regimeCounts[r] ?? 0) + 1;
+    }
+    const dominantRegime = Object.entries(regimeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "unknown";
+    const bestVix = similar[0]?.vix_approx ?? null;
+    const bestSpyTrend = similar[0]?.spy_trend_30d ?? null;
 
     // 3. Compute outcome stats
     const o5 = similar
@@ -218,25 +244,20 @@ export async function GET(request: NextRequest) {
         current_price: Math.round(currentPrice * 100) / 100,
         change_30d_pct: Math.round(change30d * 100) / 100,
       },
-      similar: similar.slice(0, 3).map(
-        (p: {
-          start_date: string;
-          end_date: string;
-          pattern_vector: number[];
-          outcome_5d: number | null;
-          outcome_10d: number | null;
-          outcome_20d: number | null;
-          similarity: number;
-        }) => ({
-          start_date: p.start_date,
-          end_date: p.end_date,
-          prices: p.pattern_vector,
-          outcome_5d: p.outcome_5d,
-          outcome_10d: p.outcome_10d,
-          outcome_20d: p.outcome_20d,
-          similarity: Math.round(p.similarity * 10000) / 10000,
-        }),
-      ),
+      market_regime: dominantRegime,
+      vix_approx: bestVix,
+      spy_trend_30d: bestSpyTrend,
+      similar: similar.slice(0, 3).map((p) => ({
+        start_date: p.start_date,
+        end_date: p.end_date,
+        prices: p.pattern_vector,
+        outcome_5d: p.outcome_5d,
+        outcome_10d: p.outcome_10d,
+        outcome_20d: p.outcome_20d,
+        similarity: Math.round(p.similarity * 10000) / 10000,
+        market_regime: p.market_regime ?? "unknown",
+        is_crisis: p.is_crisis ?? false,
+      })),
       analysis: {
         patterns_found: similar.length,
         best_similarity: bestMatch
