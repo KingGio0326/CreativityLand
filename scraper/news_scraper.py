@@ -1,401 +1,493 @@
-"""News scraper module for fetching financial news from various sources."""
+"""Professional news scraper with trafilatura full-text extraction,
+Finnhub, Alpha Vantage, NewsAPI, and curated RSS feeds."""
 
 import asyncio
 import logging
-import re
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import datetime, timedelta
 
 import feedparser
+import finnhub
 import httpx
+import trafilatura
 from dotenv import load_dotenv
-import os
 from supabase import create_client
 
-load_dotenv()
+# ── Configuration ──────────────────────────────────────────────
 
-logger = logging.getLogger("scraper")
+CRYPTO_TICKERS = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"]
 
-# ── Ticker → company/asset name mapping (for filtering general feeds) ──
-TICKER_NAMES: dict[str, list[str]] = {
-    "AAPL": ["Apple", "AAPL"],
-    "TSLA": ["Tesla", "TSLA"],
-    "NVDA": ["Nvidia", "NVDA", "Jensen Huang"],
-    "MSFT": ["Microsoft", "MSFT"],
-    "XOM": ["Exxon", "ExxonMobil", "XOM"],
-    "GLD": ["Gold", "GLD", "XAUUSD", "gold price"],
-    "BTC-USD": ["Bitcoin", "BTC", "crypto"],
-    "ETH-USD": ["Ethereum", "ETH", "Ether"],
+RSS_SOURCES_STOCKS = {
+    "google_news":   "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en",
+    "cnbc":          "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+    "benzinga":      "https://www.benzinga.com/stock/{ticker_lower}/feed",
+    "seeking_alpha": "https://seekingalpha.com/api/sa/combined/{ticker}.xml",
+    "marketwatch":   "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
 }
 
-CRYPTO_TICKERS = {"BTC-USD", "ETH-USD"}
+RSS_SOURCES_CRYPTO = {
+    "coindesk":      "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "cointelegraph": "https://cointelegraph.com/rss",
+    "the_block":     "https://www.theblock.co/rss.xml",
+    "google_news":   "https://news.google.com/rss/search?q={ticker_clean}+crypto&hl=en-US&gl=US&ceid=US:en",
+}
 
-# ── Ticker-specific RSS feeds ──
-YAHOO_RSS = "https://finance.yahoo.com/rss/headline?s={ticker}"
-GOOGLE_RSS = "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en"
-SEEKING_ALPHA_RSS = "https://seekingalpha.com/api/sa/combined/{ticker}.xml"
 
-# ── General financial RSS feeds (filtered by ticker keywords) ──
-GENERAL_RSS = [
-    "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
-    "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
-    "https://www.investing.com/rss/news_301.rss",
-    "https://feeds.benzinga.com/benzinga/markets/",
-]
+# ── Helpers ────────────────────────────────────────────────────
 
-# ── Crypto-specific RSS feeds ──
-CRYPTO_RSS = [
-    "https://www.coindesk.com/arc/outboundfeeds/rss/",
-    "https://cointelegraph.com/rss",
-    "https://www.theblock.co/rss.xml",
-]
+def is_crypto(ticker: str) -> bool:
+    return ticker in CRYPTO_TICKERS
 
-# ── API endpoints ──
-NEWSAPI_URL = "https://newsapi.org/v2/everything"
-FINNHUB_URL = "https://finnhub.io/api/v1/company-news"
-ALPHAVANTAGE_URL = "https://www.alphavantage.co/query"
 
+def clean_ticker_crypto(ticker: str) -> str:
+    mapping = {
+        "BTC-USD": "Bitcoin",
+        "ETH-USD": "Ethereum",
+        "SOL-USD": "Solana",
+        "BNB-USD": "BNB",
+    }
+    return mapping.get(ticker, ticker.replace("-USD", ""))
+
+
+def convert_ticker_finnhub(ticker: str) -> str:
+    crypto_map = {
+        "BTC-USD": "BINANCE:BTCUSDT",
+        "ETH-USD": "BINANCE:ETHUSDT",
+        "SOL-USD": "BINANCE:SOLUSDT",
+    }
+    return crypto_map.get(ticker, ticker)
+
+
+async def resolve_redirect(url: str) -> str:
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=10,
+            headers={"User-Agent": "Mozilla/5.0"},
+        ) as client:
+            r = await client.head(url)
+            return str(r.url)
+    except Exception:
+        return url
+
+
+def extract_clean_text(url: str, html: str) -> str:
+    # Priority 1: trafilatura
+    try:
+        text = trafilatura.extract(
+            html, url=url,
+            include_comments=False, include_tables=False,
+            favor_precision=True, deduplicate=True,
+        )
+        if text and len(text) > 100:
+            return text.strip()
+    except Exception:
+        pass
+
+    # Priority 2: BeautifulSoup fallback
+    try:
+        import re
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            tag.decompose()
+        text = soup.get_text(separator=" ")
+        text = re.sub(r"\s+", " ", text).strip()
+        if len(text) > 100:
+            return text[:3000]
+    except Exception:
+        pass
+
+    return ""
+
+
+def normalize_date(date_str) -> str:
+    try:
+        from dateutil import parser as dateparser
+        return dateparser.parse(str(date_str)).isoformat()
+    except Exception:
+        return datetime.now().isoformat()
+
+
+# ── Scraper ────────────────────────────────────────────────────
 
 class NewsScraper:
-    """Scrapes financial news from NewsAPI, Finnhub, Alpha Vantage, and RSS feeds."""
 
     def __init__(self):
-        self.newsapi_key = os.getenv("NEWS_API_KEY", "")
-        self.finnhub_key = os.getenv("FINNHUB_API_KEY", "")
-        self.alphavantage_key = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+        self.logger = logging.getLogger("scraper")
+        load_dotenv()
         self.supabase = create_client(
             os.getenv("SUPABASE_URL", ""),
             os.getenv("SUPABASE_KEY", ""),
         )
+        finnhub_key = os.getenv("FINNHUB_API_KEY")
+        self.finnhub = finnhub.Client(api_key=finnhub_key) if finnhub_key else None
 
-    def _ticker_keywords(self, ticker: str) -> list[str]:
-        """Get keywords for filtering general feeds."""
-        return TICKER_NAMES.get(ticker, [ticker])
+    # ── SOURCE 1: RSS with trafilatura full-text ──
 
-    def _matches_ticker(self, text: str, ticker: str) -> bool:
-        """Check if text mentions the ticker or its company name."""
-        keywords = self._ticker_keywords(ticker)
-        text_lower = text.lower()
-        return any(kw.lower() in text_lower for kw in keywords)
+    async def fetch_rss_with_fulltext(
+        self, url: str, ticker: str,
+        source_name: str, use_fulltext: bool = True,
+    ) -> list[dict]:
+        try:
+            async with httpx.AsyncClient(
+                follow_redirects=True, timeout=15,
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as client:
+                resp = await client.get(url)
 
-    async def fetch_by_ticker(self, ticker: str, days_back: int = 3) -> list[dict]:
-        """Fetch articles from all sources in parallel and deduplicate."""
-        # Clean ticker for APIs that don't support crypto format
-        clean_ticker = ticker.replace("-USD", "")
+            feed = feedparser.parse(resp.text)
+            articles = []
 
-        # ── Build task list ──
-        tasks: list = [
-            # APIs
-            self.fetch_newsapi(ticker, days_back),
-            self.fetch_finnhub(clean_ticker, ticker, days_back),
-            self.fetch_alphavantage(ticker, days_back),
-            # Ticker-specific RSS
-            self.fetch_rss(YAHOO_RSS.format(ticker=ticker), ticker),
-            self.fetch_rss(GOOGLE_RSS.format(ticker=ticker), ticker),
-            self.fetch_rss(SEEKING_ALPHA_RSS.format(ticker=clean_ticker), ticker),
-        ]
+            for entry in feed.entries[:15]:
+                title = entry.get("title", "")
+                if not title:
+                    continue
 
-        # General financial RSS (filter by keywords)
-        for url in GENERAL_RSS:
-            tasks.append(self.fetch_rss_filtered(url, ticker))
+                # Filter crypto feeds by keyword
+                if is_crypto(ticker):
+                    keyword = clean_ticker_crypto(ticker).lower()
+                    combined = f"{title} {entry.get('summary', '')}".lower()
+                    if keyword not in combined:
+                        continue
 
-        # Crypto-specific RSS (only for crypto tickers)
-        if ticker in CRYPTO_TICKERS:
-            for url in CRYPTO_RSS:
-                tasks.append(self.fetch_rss_filtered(url, ticker))
+                content = entry.get("summary", "")
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+                # Full text extraction via trafilatura
+                if use_fulltext and entry.get("link"):
+                    try:
+                        real_url = await resolve_redirect(entry.link)
+                        async with httpx.AsyncClient(
+                            follow_redirects=True, timeout=12,
+                            headers={"User-Agent": "Mozilla/5.0"},
+                        ) as client:
+                            page = await client.get(real_url)
+                        full = extract_clean_text(real_url, page.text)
+                        if full:
+                            content = full
+                        await asyncio.sleep(0.3)
+                    except Exception as e:
+                        self.logger.debug("Full text fallback for %s: %s", entry.link, e)
 
-        articles = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error("Source %d failed for %s: %s", i, ticker, result)
-            else:
-                articles.extend(result)
+                articles.append({
+                    "title": title,
+                    "content": content,
+                    "url": entry.get("link", ""),
+                    "source": source_name,
+                    "ticker": ticker,
+                    "published_at": normalize_date(
+                        entry.get("published", datetime.now().isoformat())
+                    ),
+                })
 
-        articles = self.deduplicate(articles)
-        logger.info("Fetched %d unique articles for %s from %d sources",
-                     len(articles), ticker, len(tasks))
-        return articles
+            self.logger.info("%s: %d articles for %s", source_name, len(articles), ticker)
+            return articles
+        except Exception as e:
+            self.logger.warning("%s failed for %s: %s", source_name, ticker, e)
+            return []
 
-    # ═══════════════════════ API SOURCES ═══════════════════════
+    # ── SOURCE 2: Google News with redirect resolution ──
+
+    async def fetch_google_news(self, ticker: str, days_back: int) -> list[dict]:
+        query = clean_ticker_crypto(ticker) if is_crypto(ticker) else f"{ticker} stock"
+        url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+        return await self.fetch_rss_with_fulltext(url, ticker, "Google News", use_fulltext=True)
+
+    # ── SOURCE 3: NewsAPI with full-text ──
 
     async def fetch_newsapi(self, ticker: str, days_back: int) -> list[dict]:
-        """Fetch articles from NewsAPI."""
-        if not self.newsapi_key:
-            logger.debug("NEWS_API_KEY not set, skipping NewsAPI")
+        api_key = os.getenv("NEWS_API_KEY")
+        if not api_key:
             return []
-
-        keywords = self._ticker_keywords(ticker)
-        query = " OR ".join(f'"{kw}"' for kw in keywords)
-        from_date = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%d")
-
-        params = {
-            "q": query,
-            "language": "en",
-            "sortBy": "publishedAt",
-            "pageSize": 30,
-            "from": from_date,
-            "apiKey": self.newsapi_key,
-        }
-
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(NEWSAPI_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-
-        articles = []
-        for a in data.get("articles", []):
-            articles.append({
-                "title": a.get("title", ""),
-                "content": a.get("content") or a.get("description", ""),
-                "url": a.get("url", ""),
-                "source": a.get("source", {}).get("name", "NewsAPI"),
-                "ticker": ticker,
-                "published_at": a.get("publishedAt", ""),
-            })
-
-        logger.info("NewsAPI: %d articles for %s", len(articles), ticker)
-        return articles
-
-    async def fetch_finnhub(self, symbol: str, ticker: str, days_back: int) -> list[dict]:
-        """Fetch articles from Finnhub Company News API."""
-        if not self.finnhub_key:
-            logger.debug("FINNHUB_API_KEY not set, skipping Finnhub")
-            return []
-
-        # Finnhub doesn't support crypto symbols well, skip them
-        if ticker in CRYPTO_TICKERS:
-            return []
-
-        to_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        from_date = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%d")
-
-        params = {
-            "symbol": symbol,
-            "from": from_date,
-            "to": to_date,
-            "token": self.finnhub_key,
-        }
-
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(FINNHUB_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-
-        articles = []
-        for a in data if isinstance(data, list) else []:
-            published_ts = a.get("datetime", 0)
-            published_at = datetime.fromtimestamp(
-                published_ts, tz=timezone.utc
-            ).isoformat() if published_ts else datetime.now(timezone.utc).isoformat()
-
-            articles.append({
-                "title": a.get("headline", ""),
-                "content": a.get("summary", ""),
-                "url": a.get("url", ""),
-                "source": a.get("source", "Finnhub"),
-                "ticker": ticker,
-                "published_at": published_at,
-            })
-
-        logger.info("Finnhub: %d articles for %s", len(articles), ticker)
-        return articles[:30]
-
-    async def fetch_alphavantage(self, ticker: str, days_back: int) -> list[dict]:
-        """Fetch articles from Alpha Vantage News Sentiment API."""
-        if not self.alphavantage_key:
-            logger.debug("ALPHA_VANTAGE_API_KEY not set, skipping Alpha Vantage")
-            return []
-
-        # Alpha Vantage uses different format for crypto
-        av_ticker = ticker
-        if ticker == "BTC-USD":
-            av_ticker = "CRYPTO:BTC"
-        elif ticker == "ETH-USD":
-            av_ticker = "CRYPTO:ETH"
-
-        time_from = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y%m%dT0000")
-
-        params = {
-            "function": "NEWS_SENTIMENT",
-            "tickers": av_ticker,
-            "time_from": time_from,
-            "limit": 30,
-            "apikey": self.alphavantage_key,
-        }
-
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(ALPHAVANTAGE_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-
-        articles = []
-        for a in data.get("feed", []):
-            time_pub = a.get("time_published", "")
-            try:
-                published_at = datetime.strptime(
-                    time_pub, "%Y%m%dT%H%M%S"
-                ).replace(tzinfo=timezone.utc).isoformat()
-            except (ValueError, TypeError):
-                published_at = datetime.now(timezone.utc).isoformat()
-
-            articles.append({
-                "title": a.get("title", ""),
-                "content": a.get("summary", ""),
-                "url": a.get("url", ""),
-                "source": a.get("source", "Alpha Vantage"),
-                "ticker": ticker,
-                "published_at": published_at,
-            })
-
-        logger.info("Alpha Vantage: %d articles for %s", len(articles), ticker)
-        return articles
-
-    # ═══════════════════════ RSS SOURCES ═══════════════════════
-
-    async def fetch_rss(self, url: str, ticker: str) -> list[dict]:
-        """Fetch and parse a ticker-specific RSS feed (no filtering needed)."""
-        headers = {
-            "User-Agent": "Mozilla/5.0 (TradingBot/1.0)",
-            "Accept": "application/rss+xml, application/xml, text/xml, */*",
-        }
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-
-        feed = feedparser.parse(resp.text)
-        articles = []
-        for entry in feed.entries:
-            published = entry.get("published_parsed")
-            if published:
-                published_at = datetime(*published[:6], tzinfo=timezone.utc).isoformat()
-            else:
-                published_at = datetime.now(timezone.utc).isoformat()
-
-            articles.append({
-                "title": entry.get("title", ""),
-                "content": entry.get("summary", ""),
-                "url": entry.get("link", ""),
-                "source": feed.feed.get("title", url.split("/")[2]),
-                "ticker": ticker,
-                "published_at": published_at,
-            })
-
-        logger.info("RSS %s: %d articles for %s", url.split("/")[2], len(articles), ticker)
-        return articles
-
-    async def fetch_rss_filtered(self, url: str, ticker: str) -> list[dict]:
-        """Fetch a general RSS feed and filter entries matching the ticker keywords."""
-        headers = {
-            "User-Agent": "Mozilla/5.0 (TradingBot/1.0)",
-            "Accept": "application/rss+xml, application/xml, text/xml, */*",
-        }
         try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-                resp = await client.get(url, headers=headers)
-                resp.raise_for_status()
+            from_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+            query = clean_ticker_crypto(ticker) if is_crypto(ticker) else ticker
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    "https://newsapi.org/v2/everything",
+                    params={
+                        "q": query,
+                        "language": "en",
+                        "sortBy": "publishedAt",
+                        "pageSize": 20,
+                        "from": from_date,
+                        "apiKey": api_key,
+                    },
+                )
+            data = resp.json()
+            articles = []
+            for item in data.get("articles", []):
+                if item.get("title") == "[Removed]":
+                    continue
+                content = item.get("content") or item.get("description") or ""
+                # Try trafilatura on original URL
+                if item.get("url"):
+                    try:
+                        async with httpx.AsyncClient(
+                            follow_redirects=True, timeout=12,
+                            headers={"User-Agent": "Mozilla/5.0"},
+                        ) as client:
+                            page = await client.get(item["url"])
+                        full = extract_clean_text(item["url"], page.text)
+                        if full:
+                            content = full
+                        await asyncio.sleep(0.3)
+                    except Exception:
+                        pass
+                articles.append({
+                    "title": item.get("title", ""),
+                    "content": content,
+                    "url": item.get("url", ""),
+                    "source": item.get("source", {}).get("name", "NewsAPI"),
+                    "ticker": ticker,
+                    "published_at": normalize_date(item.get("publishedAt", "")),
+                })
+            self.logger.info("NewsAPI: %d articles for %s", len(articles), ticker)
+            return articles
         except Exception as e:
-            logger.warning("RSS %s failed: %s", url.split("/")[2], e)
+            self.logger.warning("NewsAPI failed: %s", e)
             return []
 
-        feed = feedparser.parse(resp.text)
-        articles = []
-        for entry in feed.entries:
-            title = entry.get("title", "")
-            summary = entry.get("summary", "")
-            text = f"{title} {summary}"
+    # ── SOURCE 4: Finnhub (clean text already) ──
 
-            if not self._matches_ticker(text, ticker):
-                continue
+    def fetch_finnhub(self, ticker: str, days_back: int) -> list[dict]:
+        if not self.finnhub:
+            return []
+        try:
+            finnhub_ticker = convert_ticker_finnhub(ticker)
+            from_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+            to_date = datetime.now().strftime("%Y-%m-%d")
+            news = self.finnhub.company_news(
+                finnhub_ticker, _from=from_date, to=to_date,
+            )
+            articles = []
+            for n in (news or [])[:20]:
+                if not n.get("headline"):
+                    continue
+                articles.append({
+                    "title": n["headline"],
+                    "content": n.get("summary", ""),
+                    "url": n.get("url", ""),
+                    "source": n.get("source", "Finnhub"),
+                    "ticker": ticker,
+                    "published_at": datetime.fromtimestamp(
+                        n.get("datetime", 0)
+                    ).isoformat(),
+                })
+            self.logger.info("Finnhub: %d articles for %s", len(articles), ticker)
+            return articles
+        except Exception as e:
+            self.logger.warning("Finnhub failed for %s: %s", ticker, e)
+            return []
 
-            published = entry.get("published_parsed")
-            if published:
-                published_at = datetime(*published[:6], tzinfo=timezone.utc).isoformat()
-            else:
-                published_at = datetime.now(timezone.utc).isoformat()
+    # ── SOURCE 5: Alpha Vantage ──
 
-            articles.append({
-                "title": title,
-                "content": summary,
-                "url": entry.get("link", ""),
-                "source": feed.feed.get("title", url.split("/")[2]),
-                "ticker": ticker,
-                "published_at": published_at,
-            })
+    async def fetch_alpha_vantage(self, ticker: str) -> list[dict]:
+        api_key = os.getenv("ALPHA_VANTAGE_KEY")
+        if not api_key:
+            return []
+        try:
+            av_ticker = ticker.replace("-USD", "")
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    "https://www.alphavantage.co/query",
+                    params={
+                        "function": "NEWS_SENTIMENT",
+                        "tickers": av_ticker,
+                        "limit": 20,
+                        "apikey": api_key,
+                    },
+                )
+            data = resp.json()
+            articles = []
+            for item in data.get("feed", []):
+                articles.append({
+                    "title": item.get("title", ""),
+                    "content": item.get("summary", ""),
+                    "url": item.get("url", ""),
+                    "source": item.get("source", "Alpha Vantage"),
+                    "ticker": ticker,
+                    "published_at": normalize_date(
+                        item.get("time_published", "")
+                    ),
+                })
+            self.logger.info("Alpha Vantage: %d articles for %s", len(articles), ticker)
+            return articles
+        except Exception as e:
+            self.logger.warning("Alpha Vantage failed: %s", e)
+            return []
 
-        logger.info("RSS filtered %s: %d articles for %s",
-                     url.split("/")[2], len(articles), ticker)
-        return articles
+    # ── MAIN FETCH ──
 
-    # ═══════════════════════ STORAGE ═══════════════════════
+    async def fetch_by_ticker(self, ticker: str, days_back: int = 2) -> list[dict]:
+        ticker_lower = ticker.lower().replace("-usd", "")
 
-    def deduplicate(self, articles: list[dict]) -> list[dict]:
-        """Remove duplicate articles by URL and by similar titles."""
-        seen_urls: set[str] = set()
-        seen_titles: set[str] = set()
-        unique = []
-        for article in articles:
-            url = article.get("url", "")
-            # Normalize title for dedup
-            title_norm = re.sub(r'\s+', ' ', article.get("title", "").lower().strip())
+        # Common tasks
+        tasks = [
+            self.fetch_google_news(ticker, days_back),
+            self.fetch_newsapi(ticker, days_back),
+            self.fetch_rss_with_fulltext(
+                RSS_SOURCES_STOCKS["seeking_alpha"].format(ticker=ticker),
+                ticker, "Seeking Alpha", use_fulltext=False,
+            ),
+            self.fetch_alpha_vantage(ticker),
+        ]
 
-            if url and url in seen_urls:
-                continue
-            if title_norm and title_norm in seen_titles:
-                continue
-
-            if url:
-                seen_urls.add(url)
-            if title_norm:
-                seen_titles.add(title_norm)
-            unique.append(article)
-        return unique
-
-    async def save_to_supabase(self, articles: list[dict]) -> int:
-        """Upsert articles to Supabase, skipping duplicates. Returns count of new inserts."""
-        if not articles:
-            return 0
-
-        count_before = (
-            self.supabase.table("articles")
-            .select("id", count="exact")
-            .execute()
-        ).count or 0
-
-        (
-            self.supabase.table("articles")
-            .upsert(articles, on_conflict="url")
-            .execute()
+        # Finnhub is sync — run in thread
+        loop = asyncio.get_event_loop()
+        finnhub_task = loop.run_in_executor(
+            None, self.fetch_finnhub, ticker, days_back,
         )
 
-        count_after = (
-            self.supabase.table("articles")
-            .select("id", count="exact")
-            .execute()
-        ).count or 0
+        if is_crypto(ticker):
+            clean = clean_ticker_crypto(ticker)
+            tasks += [
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_CRYPTO["coindesk"],
+                    ticker, "CoinDesk", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_CRYPTO["cointelegraph"],
+                    ticker, "CoinTelegraph", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_CRYPTO["the_block"],
+                    ticker, "The Block", use_fulltext=False,
+                ),
+            ]
+        else:
+            tasks += [
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_STOCKS["cnbc"],
+                    ticker, "CNBC", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_STOCKS["benzinga"].format(ticker_lower=ticker_lower),
+                    ticker, "Benzinga", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_STOCKS["marketwatch"],
+                    ticker, "MarketWatch", use_fulltext=True,
+                ),
+            ]
 
-        new_count = count_after - count_before
-        logger.info("Saved %d new articles to Supabase", new_count)
-        return new_count
+        results = await asyncio.gather(*tasks, finnhub_task, return_exceptions=True)
+
+        all_articles = []
+        for r in results:
+            if isinstance(r, list):
+                all_articles.extend(r)
+            elif isinstance(r, Exception):
+                self.logger.warning("Source error: %s", r)
+
+        # Deduplicate by URL
+        seen: set[str] = set()
+        unique = []
+        for a in all_articles:
+            url = a.get("url", "")
+            if url and url not in seen and len(a.get("title", "")) > 10:
+                seen.add(url)
+                unique.append(a)
+
+        self.logger.info(
+            "%s: %d unique articles (from %d total, %d dupes removed)",
+            ticker, len(unique), len(all_articles),
+            len(all_articles) - len(unique),
+        )
+        return unique
+
+    # ── SAVE TO SUPABASE ──
+
+    async def save_to_supabase(self, articles: list[dict]) -> int:
+        if not articles:
+            return 0
+        try:
+            existing = self.supabase.table("articles").select("url").execute()
+            existing_urls = {r["url"] for r in existing.data}
+
+            new_articles = [
+                a for a in articles
+                if a.get("url") and a["url"] not in existing_urls
+            ]
+            if not new_articles:
+                return 0
+
+            self.supabase.table("articles").upsert(
+                new_articles, on_conflict="url",
+            ).execute()
+
+            self.logger.info("Saved %d new articles", len(new_articles))
+            return len(new_articles)
+        except Exception as e:
+            self.logger.error("Supabase save error: %s", e)
+            return 0
+
+    # ── RUN ALL TICKERS ──
+
+    async def run_all(
+        self, tickers: list[str] | None = None, days_back: int = 2,
+    ) -> dict:
+        if tickers is None:
+            tickers = [
+                "AAPL", "TSLA", "NVDA", "MSFT",
+                "XOM", "GLD", "BTC-USD", "ETH-USD",
+            ]
+        results = {}
+        for ticker in tickers:
+            articles = await self.fetch_by_ticker(ticker, days_back)
+            saved = await self.save_to_supabase(articles)
+            results[ticker] = {"found": len(articles), "saved": saved}
+            self.logger.info("%s: found=%d, saved=%d", ticker, len(articles), saved)
+            await asyncio.sleep(1)
+        return results
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-
-    TICKERS = ["AAPL", "TSLA", "NVDA", "BTC-USD", "ETH-USD", "MSFT", "XOM", "GLD"]
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
 
     async def main():
         scraper = NewsScraper()
-        total = 0
-        for t in TICKERS:
-            print(f"\n{'='*50}")
-            print(f"Scraping {t}...")
-            articles = await scraper.fetch_by_ticker(t, days_back=3)
-            print(f"  Trovati {len(articles)} articoli")
-            saved = await scraper.save_to_supabase(articles)
-            print(f"  Salvati {saved} nuovi articoli")
-            total += saved
-        print(f"\n{'='*50}")
-        print(f"Totale nuovi articoli salvati: {total}")
+        print("=== TEST SCRAPER PROFESSIONALE ===\n")
+
+        # Test AAPL
+        print("Test AAPL (stock)...")
+        articles = await scraper.fetch_by_ticker("AAPL", days_back=1)
+        with_content = [a for a in articles if len(a.get("content", "")) > 100]
+        print(f"  Trovati: {len(articles)}")
+        print(f"  Con contenuto pulito: {len(with_content)}")
+        fonti: dict[str, int] = {}
+        for a in articles:
+            fonti[a["source"]] = fonti.get(a["source"], 0) + 1
+        for fonte, count in sorted(fonti.items()):
+            print(f"    {fonte}: {count}")
+        if articles:
+            a = articles[0]
+            print(f"\n  Esempio articolo:")
+            print(f"    Titolo:    {a['title'][:70]}")
+            print(f"    Fonte:     {a['source']}")
+            print(f"    URL:       {a['url'][:80]}")
+            print(f"    Contenuto: {a['content'][:200]}...")
+
+        # Test BTC-USD
+        print("\nTest BTC-USD (crypto)...")
+        btc = await scraper.fetch_by_ticker("BTC-USD", days_back=1)
+        print(f"  Trovati: {len(btc)}")
+        fonti_btc: dict[str, int] = {}
+        for a in btc:
+            fonti_btc[a["source"]] = fonti_btc.get(a["source"], 0) + 1
+        for fonte, count in sorted(fonti_btc.items()):
+            print(f"    {fonte}: {count}")
+
+        print(f"\n=== RISULTATI ===")
+        pct = len(with_content) / max(len(articles), 1) * 100
+        print(f"AAPL: {len(articles)} articoli, {len(with_content)} con contenuto pulito ({pct:.0f}%)")
+        print(f"BTC:  {len(btc)} articoli")
+
+        if len(articles) >= 50 and pct >= 60:
+            print("\n=== SCRAPER PROFESSIONALE FUNZIONANTE ===")
+        else:
+            print("\n!!!  Qualita' bassa -- controlla le fonti fallite nei log")
 
     asyncio.run(main())
