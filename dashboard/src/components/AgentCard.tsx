@@ -7,8 +7,9 @@ export interface AgentCardProps {
   initials: string;
   avatarBg: string;
   avatarColor: string;
-  weight: number;
+  weightLabel: string;
   vote: "BUY" | "SELL" | "HOLD";
+  confidence?: number;
   details: Record<string, string | number>;
   reasoning: string[];
 }
@@ -24,8 +25,9 @@ export default function AgentCard({
   initials,
   avatarBg,
   avatarColor,
-  weight,
+  weightLabel,
   vote,
+  confidence,
   details,
   reasoning,
 }: AgentCardProps) {
@@ -46,7 +48,7 @@ export default function AgentCard({
           <p className="text-sm font-semibold truncate">{name}</p>
         </div>
         <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground border">
-          w&thinsp;{weight}
+          {weightLabel}
         </span>
       </div>
 
@@ -56,9 +58,14 @@ export default function AgentCard({
         <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
           <div
             className={`h-full rounded-full ${v.bar} transition-all duration-500`}
-            style={{ width: vote === "HOLD" ? "50%" : vote === "BUY" ? "100%" : "100%" }}
+            style={{ width: `${confidence != null ? Math.round(confidence * 100) : 50}%` }}
           />
         </div>
+        {confidence != null && (
+          <span className={`text-[10px] font-mono font-medium ${v.text}`}>
+            {Math.round(confidence * 100)}%
+          </span>
+        )}
       </div>
 
       {/* Details grid */}
