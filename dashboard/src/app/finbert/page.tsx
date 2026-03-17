@@ -1,78 +1,105 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /* ── constants ── */
 const TICKERS = [
-  "AAPL",
-  "TSLA",
-  "NVDA",
-  "BTC-USD",
-  "ETH-USD",
-  "MSFT",
-  "XOM",
-  "GLD",
+  "AAPL", "TSLA", "NVDA", "BTC-USD",
+  "ETH-USD", "MSFT", "XOM", "GLD",
 ];
 
-const PIPELINE_STEPS = [
-  "Fetch articoli",
-  "Truncate 512 token",
-  "FinBERT classify",
-  "Decay weighting",
-  "Score aggregato",
+const PHASE_LABELS = ["Scraping", "Text Extract", "Sentiment", "Embeddings"] as const;
+type TabId = "scraping" | "text" | "sentiment" | "embedding";
+const TABS: { id: TabId; label: string }[] = [
+  { id: "scraping", label: "Scraping" },
+  { id: "text", label: "Testo" },
+  { id: "sentiment", label: "Sentiment" },
+  { id: "embedding", label: "Embedding" },
 ];
 
-type SentimentLabel = "positive" | "negative" | "neutral";
-type SignalType = "BUY" | "SELL" | "HOLD";
-type FilterType = "all" | SentimentLabel;
-
-interface Article {
+/* ── types ── */
+interface ArticleData {
   id: string;
-  title: string;
-  content: string;
-  url: string;
-  source: string;
-  ticker: string;
-  published_at: string;
-  sentiment_label: SentimentLabel;
-  sentiment_score: number;
-  hours_ago: number;
-  decay_weight: number;
-  direction: number;
-  contribution: number;
-}
-
-interface Stats {
-  count: number;
-  weighted_score: number;
-  signal: SignalType;
-  distribution: Record<SentimentLabel, number>;
-  sum_contribution: number;
-  sum_weight: number;
-  most_impactful: {
+  scraping: {
+    url: string;
+    source: string;
+    scraped_at: string | null;
     title: string;
-    label: string;
+    title_length: number;
+    content_length: number;
+    has_content: boolean;
+    content_preview: string | null;
+    content_full: string;
+    published_at: string;
+    hours_since_publish: number;
+  };
+  text_processing: {
+    raw_text: string;
+    char_count: number;
+    estimated_tokens: number;
+    was_truncated: boolean;
+    truncated_text: string;
+    sentences: string[];
+    sentence_count: number;
+  };
+  sentiment: {
+    label: string | null;
     score: number;
+    processed: boolean;
+    direction: number;
+    hours_ago: number;
+    decay_weight: number;
     contribution: number;
-  } | null;
+  };
+  embeddings: {
+    has_embedding: boolean;
+    dimensions: number;
+    vector_preview: number[] | null;
+    vector_norm: number | null;
+    vector_stats: {
+      min: number;
+      max: number;
+      mean: number;
+      nonzero: number;
+    } | null;
+    vector_full: number[] | null;
+  };
 }
 
-interface RecentRun {
-  id: string;
-  signal: SignalType;
-  confidence: number;
-  created_at: string;
-  reasoning: string;
-}
-
-interface DebugData {
+interface PipelineData {
   ticker: string;
-  articles: Article[];
-  stats: Stats;
-  recent_runs: RecentRun[];
+  total_articles: number;
+  phases: {
+    scraped: number;
+    has_content: number;
+    processed_sentiment: number;
+    has_embedding: number;
+  };
+  pipeline_health: {
+    content_rate: number;
+    sentiment_rate: number;
+    embedding_rate: number;
+  };
+  articles: ArticleData[];
+  recent_signals: {
+    id: string;
+    signal: string;
+    confidence: number;
+    created_at: string;
+    reasoning: string;
+  }[];
 }
+
+type PhaseFilter = null | "scraped" | "has_content" | "processed_sentiment" | "has_embedding";
 
 /* ── helpers ── */
+const labelBg = (l: string | null) =>
+  l === "positive"
+    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25"
+    : l === "negative"
+      ? "bg-red-500/15 text-red-400 border-red-500/25"
+      : "bg-zinc-500/15 text-zinc-400 border-zinc-500/25";
+
 const signalBg = (s: string) =>
   s === "BUY"
     ? "bg-emerald-500"
@@ -80,129 +107,117 @@ const signalBg = (s: string) =>
       ? "bg-red-500"
       : "bg-zinc-500";
 
-const labelBg = (l: string) =>
-  l === "positive"
-    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25"
-    : l === "negative"
-      ? "bg-red-500/15 text-red-400 border-red-500/25"
-      : "bg-zinc-500/15 text-zinc-400 border-zinc-500/25";
-
-const labelDot = (l: string) =>
-  l === "positive"
-    ? "bg-emerald-400"
-    : l === "negative"
-      ? "bg-red-400"
-      : "bg-zinc-400";
-
-const scoreBg = (score: number) => {
-  if (score > 0) return `rgba(52,211,153,${Math.min(score, 1) * 0.7})`;
-  if (score < 0) return `rgba(248,113,113,${Math.min(-score, 1) * 0.7})`;
-  return "rgba(161,161,170,0.3)";
-};
-
 function timeAgo(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)}m fa`;
   if (hours < 24) return `${Math.round(hours)}h fa`;
   return `${Math.round(hours / 24)}d fa`;
 }
 
-/* ── word coloring for salient tokens ── */
-const POS_WORDS = new Set([
-  "surge", "surges", "soars", "rally", "rallies", "jumps",
-  "gains", "rises", "beats", "profit", "growth", "bullish",
-  "record", "high", "upgrade", "buy", "up", "boost", "strong",
-  "positive", "outperform", "revenue", "earnings", "demand",
-]);
-const NEG_WORDS = new Set([
-  "crash", "crashes", "drops", "falls", "plunges", "decline",
-  "loss", "losses", "sell", "selloff", "bearish", "down",
-  "risk", "debt", "miss", "warning", "weak", "cut", "layoffs",
-  "negative", "underperform", "fear", "recession", "inflation",
-]);
+function healthColor(pct: number): string {
+  if (pct >= 90) return "bg-emerald-500";
+  if (pct >= 60) return "bg-amber-500";
+  return "bg-red-500";
+}
 
-function wordColor(word: string): string {
-  const w = word.toLowerCase().replace(/[^a-z]/g, "");
-  if (POS_WORDS.has(w)) return "text-emerald-400 font-semibold";
-  if (NEG_WORDS.has(w)) return "text-red-400 font-semibold";
-  return "text-zinc-400";
+function healthText(pct: number): string {
+  if (pct >= 90) return "text-emerald-400";
+  if (pct >= 60) return "text-amber-400";
+  return "text-red-400";
+}
+
+function parseLogEntries(reasoning: string): { time: string; event: string; detail: string }[] {
+  if (!reasoning) return [];
+  const parts = typeof reasoning === "string"
+    ? reasoning.split(" | ")
+    : Array.isArray(reasoning) ? reasoning : [];
+  return parts.map((p, i) => {
+    const colonIdx = p.indexOf(":");
+    const event = colonIdx > 0 ? p.substring(0, colonIdx).trim() : "STEP";
+    const detail = colonIdx > 0 ? p.substring(colonIdx + 1).trim() : p;
+    const seconds = i * 2;
+    const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
+    const ss = String(seconds % 60).padStart(2, "0");
+    return { time: `00:${mm}:${ss}`, event, detail };
+  });
 }
 
 /* ═══════════════ COMPONENT ═══════════════ */
 export default function FinBertDebugPage() {
   const [ticker, setTicker] = useState("AAPL");
-  const [data, setData] = useState<DebugData | null>(null);
+  const [data, setData] = useState<PipelineData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<FilterType>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [pipeStep, setPipeStep] = useState(-1);
-  const [pipeRunning, setPipeRunning] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("scraping");
+  const [phaseFilter, setPhaseFilter] = useState<PhaseFilter>(null);
+  const [expandContent, setExpandContent] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  /* ── fetch data ── */
+  /* ── fetch ── */
   const fetchData = useCallback(async (t: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/finbert-debug?ticker=${t}&limit=50`);
-      const json: DebugData = await res.json();
+      const res = await fetch(`/api/pipeline-debug?ticker=${t}&limit=50`);
+      const json: PipelineData = await res.json();
       setData(json);
       setSelectedId(null);
-      setFilter("all");
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
+      setPhaseFilter(null);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchData(ticker);
-  }, [ticker, fetchData]);
-
-  /* ── pipeline animation ── */
-  const runPipeline = () => {
-    if (pipeRunning) return;
-    setPipeRunning(true);
-    setPipeStep(0);
-    let step = 0;
-    const iv = setInterval(() => {
-      step++;
-      if (step >= PIPELINE_STEPS.length) {
-        clearInterval(iv);
-        setPipeStep(PIPELINE_STEPS.length);
-        setTimeout(() => {
-          setPipeRunning(false);
-          fetchData(ticker);
-        }, 600);
-      } else {
-        setPipeStep(step);
-      }
-    }, 700);
-  };
+  useEffect(() => { fetchData(ticker); }, [ticker, fetchData]);
 
   /* ── derived ── */
   const articles = data?.articles ?? [];
-  const filtered =
-    filter === "all"
-      ? articles
-      : articles.filter((a) => a.sentiment_label === filter);
+  const phases = data?.phases;
+  const health = data?.pipeline_health;
+
+  const filtered = useMemo(() => {
+    if (!phaseFilter) return articles;
+    return articles.filter((a) => {
+      if (phaseFilter === "scraped") return true;
+      if (phaseFilter === "has_content") return a.scraping.has_content;
+      if (phaseFilter === "processed_sentiment") return a.sentiment.processed;
+      if (phaseFilter === "has_embedding") return a.embeddings.has_embedding;
+      return true;
+    });
+  }, [articles, phaseFilter]);
+
   const selected = articles.find((a) => a.id === selectedId) ?? null;
-  const stats = data?.stats;
+
+  const phaseRows: {
+    label: string;
+    count: number;
+    total: number;
+    pct: number;
+    filterKey: PhaseFilter;
+  }[] = phases
+    ? [
+        { label: "Scraping", count: phases.scraped, total: phases.scraped, pct: 100, filterKey: "scraped" },
+        { label: "Text Extract", count: phases.has_content, total: phases.scraped, pct: health?.content_rate ?? 0, filterKey: "has_content" },
+        { label: "Sentiment", count: phases.processed_sentiment, total: phases.scraped, pct: health?.sentiment_rate ?? 0, filterKey: "processed_sentiment" },
+        { label: "Embeddings", count: phases.has_embedding, total: phases.scraped, pct: health?.embedding_rate ?? 0, filterKey: "has_embedding" },
+      ]
+    : [];
+
+  /* ── copy to clipboard ── */
+  const copyText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   return (
-    <div className="space-y-6">
-      {/* ── header ── */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      {/* ── HEADER ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            FinBERT Debug
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Analisi dettagliata del sentiment per articolo
+          <h1 className="text-2xl font-bold tracking-tight">Pipeline Debug</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Scraping → Text → FinBERT → Embeddings
           </p>
         </div>
-
-        {/* ticker pills */}
-        <div className="flex gap-1.5 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap">
           {TICKERS.map((t) => (
             <button
               key={t}
@@ -216,210 +231,136 @@ export default function FinBertDebugPage() {
               {t}
             </button>
           ))}
+          <button
+            onClick={() => fetchData(ticker)}
+            disabled={loading}
+            className="px-4 py-1 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/80 disabled:opacity-50 transition-all ml-2"
+          >
+            {loading ? "..." : "Ricarica"}
+          </button>
         </div>
       </div>
 
       {loading && !data ? (
-        <div className="grid grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="h-28 rounded-xl bg-muted/30 animate-pulse"
-            />
-          ))}
-        </div>
-      ) : (
+        <div className="h-40 rounded-xl bg-muted/30 animate-pulse" />
+      ) : data ? (
         <>
-          {/* ══════ SEZIONE 1: Metriche aggregate ══════ */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* count */}
-            <div className="rounded-xl border bg-card p-5">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                Articoli analizzati
-              </p>
-              <p className="text-3xl font-bold font-mono">
-                {stats?.count ?? 0}
-              </p>
-            </div>
-
-            {/* weighted score */}
-            <div className="rounded-xl border bg-card p-5">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                Score pesato
-              </p>
-              <p
-                className="text-3xl font-bold font-mono"
-                style={{ color: scoreBg(stats?.weighted_score ?? 0) }}
-              >
-                {(stats?.weighted_score ?? 0) > 0 ? "+" : ""}
-                {(stats?.weighted_score ?? 0).toFixed(4)}
-              </p>
-            </div>
-
-            {/* distribution */}
-            <div className="rounded-xl border bg-card p-5">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                Distribuzione
-              </p>
-              <div className="flex gap-3 mt-2">
-                <span className="text-emerald-400 font-bold font-mono">
-                  {stats?.distribution.positive ?? 0}+
-                </span>
-                <span className="text-red-400 font-bold font-mono">
-                  {stats?.distribution.negative ?? 0}-
-                </span>
-                <span className="text-zinc-400 font-bold font-mono">
-                  {stats?.distribution.neutral ?? 0}~
-                </span>
-              </div>
-            </div>
-
-            {/* signal */}
-            <div className="rounded-xl border bg-card p-5">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                Segnale finale
-              </p>
-              <span
-                className={`inline-block mt-1 px-4 py-1.5 rounded-full text-white text-sm font-bold ${signalBg(stats?.signal ?? "HOLD")}`}
-              >
-                {stats?.signal ?? "HOLD"}
-              </span>
-            </div>
-          </div>
-
-          {/* ══════ SEZIONE 2: Pipeline steps ══════ */}
-          <div className="rounded-xl border bg-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-sm">Pipeline FinBERT</h2>
-              <button
-                onClick={runPipeline}
-                disabled={pipeRunning}
-                className="px-4 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/80 disabled:opacity-50 transition-all"
-              >
-                {pipeRunning ? "Elaborazione..." : "Rielabora"}
-              </button>
-            </div>
-
+          {/* ══════ PIPELINE HEALTH BAR ══════ */}
+          <div className="rounded-xl border bg-card p-4">
             <div className="flex items-center gap-0">
-              {PIPELINE_STEPS.map((step, i) => {
-                const done = pipeStep > i;
-                const active = pipeStep === i && pipeRunning;
-                return (
-                  <div key={step} className="flex items-center flex-1">
-                    <div className="flex flex-col items-center flex-1">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${
-                          done
-                            ? "bg-emerald-500 text-white scale-105"
-                            : active
-                              ? "bg-blue-500 text-white animate-pulse scale-110"
-                              : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {done ? "\u2713" : i + 1}
-                      </div>
-                      <span
-                        className={`text-[11px] mt-1.5 text-center leading-tight ${
-                          done
-                            ? "text-emerald-400"
-                            : active
-                              ? "text-blue-400"
-                              : "text-muted-foreground"
-                        }`}
-                      >
-                        {step}
-                      </span>
-                    </div>
-                    {i < PIPELINE_STEPS.length - 1 && (
-                      <div
-                        className={`h-0.5 flex-1 -mx-1 transition-all duration-500 ${
-                          done ? "bg-emerald-500" : "bg-muted"
-                        }`}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* ══════ SEZIONE 3: Lista + Dettaglio ══════ */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* ── colonna sinistra: lista articoli ── */}
-            <div className="rounded-xl border bg-card flex flex-col max-h-[620px]">
-              {/* filtri */}
-              <div className="flex gap-1.5 p-3 border-b">
-                {(
-                  ["all", "positive", "negative", "neutral"] as FilterType[]
-                ).map((f) => (
+              {phaseRows.map((ph, i) => (
+                <div key={ph.label} className="flex items-center flex-1">
                   <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`px-3 py-1 text-xs rounded-full border transition-all ${
-                      filter === f
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                    onClick={() =>
+                      setPhaseFilter(
+                        phaseFilter === ph.filterKey ? null : ph.filterKey,
+                      )
+                    }
+                    className={`flex flex-col items-center flex-1 p-2 rounded-lg transition-all ${
+                      phaseFilter === ph.filterKey
+                        ? "bg-muted ring-1 ring-primary/40"
+                        : "hover:bg-muted/40"
                     }`}
                   >
-                    {f === "all"
-                      ? `Tutti (${articles.length})`
-                      : f === "positive"
-                        ? `Positivi (${stats?.distribution.positive ?? 0})`
-                        : f === "negative"
-                          ? `Negativi (${stats?.distribution.negative ?? 0})`
-                          : `Neutrali (${stats?.distribution.neutral ?? 0})`}
+                    {/* circle */}
+                    <div
+                      className={`w-11 h-11 rounded-full flex items-center justify-center text-xs font-bold text-white transition-all ${healthColor(ph.pct)}`}
+                    >
+                      {Math.round(ph.pct)}%
+                    </div>
+                    <span className="text-[11px] mt-1 font-medium">
+                      {ph.label}
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono ${healthText(ph.pct)} cursor-pointer`}
+                    >
+                      {ph.count}/{ph.total}
+                    </span>
                   </button>
-                ))}
-              </div>
+                  {i < phaseRows.length - 1 && (
+                    <div className="h-0.5 w-6 bg-border shrink-0 -mx-1" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
 
-              {/* lista */}
-              <div ref={listRef} className="overflow-y-auto flex-1 divide-y divide-border">
+          {/* ══════ LIST + DETAIL ══════ */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4" style={{ minHeight: 520 }}>
+            {/* ── sidebar: article list ── */}
+            <div className="lg:col-span-2 rounded-xl border bg-card flex flex-col max-h-[640px]">
+              <div className="p-3 border-b text-xs text-muted-foreground">
+                {filtered.length} articoli
+                {phaseFilter && (
+                  <button
+                    onClick={() => setPhaseFilter(null)}
+                    className="ml-2 text-primary hover:underline"
+                  >
+                    rimuovi filtro
+                  </button>
+                )}
+              </div>
+              <div className="overflow-y-auto flex-1 divide-y divide-border">
                 {filtered.length === 0 && (
                   <p className="p-6 text-center text-muted-foreground text-sm">
-                    Nessun articolo trovato
+                    Nessun articolo
                   </p>
                 )}
                 {filtered.map((a) => (
                   <button
                     key={a.id}
-                    onClick={() => setSelectedId(a.id)}
-                    className={`w-full text-left p-3 hover:bg-muted/40 transition-colors ${
+                    onClick={() => {
+                      setSelectedId(a.id);
+                      setActiveTab("scraping");
+                      setExpandContent(false);
+                    }}
+                    className={`w-full text-left p-2.5 hover:bg-muted/40 transition-colors ${
                       selectedId === a.id ? "bg-muted/60" : ""
                     }`}
                   >
-                    <div className="flex items-start gap-2">
+                    <p className="text-xs leading-snug truncate mb-1.5">
+                      {a.scraping.title.substring(0, 60)}
+                      {a.scraping.title.length > 60 ? "..." : ""}
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {a.sentiment.label && (
+                        <span
+                          className={`text-[9px] px-1 py-0.5 rounded border ${labelBg(a.sentiment.label)}`}
+                        >
+                          {a.sentiment.label?.substring(0, 3)}
+                        </span>
+                      )}
+                      {/* phase icons */}
+                      <span className="text-[9px] font-mono text-emerald-400" title="Scraped">SC✓</span>
                       <span
-                        className={`mt-1 w-2 h-2 rounded-full shrink-0 ${labelDot(a.sentiment_label)}`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm leading-snug truncate">
-                          {a.title}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded border ${labelBg(a.sentiment_label)}`}
-                          >
-                            {a.sentiment_label}
-                          </span>
-                          <span className="text-[11px] font-mono text-muted-foreground">
-                            {a.sentiment_score.toFixed(3)}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {a.source}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground ml-auto">
-                            {timeAgo(a.hours_ago)}
-                          </span>
-                        </div>
-                      </div>
+                        className={`text-[9px] font-mono ${a.scraping.has_content ? "text-emerald-400" : "text-red-400"}`}
+                        title="Text extracted"
+                      >
+                        TX{a.scraping.has_content ? "✓" : "✗"}
+                      </span>
+                      <span
+                        className={`text-[9px] font-mono ${a.sentiment.processed ? "text-emerald-400" : "text-red-400"}`}
+                        title="Sentiment"
+                      >
+                        SE{a.sentiment.processed ? "✓" : "✗"}
+                      </span>
+                      <span
+                        className={`text-[9px] font-mono ${a.embeddings.has_embedding ? "text-emerald-400" : "text-red-400"}`}
+                        title="Embedding"
+                      >
+                        EM{a.embeddings.has_embedding ? "✓" : "✗"}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground ml-auto">
+                        {timeAgo(a.scraping.hours_since_publish)}
+                      </span>
                     </div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* ── colonna destra: dettaglio ── */}
-            <div className="rounded-xl border bg-card p-5 max-h-[620px] overflow-y-auto">
+            {/* ── detail area ── */}
+            <div className="lg:col-span-3 rounded-xl border bg-card flex flex-col max-h-[640px]">
               {!selected ? (
                 <div className="flex items-center justify-center h-full min-h-[200px]">
                   <p className="text-muted-foreground text-sm">
@@ -427,353 +368,630 @@ export default function FinBertDebugPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-5 agent-msg">
-                  {/* titolo */}
-                  <div>
-                    <h3 className="font-semibold text-base leading-snug">
-                      {selected.title}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-                      <span>{selected.source}</span>
-                      <span>-</span>
-                      <span>
-                        {new Date(selected.published_at).toLocaleString(
-                          "it-IT",
+                <>
+                  {/* tabs */}
+                  <div className="flex border-b">
+                    {TABS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${
+                          activeTab === tab.id
+                            ? "border-primary text-foreground"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="overflow-y-auto flex-1 p-4 space-y-4 agent-msg">
+                    {/* ═══ TAB 1: SCRAPING ═══ */}
+                    {activeTab === "scraping" && (
+                      <>
+                        {/* url */}
+                        <div className="rounded-lg border p-3">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                            URL sorgente
+                          </p>
+                          <a
+                            href={selected.scraping.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline break-all"
+                          >
+                            {selected.scraping.url}
+                          </a>
+                          <div className="flex gap-3 mt-2 text-[11px] text-muted-foreground">
+                            <span>Fonte: {selected.scraping.source}</span>
+                            <span>Scraped: {selected.scraping.scraped_at ? timeAgo((Date.now() - new Date(selected.scraping.scraped_at).getTime()) / 3600000) : "N/A"}</span>
+                            <span>Pubblicato: {timeAgo(selected.scraping.hours_since_publish)}</span>
+                          </div>
+                        </div>
+
+                        {/* title */}
+                        <div className="rounded-lg border p-3">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                            Titolo estratto
+                          </p>
+                          <p className="text-sm font-medium">
+                            {selected.scraping.title}
+                          </p>
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            [{selected.scraping.title_length} chars]
+                          </span>
+                        </div>
+
+                        {/* content */}
+                        <div className="rounded-lg border p-3">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                            Contenuto estratto
+                          </p>
+                          {selected.scraping.has_content ? (
+                            <>
+                              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                                {expandContent
+                                  ? selected.scraping.content_full
+                                  : selected.scraping.content_preview}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[10px] font-mono text-muted-foreground">
+                                  [{selected.scraping.content_length.toLocaleString()} chars]
+                                </span>
+                                {selected.scraping.content_length > 200 && (
+                                  <button
+                                    onClick={() => setExpandContent(!expandContent)}
+                                    className="text-[10px] text-primary hover:underline"
+                                  >
+                                    {expandContent ? "nascondi ▲" : "mostra tutto ▼"}
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-xs text-red-400 italic">
+                              Nessun contenuto estratto
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {/* ═══ TAB 2: TEXT PROCESSING ═══ */}
+                    {activeTab === "text" && (
+                      <>
+                        {/* raw text stats */}
+                        <div className="rounded-lg border p-3">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                            Testo grezzo
+                          </p>
+                          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap max-h-24 overflow-y-auto font-mono bg-muted/30 rounded p-2">
+                            {selected.text_processing.raw_text.substring(0, 500)}
+                            {selected.text_processing.raw_text.length > 500 ? "..." : ""}
+                          </p>
+                          <div className="flex gap-4 mt-2 text-[11px] text-muted-foreground">
+                            <span>
+                              Caratteri:{" "}
+                              <strong className="text-foreground">
+                                {selected.text_processing.char_count.toLocaleString()}
+                              </strong>
+                            </span>
+                            <span>
+                              Token est:{" "}
+                              <strong className="text-foreground">
+                                ~{selected.text_processing.estimated_tokens}
+                              </strong>
+                            </span>
+                            <span>
+                              Troncato:{" "}
+                              <strong
+                                className={
+                                  selected.text_processing.was_truncated
+                                    ? "text-amber-400"
+                                    : "text-emerald-400"
+                                }
+                              >
+                                {selected.text_processing.was_truncated
+                                  ? "SI (> 512 token)"
+                                  : "NO (< 512 token)"}
+                              </strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* sentences */}
+                        <div className="rounded-lg border p-3">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                            Frasi estratte ({selected.text_processing.sentence_count})
+                          </p>
+                          <div className="space-y-1 max-h-40 overflow-y-auto">
+                            {selected.text_processing.sentences.map((s, i) => (
+                              <div key={i} className="flex gap-2 text-xs">
+                                <span className="text-muted-foreground font-mono shrink-0 w-5 text-right">
+                                  {i + 1}.
+                                </span>
+                                <span className="text-muted-foreground leading-snug">
+                                  {s}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* finbert input */}
+                        <div className="rounded-lg border p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                              Testo inviato a FinBERT
+                            </p>
+                            <button
+                              onClick={() =>
+                                copyText(selected.text_processing.truncated_text)
+                              }
+                              className="text-[10px] text-primary hover:underline"
+                            >
+                              {copied ? "copiato ✓" : "copia negli appunti"}
+                            </button>
+                          </div>
+                          <pre className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono bg-muted/30 rounded p-2 max-h-32 overflow-y-auto">
+                            {selected.text_processing.truncated_text}
+                          </pre>
+                        </div>
+                      </>
+                    )}
+
+                    {/* ═══ TAB 3: SENTIMENT ═══ */}
+                    {activeTab === "sentiment" && (
+                      <>
+                        {!selected.sentiment.processed ? (
+                          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-center">
+                            <p className="text-amber-400 text-sm font-medium">
+                              Sentiment non ancora elaborato
+                            </p>
+                            <p className="text-[11px] text-muted-foreground mt-1">
+                              FinBERT non ha ancora processato questo articolo
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            {/* model info */}
+                            <div className="rounded-lg border p-3">
+                              <p className="text-xs text-muted-foreground">
+                                Input → <strong className="text-foreground">FinBERT</strong>{" "}
+                                (ProsusAI/finbert)
+                              </p>
+                            </div>
+
+                            {/* class scores */}
+                            <div className="rounded-lg border p-3">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">
+                                Output classi
+                              </p>
+                              <div className="space-y-2.5">
+                                {(["positive", "negative", "neutral"] as const).map(
+                                  (cls) => {
+                                    const isWinner = selected.sentiment.label === cls;
+                                    const val = isWinner
+                                      ? selected.sentiment.score
+                                      : (1 - selected.sentiment.score) *
+                                        (cls === "neutral" ? 0.4 : 0.3);
+                                    const barColor =
+                                      cls === "positive"
+                                        ? "bg-emerald-500"
+                                        : cls === "negative"
+                                          ? "bg-red-500"
+                                          : "bg-zinc-500";
+                                    const textColor =
+                                      cls === "positive"
+                                        ? "text-emerald-400"
+                                        : cls === "negative"
+                                          ? "text-red-400"
+                                          : "text-zinc-400";
+                                    return (
+                                      <div
+                                        key={cls}
+                                        className="flex items-center gap-3"
+                                      >
+                                        <span
+                                          className={`text-xs w-16 ${textColor}`}
+                                        >
+                                          {cls}
+                                        </span>
+                                        <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                                          <div
+                                            className={`h-full ${barColor} rounded-full transition-all duration-700`}
+                                            style={{
+                                              width: `${val * 100}%`,
+                                            }}
+                                          />
+                                        </div>
+                                        <span className="text-xs font-mono w-12 text-right">
+                                          {val.toFixed(3)}
+                                        </span>
+                                      </div>
+                                    );
+                                  },
+                                )}
+                              </div>
+                              <p className="text-xs mt-3">
+                                → Classificato:{" "}
+                                <strong
+                                  className={
+                                    selected.sentiment.label === "positive"
+                                      ? "text-emerald-400"
+                                      : selected.sentiment.label === "negative"
+                                        ? "text-red-400"
+                                        : "text-zinc-400"
+                                  }
+                                >
+                                  {(selected.sentiment.label ?? "N/A").toUpperCase()}
+                                </strong>{" "}
+                                <span className="font-mono">
+                                  ({selected.sentiment.score.toFixed(4)})
+                                </span>
+                              </p>
+                            </div>
+
+                            {/* contribution formula */}
+                            <div className="rounded-lg bg-muted/40 border p-4 font-mono text-xs leading-loose space-y-1">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 font-sans">
+                                Contributo al score aggregato
+                              </p>
+                              <p>
+                                Ore dalla pubblicazione:{" "}
+                                <span className="text-foreground font-bold">
+                                  {selected.sentiment.hours_ago}h
+                                </span>
+                              </p>
+                              <p>
+                                Decay weight: e^(-{selected.sentiment.hours_ago}
+                                /24) ={" "}
+                                <span className="text-foreground font-bold">
+                                  {selected.sentiment.decay_weight.toFixed(4)}
+                                </span>
+                              </p>
+                              <p>
+                                Direction:{" "}
+                                <span className="text-foreground font-bold">
+                                  {selected.sentiment.direction > 0
+                                    ? "+1 (positive)"
+                                    : selected.sentiment.direction < 0
+                                      ? "-1 (negative)"
+                                      : "0 (neutral)"}
+                                </span>
+                              </p>
+                              <p>
+                                Contributo:{" "}
+                                <span className="text-foreground">
+                                  {selected.sentiment.score.toFixed(4)} ×{" "}
+                                  {selected.sentiment.direction} ×{" "}
+                                  {selected.sentiment.decay_weight.toFixed(4)}
+                                </span>
+                              </p>
+                              <p>
+                                {"= "}
+                                <span
+                                  className={`font-bold text-sm ${
+                                    selected.sentiment.contribution > 0
+                                      ? "text-emerald-400"
+                                      : selected.sentiment.contribution < 0
+                                        ? "text-red-400"
+                                        : "text-zinc-400"
+                                  }`}
+                                >
+                                  {selected.sentiment.contribution > 0
+                                    ? "+"
+                                    : ""}
+                                  {selected.sentiment.contribution.toFixed(4)}
+                                </span>
+                              </p>
+                              <div className="border-t border-border mt-2 pt-2 text-muted-foreground">
+                                <p>Soglie segnale:</p>
+                                <p>
+                                  score {">"} +0.15 →{" "}
+                                  <span className="text-emerald-400">BUY</span>
+                                </p>
+                                <p>
+                                  score {"<"} -0.15 →{" "}
+                                  <span className="text-red-400">SELL</span>
+                                </p>
+                                <p>
+                                  else →{" "}
+                                  <span className="text-zinc-400">HOLD</span>
+                                </p>
+                              </div>
+                            </div>
+                          </>
                         )}
-                      </span>
-                      <span>-</span>
-                      <span className="font-mono">troncato a 512 token</span>
-                    </div>
-                  </div>
+                      </>
+                    )}
 
-                  {/* token salienti */}
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                      Token salienti
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {selected.title.split(/\s+/).map((word, i) => (
-                        <span
-                          key={i}
-                          className={`px-1.5 py-0.5 rounded text-sm ${wordColor(word)} bg-muted/40`}
-                        >
-                          {word}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                    {/* ═══ TAB 4: EMBEDDING ═══ */}
+                    {activeTab === "embedding" && (
+                      <>
+                        {/* model info */}
+                        <div className="rounded-lg border p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs">
+                                Modello:{" "}
+                                <strong className="text-foreground">
+                                  all-MiniLM-L6-v2
+                                </strong>
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Dimensioni: {selected.embeddings.dimensions || 384}
+                              </p>
+                            </div>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                selected.embeddings.has_embedding
+                                  ? "bg-emerald-500/15 text-emerald-400"
+                                  : "bg-red-500/15 text-red-400"
+                              }`}
+                            >
+                              {selected.embeddings.has_embedding
+                                ? "✓ generato"
+                                : "✗ non generato"}
+                            </span>
+                          </div>
+                        </div>
 
-                  {/* score per classe */}
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                      Score per classe
-                    </p>
-                    <div className="space-y-2">
-                      {/* positive */}
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs w-16 text-emerald-400">
-                          Positive
-                        </span>
-                        <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-emerald-500 rounded-full transition-all duration-700"
-                            style={{
-                              width: `${selected.sentiment_label === "positive" ? selected.sentiment_score * 100 : (1 - selected.sentiment_score) * 30}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs font-mono w-12 text-right">
-                          {selected.sentiment_label === "positive"
-                            ? selected.sentiment_score.toFixed(3)
-                            : ((1 - selected.sentiment_score) * 0.3).toFixed(
-                                3,
-                              )}
-                        </span>
-                      </div>
-                      {/* negative */}
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs w-16 text-red-400">
-                          Negative
-                        </span>
-                        <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-red-500 rounded-full transition-all duration-700"
-                            style={{
-                              width: `${selected.sentiment_label === "negative" ? selected.sentiment_score * 100 : (1 - selected.sentiment_score) * 30}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs font-mono w-12 text-right">
-                          {selected.sentiment_label === "negative"
-                            ? selected.sentiment_score.toFixed(3)
-                            : ((1 - selected.sentiment_score) * 0.3).toFixed(
-                                3,
-                              )}
-                        </span>
-                      </div>
-                      {/* neutral */}
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs w-16 text-zinc-400">
-                          Neutral
-                        </span>
-                        <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-zinc-500 rounded-full transition-all duration-700"
-                            style={{
-                              width: `${selected.sentiment_label === "neutral" ? selected.sentiment_score * 100 : (1 - selected.sentiment_score) * 0.4 * 100}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs font-mono w-12 text-right">
-                          {selected.sentiment_label === "neutral"
-                            ? selected.sentiment_score.toFixed(3)
-                            : ((1 - selected.sentiment_score) * 0.4).toFixed(
-                                3,
-                              )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                        {!selected.embeddings.has_embedding ? (
+                          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-center">
+                            <p className="text-amber-400 text-sm">
+                              Embedding non ancora generato
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            {/* vector stats */}
+                            <div className="rounded-lg border p-3">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                                Statistiche vettore
+                              </p>
+                              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs font-mono">
+                                <div>
+                                  Min:{" "}
+                                  <span className="text-red-400">
+                                    {selected.embeddings.vector_stats?.min}
+                                  </span>
+                                </div>
+                                <div>
+                                  Max:{" "}
+                                  <span className="text-emerald-400">
+                                    +{selected.embeddings.vector_stats?.max}
+                                  </span>
+                                </div>
+                                <div>
+                                  Mean:{" "}
+                                  <span className="text-foreground">
+                                    {(selected.embeddings.vector_stats?.mean ?? 0) > 0 ? "+" : ""}
+                                    {selected.embeddings.vector_stats?.mean}
+                                  </span>
+                                </div>
+                                <div>
+                                  Norma:{" "}
+                                  <span className="text-foreground">
+                                    {selected.embeddings.vector_norm}
+                                  </span>
+                                </div>
+                                <div className="col-span-2">
+                                  Valori non-zero:{" "}
+                                  <span className="text-foreground">
+                                    {selected.embeddings.vector_stats?.nonzero}/
+                                    {selected.embeddings.dimensions} (
+                                    {(
+                                      ((selected.embeddings.vector_stats
+                                        ?.nonzero ?? 0) /
+                                        (selected.embeddings.dimensions || 1)) *
+                                      100
+                                    ).toFixed(1)}
+                                    %)
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
 
-                  {/* formula box */}
-                  <div className="rounded-lg bg-muted/40 border border-border p-4 font-mono text-xs leading-relaxed space-y-1">
-                    <p>
-                      Classificato come{" "}
-                      <span
-                        className={
-                          selected.sentiment_label === "positive"
-                            ? "text-emerald-400 font-bold"
-                            : selected.sentiment_label === "negative"
-                              ? "text-red-400 font-bold"
-                              : "text-zinc-400 font-bold"
-                        }
-                      >
-                        {selected.sentiment_label}
-                      </span>{" "}
-                      con confidence{" "}
-                      <span className="text-foreground font-bold">
-                        {selected.sentiment_score.toFixed(4)}
-                      </span>
-                    </p>
-                    <p>
-                      Peso per et&agrave; ({selected.hours_ago}h):{" "}
-                      <span className="text-foreground">
-                        e^(-{selected.hours_ago}/24)
-                      </span>{" "}
-                      ={" "}
-                      <span className="text-foreground font-bold">
-                        {selected.decay_weight.toFixed(4)}
-                      </span>
-                    </p>
-                    <p>
-                      Contributo al score:{" "}
-                      <span className="text-foreground">
-                        {selected.sentiment_score.toFixed(4)} &times;{" "}
-                        {selected.direction} &times;{" "}
-                        {selected.decay_weight.toFixed(4)}
-                      </span>{" "}
-                      ={" "}
-                      <span
-                        className={`font-bold ${selected.contribution > 0 ? "text-emerald-400" : selected.contribution < 0 ? "text-red-400" : "text-zinc-400"}`}
-                      >
-                        {selected.contribution > 0 ? "+" : ""}
-                        {selected.contribution.toFixed(4)}
-                      </span>
-                    </p>
+                            {/* vector preview */}
+                            <div className="rounded-lg border p-3">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                                Anteprima primi 8 valori
+                              </p>
+                              <div className="font-mono text-xs text-muted-foreground bg-muted/30 rounded p-2">
+                                [{selected.embeddings.vector_preview?.join(", ")}, ...]
+                              </div>
+                            </div>
+
+                            {/* heatmap */}
+                            <div className="rounded-lg border p-3">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                                Visualizzazione vettore (24×16 heatmap)
+                              </p>
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(24, 1fr)",
+                                  gap: "1px",
+                                }}
+                              >
+                                {(
+                                  selected.embeddings.vector_full ?? []
+                                ).map((v, i) => (
+                                  <div
+                                    key={i}
+                                    title={`dim ${i}: ${v.toFixed(4)}`}
+                                    style={{
+                                      height: "8px",
+                                      borderRadius: "1px",
+                                      background:
+                                        v > 0
+                                          ? `rgba(52,211,153,${Math.min(Math.abs(v) * 2, 1)})`
+                                          : `rgba(248,113,113,${Math.min(Math.abs(v) * 2, 1)})`,
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                              <div className="flex justify-between mt-1.5 text-[9px] text-muted-foreground">
+                                <span className="text-red-400">negativo ←</span>
+                                <span>dim 0...383</span>
+                                <span className="text-emerald-400">→ positivo</span>
+                              </div>
+                            </div>
+
+                            {/* usage info */}
+                            <div className="rounded-lg bg-muted/30 border p-3 text-xs text-muted-foreground space-y-1">
+                              <p className="font-medium text-foreground">
+                                Usato per:
+                              </p>
+                              <p>Semantic search su pgvector</p>
+                              <p>
+                                Operatore:{" "}
+                                <code className="font-mono text-foreground">
+                                  {"<->"}
+                                </code>{" "}
+                                (cosine distance)
+                              </p>
+                              <p>Index: IVFFlat con 100 liste</p>
+                            </div>
+                          </>
+                        )}
+                      </>
+                    )}
                   </div>
-                </div>
+                </>
               )}
             </div>
           </div>
 
-          {/* ══════ SEZIONE 4: Decay Weighting table ══════ */}
+          {/* ══════ SYSTEM LOG ══════ */}
           <div className="rounded-xl border bg-card overflow-hidden">
             <div className="p-4 border-b">
               <h2 className="font-semibold text-sm">
-                Decay Weighting &mdash; Contributo per articolo
+                System Log — Ultima esecuzione per {data.ticker}
               </h2>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="text-left p-3 text-xs font-medium text-muted-foreground">
-                      Et&agrave;
-                    </th>
-                    <th className="text-left p-3 text-xs font-medium text-muted-foreground">
-                      Titolo
-                    </th>
-                    <th className="text-left p-3 text-xs font-medium text-muted-foreground">
-                      Label
-                    </th>
-                    <th className="text-right p-3 text-xs font-medium text-muted-foreground">
-                      Peso (e^(-h/24))
-                    </th>
-                    <th className="p-3 text-xs font-medium text-muted-foreground w-32">
-                      Barra peso
-                    </th>
-                    <th className="text-right p-3 text-xs font-medium text-muted-foreground">
-                      Contributo
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {articles.map((a) => (
-                    <tr
-                      key={a.id}
-                      className="hover:bg-muted/20 transition-colors cursor-pointer"
-                      onClick={() => setSelectedId(a.id)}
-                    >
-                      <td className="p-3 text-xs font-mono text-muted-foreground whitespace-nowrap">
-                        {timeAgo(a.hours_ago)}
-                      </td>
-                      <td className="p-3 max-w-[300px] truncate text-xs">
-                        {a.title}
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded border ${labelBg(a.sentiment_label)}`}
-                        >
-                          {a.sentiment_label}
-                        </span>
-                      </td>
-                      <td className="p-3 text-xs font-mono text-right">
-                        {a.decay_weight.toFixed(4)}
-                      </td>
-                      <td className="p-3">
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500/60 rounded-full transition-all"
-                            style={{
-                              width: `${a.decay_weight * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </td>
-                      <td
-                        className={`p-3 text-xs font-mono text-right font-bold ${
-                          a.contribution > 0
-                            ? "text-emerald-400"
-                            : a.contribution < 0
-                              ? "text-red-400"
-                              : "text-zinc-500"
-                        }`}
-                      >
-                        {a.contribution > 0 ? "+" : ""}
-                        {a.contribution.toFixed(4)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                {/* riga aggregata */}
-                <tfoot>
-                  <tr className="border-t-2 bg-muted/20">
-                    <td
-                      colSpan={3}
-                      className="p-3 text-xs font-mono text-muted-foreground"
-                    >
-                      &Sigma;(score &times; direction &times; weight) /{" "}
-                      &Sigma;(weights)
-                    </td>
-                    <td className="p-3 text-xs font-mono text-right font-bold">
-                      &Sigma; {stats?.sum_weight?.toFixed(4) ?? "0"}
-                    </td>
-                    <td className="p-3">
-                      <div className="text-[10px] text-muted-foreground text-center">
-                        {">"}+0.15 = BUY &nbsp; {"<"}-0.15 = SELL
-                      </div>
-                    </td>
-                    <td
-                      className={`p-3 text-sm font-mono text-right font-bold ${
-                        (stats?.weighted_score ?? 0) > 0
-                          ? "text-emerald-400"
-                          : (stats?.weighted_score ?? 0) < 0
-                            ? "text-red-400"
-                            : "text-zinc-400"
-                      }`}
-                    >
-                      {(stats?.weighted_score ?? 0) > 0 ? "+" : ""}
-                      {(stats?.weighted_score ?? 0).toFixed(4)}{" "}
-                      <span
-                        className={`ml-2 px-2 py-0.5 rounded text-xs text-white ${signalBg(stats?.signal ?? "HOLD")}`}
-                      >
-                        {stats?.signal ?? "HOLD"}
-                      </span>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          {/* ══════ SEZIONE 5: Confronto run ══════ */}
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="p-4 border-b">
-              <h2 className="font-semibold text-sm">
-                Confronto run &mdash; Ultimi 5 segnali per {data?.ticker}
-              </h2>
-            </div>
-            {(data?.recent_runs ?? []).length === 0 ? (
+            {(data.recent_signals ?? []).length === 0 ? (
               <p className="p-6 text-center text-muted-foreground text-sm">
                 Nessun segnale storico trovato
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b bg-muted/30">
-                      <th className="text-left p-3 text-xs font-medium text-muted-foreground">
+                      <th className="text-left p-2.5 font-medium text-muted-foreground w-20">
                         Timestamp
                       </th>
-                      <th className="text-left p-3 text-xs font-medium text-muted-foreground">
-                        Segnale
+                      <th className="text-left p-2.5 font-medium text-muted-foreground w-24">
+                        Evento
                       </th>
-                      <th className="text-right p-3 text-xs font-medium text-muted-foreground">
-                        Confidence
-                      </th>
-                      <th className="p-3 text-xs font-medium text-muted-foreground">
-                        Confidence bar
+                      <th className="text-left p-2.5 font-medium text-muted-foreground">
+                        Dettaglio
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
-                    {(data?.recent_runs ?? []).map((run) => (
-                      <tr
-                        key={run.id}
-                        className="hover:bg-muted/20 transition-colors"
-                      >
-                        <td className="p-3 text-xs font-mono text-muted-foreground">
-                          {new Date(run.created_at).toLocaleString("it-IT")}
-                        </td>
-                        <td className="p-3">
-                          <span
-                            className={`px-2 py-0.5 rounded text-xs text-white font-bold ${signalBg(run.signal)}`}
+                  <tbody className="divide-y divide-border font-mono">
+                    {data.recent_signals.slice(0, 1).map((sig) => {
+                      const entries = parseLogEntries(sig.reasoning);
+                      return entries.map((entry, i) => {
+                        const evColor =
+                          entry.event.includes("Scraper") || entry.event.includes("SCRAPE")
+                            ? "text-blue-400"
+                            : entry.event.includes("Sentiment") || entry.event.includes("FINBERT")
+                              ? "text-purple-400"
+                              : entry.event.includes("Signal") || entry.event.includes("Weighted")
+                                ? "text-emerald-400"
+                                : entry.event.includes("Risk") || entry.event.includes("Macro")
+                                  ? "text-amber-400"
+                                  : "text-zinc-400";
+                        return (
+                          <tr
+                            key={`${sig.id}-${i}`}
+                            className="hover:bg-muted/20"
                           >
-                            {run.signal}
+                            <td className="p-2.5 text-muted-foreground">
+                              {entry.time}
+                            </td>
+                            <td className={`p-2.5 font-medium ${evColor}`}>
+                              {entry.event}
+                            </td>
+                            <td className="p-2.5 text-muted-foreground">
+                              {entry.detail}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })}
+                    {/* final row */}
+                    {data.recent_signals[0] && (
+                      <tr className="bg-muted/20 border-t-2">
+                        <td className="p-2.5 text-muted-foreground">
+                          RESULT
+                        </td>
+                        <td className="p-2.5">
+                          <span
+                            className={`px-2 py-0.5 rounded text-white text-[10px] font-bold ${signalBg(data.recent_signals[0].signal)}`}
+                          >
+                            {data.recent_signals[0].signal}
                           </span>
                         </td>
-                        <td className="p-3 text-xs font-mono text-right">
-                          {((run.confidence ?? 0) * 100).toFixed(1)}%
-                        </td>
-                        <td className="p-3">
-                          <div className="h-2 bg-muted rounded-full overflow-hidden w-32">
-                            <div
-                              className={`h-full rounded-full ${signalBg(run.signal)}`}
-                              style={{
-                                width: `${(run.confidence ?? 0) * 100}%`,
-                              }}
-                            />
-                          </div>
+                        <td className="p-2.5 text-muted-foreground">
+                          Confidence:{" "}
+                          {(
+                            (data.recent_signals[0].confidence ?? 0) * 100
+                          ).toFixed(1)}
+                          % — {new Date(data.recent_signals[0].created_at).toLocaleString("it-IT")}
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
             )}
+
+            {/* recent runs comparison */}
+            {(data.recent_signals ?? []).length > 1 && (
+              <div className="border-t">
+                <div className="p-3 border-b bg-muted/10">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Confronto ultimi {data.recent_signals.length} segnali
+                  </p>
+                </div>
+                <div className="divide-y divide-border">
+                  {data.recent_signals.map((run) => (
+                    <div
+                      key={run.id}
+                      className="flex items-center gap-3 px-3 py-2"
+                    >
+                      <span className="text-[10px] font-mono text-muted-foreground w-32">
+                        {new Date(run.created_at).toLocaleString("it-IT")}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-white text-[10px] font-bold ${signalBg(run.signal)}`}
+                      >
+                        {run.signal}
+                      </span>
+                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${signalBg(run.signal)}`}
+                          style={{
+                            width: `${(run.confidence ?? 0) * 100}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-muted-foreground w-12 text-right">
+                        {((run.confidence ?? 0) * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }
