@@ -205,6 +205,256 @@ function buildCards(data: ApiData): AgentCardProps[] {
   });
 }
 
+/* ── parse WeightedVote reasoning ──────────────────────── */
+interface WeightedVoteData {
+  consensus: string;
+  agentsAgree: number;
+  agentsTotal: number;
+  dominant: string;
+  criticLine: string;
+}
+
+function parseWeightedVote(reasoning: string[]): WeightedVoteData {
+  const wvLine = reasoning.find((r) => r.startsWith("WeightedVote:")) ?? "";
+  const criticLine = reasoning.find((r) => r.startsWith("CriticAgent:")) ?? "";
+
+  const consensus = extractKV(wvLine, "consensus") ?? "—";
+  const agreeMatch = wvLine.match(/\((\d+)\/(\d+)\)/);
+  const dominant = extractKV(wvLine, "dominant") ?? "—";
+
+  return {
+    consensus,
+    agentsAgree: agreeMatch ? parseInt(agreeMatch[1]) : 0,
+    agentsTotal: agreeMatch ? parseInt(agreeMatch[2]) : 0,
+    dominant,
+    criticLine,
+  };
+}
+
+/* ── SVG confidence gauge ─────────────────────────────── */
+function ConfidenceGauge({ value, signal }: { value: number; signal: string }) {
+  const r = 54;
+  const stroke = 8;
+  const circumference = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(1, value));
+  const offset = circumference * (1 - pct);
+  const color =
+    signal === "BUY" ? "#10b981" : signal === "SELL" ? "#ef4444" : "#71717a";
+  const trackColor = signal === "BUY" ? "#10b98120" : signal === "SELL" ? "#ef444420" : "#71717a20";
+
+  return (
+    <div className="relative flex items-center justify-center">
+      <svg width={136} height={136} className="-rotate-90">
+        <circle
+          cx={68} cy={68} r={r}
+          fill="none" stroke={trackColor} strokeWidth={stroke}
+        />
+        <circle
+          cx={68} cy={68} r={r}
+          fill="none" stroke={color} strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="transition-all duration-700"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-bold font-mono tabular-nums" style={{ color }}>
+          {Math.round(pct * 100)}%
+        </span>
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+          confidence
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ── weighted voting summary card ─────────────────────── */
+const WEIGHT_TABLE: { name: string; initials: string; weight: number; color: string }[] = [
+  { name: "Sentiment",      initials: "SE", weight: 22, color: "#2563eb" },
+  { name: "Fundamental",    initials: "FU", weight: 18, color: "#0891b2" },
+  { name: "Technical",      initials: "TE", weight: 15, color: "#7c3aed" },
+  { name: "Momentum",       initials: "MO", weight: 12, color: "#16a34a" },
+  { name: "ML Prediction",  initials: "ML", weight: 11, color: "#eab308" },
+  { name: "Social",         initials: "SO", weight:  8, color: "#f97316" },
+  { name: "Macro",          initials: "MA", weight:  8, color: "#ea580c" },
+  { name: "Mean Reversion", initials: "MR", weight:  6, color: "#d946ef" },
+];
+
+function WeightedVotingCard({
+  cards,
+  overall,
+  reasoning,
+}: {
+  cards: AgentCardProps[];
+  overall: ApiData["signal"];
+  reasoning: string[];
+}) {
+  if (!overall) return null;
+
+  const signal = overall.signal as "BUY" | "SELL" | "HOLD";
+  const confidence = overall.confidence;
+  const wv = parseWeightedVote(reasoning);
+
+  // vote distribution from individual cards (exclude Research/Risk — non-voting)
+  const votingCards = cards.filter(
+    (c) => c.weightLabel !== "context" && c.weightLabel !== "gate",
+  );
+  const buys = votingCards.filter((c) => c.vote === "BUY").length;
+  const sells = votingCards.filter((c) => c.vote === "SELL").length;
+  const holds = votingCards.filter((c) => c.vote === "HOLD").length;
+  const total = votingCards.length || 1;
+
+  const signalColor =
+    signal === "BUY" ? "text-emerald-400" : signal === "SELL" ? "text-red-400" : "text-zinc-400";
+  const signalBg =
+    signal === "BUY"
+      ? "bg-emerald-500/10 border-emerald-500/25"
+      : signal === "SELL"
+        ? "bg-red-500/10 border-red-500/25"
+        : "bg-zinc-500/10 border-zinc-500/25";
+
+  return (
+    <div className={`rounded-xl border ${signalBg} overflow-hidden`}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-inherit">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+          WV
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-base font-bold">Weighted Voting Agent</p>
+          <p className="text-xs text-muted-foreground">
+            Consensus: <span className="font-medium text-foreground">{wv.consensus}</span>
+            {" · "}
+            {wv.agentsAgree}/{wv.agentsTotal} agents agree
+            {" · "}
+            Dominant: <span className="font-medium text-foreground">{wv.dominant}</span>
+          </p>
+        </div>
+        <span className={`text-2xl font-black tracking-tight ${signalColor}`}>
+          {signal}
+        </span>
+      </div>
+
+      {/* Body: 3 columns */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-border/50">
+        {/* Col 1: Vote distribution */}
+        <div className="p-5 space-y-4">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+            Vote Distribution
+          </p>
+
+          {/* Stacked bar */}
+          <div className="flex h-7 rounded-lg overflow-hidden border border-border/50">
+            {buys > 0 && (
+              <div
+                className="bg-emerald-500 flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
+                style={{ width: `${(buys / total) * 100}%` }}
+              >
+                {buys}
+              </div>
+            )}
+            {holds > 0 && (
+              <div
+                className="bg-zinc-500 flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
+                style={{ width: `${(holds / total) * 100}%` }}
+              >
+                {holds}
+              </div>
+            )}
+            {sells > 0 && (
+              <div
+                className="bg-red-500 flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
+                style={{ width: `${(sells / total) * 100}%` }}
+              >
+                {sells}
+              </div>
+            )}
+          </div>
+
+          {/* Legend */}
+          <div className="flex gap-4 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
+              BUY ({buys})
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-zinc-500" />
+              HOLD ({holds})
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm bg-red-500" />
+              SELL ({sells})
+            </span>
+          </div>
+
+          {/* Critic verdict */}
+          {wv.criticLine && (
+            <div className="rounded-lg bg-muted/30 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Critic</p>
+              <p className="text-[11px] font-mono text-muted-foreground leading-relaxed">
+                {wv.criticLine.replace("CriticAgent: ", "")}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Col 2: Weight table */}
+        <div className="p-5 space-y-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+            Agent Weights
+          </p>
+          <div className="space-y-1.5">
+            {WEIGHT_TABLE.map((w) => {
+              const agentCard = cards.find((c) => c.initials === w.initials);
+              const agentVote = agentCard?.vote ?? "—";
+              const voteColor =
+                agentVote === "BUY"
+                  ? "text-emerald-400"
+                  : agentVote === "SELL"
+                    ? "text-red-400"
+                    : "text-zinc-400";
+              return (
+                <div key={w.initials} className="flex items-center gap-2 text-[11px]">
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0"
+                    style={{ backgroundColor: w.color, color: "#fff" }}
+                  >
+                    {w.initials}
+                  </span>
+                  <span className="flex-1 text-muted-foreground truncate">{w.name}</span>
+                  <span className={`font-mono font-medium w-8 text-right ${voteColor}`}>
+                    {agentVote}
+                  </span>
+                  <div className="w-16 h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${w.weight}%`, backgroundColor: w.color, maxWidth: "100%" }}
+                    />
+                  </div>
+                  <span className="font-mono text-muted-foreground w-7 text-right">{w.weight}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Col 3: Confidence gauge */}
+        <div className="p-5 flex flex-col items-center justify-center gap-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+            Final Signal
+          </p>
+          <ConfidenceGauge value={confidence} signal={signal} />
+          <p className="text-xs text-muted-foreground text-center">
+            Updated {new Date(overall.created_at).toLocaleString()}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── page ──────────────────────────────────────────────── */
 export default function AgentsPage() {
   const [ticker, setTicker] = useState("AAPL");
@@ -321,11 +571,20 @@ export default function AgentsPage() {
 
       {/* Agent cards grid */}
       {!loading && !error && cards.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {cards.map((card) => (
-            <AgentCard key={card.initials} {...card} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {cards.map((card) => (
+              <AgentCard key={card.initials} {...card} />
+            ))}
+          </div>
+
+          {/* Weighted Voting summary */}
+          <WeightedVotingCard
+            cards={cards}
+            overall={data?.signal ?? null}
+            reasoning={data?.signal?.reasoning ?? []}
+          />
+        </>
       )}
 
       {/* No signal */}
