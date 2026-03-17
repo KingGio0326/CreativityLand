@@ -18,18 +18,18 @@ from supabase import create_client
 CRYPTO_TICKERS = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"]
 
 RSS_SOURCES_STOCKS = {
-    "google_news":   "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en",
-    "cnbc":          "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
-    "benzinga":      "https://www.benzinga.com/stock/{ticker_lower}/feed",
+    "google_news": "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en",
+    "cnbc": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+    "benzinga": "https://www.benzinga.com/stock/{ticker_lower}/feed",
     "seeking_alpha": "https://seekingalpha.com/api/sa/combined/{ticker}.xml",
-    "marketwatch":   "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
+    "marketwatch": "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
 }
 
 RSS_SOURCES_CRYPTO = {
-    "coindesk":      "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "coindesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "cointelegraph": "https://cointelegraph.com/rss",
-    "the_block":     "https://www.theblock.co/rss.xml",
-    "google_news":   "https://news.google.com/rss/search?q={ticker_clean}+crypto&hl=en-US&gl=US&ceid=US:en",
+    "the_block": "https://www.theblock.co/rss.xml",
+    "google_news": "https://news.google.com/rss/search?q={ticker_clean}+crypto&hl=en-US&gl=US&ceid=US:en",
 }
 
 
@@ -339,7 +339,6 @@ class NewsScraper:
         )
 
         if is_crypto(ticker):
-            clean = clean_ticker_crypto(ticker)
             tasks += [
                 self.fetch_rss_with_fulltext(
                     RSS_SOURCES_CRYPTO["coindesk"],
@@ -464,7 +463,7 @@ if __name__ == "__main__":
             print(f"    {fonte}: {count}")
         if articles:
             a = articles[0]
-            print(f"\n  Esempio articolo:")
+            print("\n  Esempio articolo:")
             print(f"    Titolo:    {a['title'][:70]}")
             print(f"    Fonte:     {a['source']}")
             print(f"    URL:       {a['url'][:80]}")
@@ -480,7 +479,7 @@ if __name__ == "__main__":
         for fonte, count in sorted(fonti_btc.items()):
             print(f"    {fonte}: {count}")
 
-        print(f"\n=== RISULTATI ===")
+        print("\n=== RISULTATI ===")
         pct = len(with_content) / max(len(articles), 1) * 100
         print(f"AAPL: {len(articles)} articoli, {len(with_content)} con contenuto pulito ({pct:.0f}%)")
         print(f"BTC:  {len(btc)} articoli")
