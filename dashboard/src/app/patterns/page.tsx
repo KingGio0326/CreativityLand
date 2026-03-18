@@ -424,8 +424,10 @@ function PortfolioPanel() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [closing, setClosing] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchPortfolio = useCallback(() => {
+    setLoading(true);
     fetch("/api/portfolio")
       .then((r) => r.json())
       .then((d) => {
@@ -435,6 +437,32 @@ function PortfolioPanel() {
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchPortfolio();
+  }, [fetchPortfolio]);
+
+  const handleClose = async (symbol: string) => {
+    if (!confirm(`Chiudere posizione ${symbol}?`)) return;
+    setClosing(symbol);
+    try {
+      const res = await fetch("/api/trade/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol }),
+      });
+      if (res.ok) {
+        fetchPortfolio();
+      } else {
+        const data = await res.json();
+        alert(data.error ?? "Errore nella chiusura");
+      }
+    } catch {
+      alert("Errore nella chiusura");
+    } finally {
+      setClosing(null);
+    }
+  };
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
@@ -484,6 +512,7 @@ function PortfolioPanel() {
                 <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
                   P&L %
                 </th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground" />
               </tr>
             </thead>
             <tbody>
@@ -516,6 +545,15 @@ function PortfolioPanel() {
                     >
                       {p.unrealized_plpc >= 0 ? "+" : ""}
                       {(p.unrealized_plpc * 100).toFixed(2)}%
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button
+                        onClick={() => handleClose(p.symbol)}
+                        disabled={closing === p.symbol}
+                        className="px-2 py-1 text-[10px] font-medium rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {closing === p.symbol ? "..." : "Chiudi"}
+                      </button>
                     </td>
                   </tr>
                 );
