@@ -138,7 +138,7 @@ class ScoringEngine:
         for ev in pending.data or []:
             entry_date = datetime.fromisoformat(
                 str(ev["entry_date"]).replace("Z", "")
-            )
+            ).replace(tzinfo=None)
             entry_price = ev.get("entry_price")
             if not entry_price:
                 continue
