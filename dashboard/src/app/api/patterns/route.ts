@@ -92,6 +92,62 @@ async function fetchPrices(
   };
 }
 
+/* ── Fetch SPY data for regime detection ─────────────── */
+async function fetchSpyCloses(): Promise<number[]> {
+  try {
+    const url = "https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=12mo";
+    const res = await fetch(url, { next: { revalidate: 0 } });
+    if (!res.ok) {
+      console.error("SPY fetch HTTP error:", res.status);
+      return [];
+    }
+    const json = await res.json();
+    const closes: (number | null)[] =
+      json.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+    return closes.filter((v): v is number => v != null);
+  } catch (err) {
+    console.error("SPY fetch error:", err);
+    return [];
+  }
+}
+
+/* ── Market regime detection (TypeScript port) ───────── */
+function calcRegime(closes: number[]): {
+  regime: string;
+  vix_approx: number;
+  spy_trend_30d: number;
+} {
+  const last = closes[closes.length - 1];
+  const ma200Slice = closes.slice(-200);
+  const ma200 = ma200Slice.reduce((a, b) => a + b, 0) / ma200Slice.length;
+
+  const returns30 = closes
+    .slice(-31)
+    .map((v, i, arr) => (i === 0 ? 0 : Math.log(v / arr[i - 1])))
+    .slice(1);
+
+  const vix =
+    Math.sqrt(returns30.reduce((a, b) => a + b * b, 0) / returns30.length) *
+    Math.sqrt(252) *
+    100;
+
+  const spy_trend_30d =
+    closes.length >= 30
+      ? ((last - closes[closes.length - 30]) / closes[closes.length - 30]) * 100
+      : 0;
+
+  let regime = "sideways";
+  if (last > ma200 && vix < 25) regime = "bull";
+  else if (last < ma200 && vix > 25) regime = "bear";
+  else if (last > ma200 && vix >= 25) regime = "volatile_bull";
+
+  return {
+    regime,
+    vix_approx: Math.round(vix * 100) / 100,
+    spy_trend_30d: Math.round(spy_trend_30d * 100) / 100,
+  };
+}
+
 /* ── Normalize prices to [-1,1] relative to first, resample to 30 ── */
 function normalizePattern(prices: number[]): number[] {
   const base = prices[0];
@@ -200,9 +256,10 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("ticker")?.toUpperCase() ?? "AAPL";
 
   try {
-    // 1. Fetch current prices + latest pipeline signal in parallel
-    const [priceData, signalRes] = await Promise.all([
+    // 1. Fetch current prices, SPY for regime, and latest pipeline signal in parallel
+    const [priceData, spyCloses, signalRes] = await Promise.all([
       fetchPrices(ticker),
+      fetchSpyCloses(),
       supabase
         .from("signals")
         .select("signal, confidence")
@@ -222,22 +279,21 @@ export async function GET(request: NextRequest) {
     const currentPrice = prices[prices.length - 1];
     const change30d = ((currentPrice - prices[0]) / prices[0]) * 100;
 
-    // 2. Normalize and search similar patterns via RPC
+    // 2. Calculate market regime from SPY data
+    const regimeData =
+      spyCloses.length >= 30
+        ? calcRegime(spyCloses)
+        : { regime: "bull", vix_approx: 20, spy_trend_30d: 0 };
+
+    console.log("Market regime detected:", regimeData);
+
+    // 3. Normalize and search similar patterns via RPC
     const vector = normalizePattern(prices);
 
     console.log("Current vector length:", vector?.length);
     console.log("Current vector sample:", vector?.slice(0, 5));
 
-    const matchRes = await supabase.rpc("match_patterns", {
-      query_vector: vector,
-      match_ticker: ticker,
-      match_count: 10,
-    });
-
-    console.log("RPC result count:", matchRes.data?.length);
-    console.log("RPC error:", matchRes.error);
-    console.log("RPC first result:", matchRes.data?.[0]);
-
+    // Tentativo 1: cerca nel regime corrente
     interface MatchedPattern {
       start_date: string;
       end_date: string;
@@ -252,35 +308,56 @@ export async function GET(request: NextRequest) {
       is_crisis?: boolean;
     }
 
-    const similar: MatchedPattern[] = matchRes.data ?? [];
+    let matchRes = await supabase.rpc("match_patterns", {
+      query_vector: vector,
+      match_ticker: ticker,
+      match_count: 10,
+      filter_regime: regimeData.regime,
+      include_crises: true,
+    });
 
-    // Detect regime from best matching patterns or default
-    const regimeCounts: Record<string, number> = {};
-    for (const p of similar) {
-      const r = p.market_regime ?? "unknown";
-      regimeCounts[r] = (regimeCounts[r] ?? 0) + 1;
+    let similar: MatchedPattern[] = matchRes.data ?? [];
+
+    console.log("RPC attempt 1 (regime:", regimeData.regime, ") count:", similar.length);
+    console.log("RPC error:", matchRes.error);
+
+    // Tentativo 2: se meno di 3 risultati, cerca in tutti i regimi
+    if (similar.length < 3) {
+      console.log("Fallback: searching all regimes...");
+      const fallbackRes = await supabase.rpc("match_patterns", {
+        query_vector: vector,
+        match_ticker: ticker,
+        match_count: 10,
+        filter_regime: null,
+        include_crises: true,
+      });
+
+      if (fallbackRes.data && fallbackRes.data.length > 0) {
+        similar = fallbackRes.data;
+        console.log("RPC fallback count:", similar.length);
+      }
+      console.log("RPC fallback error:", fallbackRes.error);
     }
-    const dominantRegime = Object.entries(regimeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "unknown";
-    const bestVix = similar[0]?.vix_approx ?? null;
-    const bestSpyTrend = similar[0]?.spy_trend_30d ?? null;
 
-    // 3. Compute outcome stats
+    console.log("RPC first result:", similar[0]);
+
+    // 4. Compute outcome stats
     const o5 = similar
-      .filter((p: { outcome_5d: number | null }) => p.outcome_5d != null)
-      .map((p: { outcome_5d: number }) => p.outcome_5d);
+      .filter((p) => p.outcome_5d != null)
+      .map((p) => p.outcome_5d as number);
     const o10 = similar
-      .filter((p: { outcome_10d: number | null }) => p.outcome_10d != null)
-      .map((p: { outcome_10d: number }) => p.outcome_10d);
+      .filter((p) => p.outcome_10d != null)
+      .map((p) => p.outcome_10d as number);
     const o20 = similar
-      .filter((p: { outcome_20d: number | null }) => p.outcome_20d != null)
-      .map((p: { outcome_20d: number }) => p.outcome_20d);
+      .filter((p) => p.outcome_20d != null)
+      .map((p) => p.outcome_20d as number);
 
     const stats10 = outcomeStats(o10);
     const recommendation = generateRecommendation(stats10);
 
     const bestMatch = similar[0] ?? null;
 
-    // 4. Pipeline signal
+    // 5. Pipeline signal
     const pipelineRow = signalRes.data?.[0] ?? null;
 
     const combinedSignal = combineSignals(
@@ -296,9 +373,9 @@ export async function GET(request: NextRequest) {
         current_price: Math.round(currentPrice * 100) / 100,
         change_30d_pct: Math.round(change30d * 100) / 100,
       },
-      market_regime: dominantRegime,
-      vix_approx: bestVix,
-      spy_trend_30d: bestSpyTrend,
+      market_regime: regimeData.regime,
+      vix_approx: regimeData.vix_approx,
+      spy_trend_30d: regimeData.spy_trend_30d,
       similar: similar.slice(0, 3).map((p) => ({
         start_date: p.start_date,
         end_date: p.end_date,
@@ -327,6 +404,12 @@ export async function GET(request: NextRequest) {
         signal: pipelineRow?.signal ?? null,
         confidence: pipelineRow?.confidence ?? null,
         combined_signal: combinedSignal,
+      },
+      debug: {
+        vector_length: vector?.length,
+        regime_detected: regimeData.regime,
+        patterns_found: similar.length,
+        spy_data_points: spyCloses.length,
       },
     });
   } catch (err) {
