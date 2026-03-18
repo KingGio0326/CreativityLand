@@ -1,7 +1,12 @@
+import logging
+
 import yfinance as yf
 import numpy as np
+import pandas as pd
 import ta
 from agents import TradingState
+
+logger = logging.getLogger("mean_reversion_agent")
 
 
 class MeanReversionAgent:
@@ -23,21 +28,39 @@ class MeanReversionAgent:
             )
             if len(df) < 20:
                 raise ValueError("Dati insufficienti")
-            close = df["Close"].squeeze()
+            # Flatten multi-level columns from yfinance
+            close = pd.Series(
+                df["Close"].values.flatten(),
+                index=df.index
+            )
+            logger.info(
+                "MeanReversion: %d prezzi, last=%s",
+                len(close),
+                f"{close.iloc[-1]:.2f}" if len(close) > 0 else "N/A"
+            )
             current = float(close.iloc[-1])
 
             # Z-Score
             mean_20 = float(close.rolling(20).mean().iloc[-1])
             std_20 = float(close.rolling(20).std().iloc[-1])
-            z_score = ((current - mean_20) / std_20
-                       if std_20 > 0 else 0)
+            if np.isnan(std_20) or std_20 == 0:
+                logger.info("MeanReversion: std_20=0 or NaN, returning HOLD")
+                z_score = 0.0
+            else:
+                z_score = (current - mean_20) / std_20
 
             # Bollinger %B
-            bb = ta.volatility.BollingerBands(close, 20, 2)
-            upper = float(bb.bollinger_hband().iloc[-1])
-            lower = float(bb.bollinger_lband().iloc[-1])
-            bb_b = ((current - lower) / (upper - lower)
-                    if upper != lower else 0.5)
+            try:
+                bb = ta.volatility.BollingerBands(close, 20, 2)
+                upper = float(bb.bollinger_hband().iloc[-1])
+                lower = float(bb.bollinger_lband().iloc[-1])
+                if np.isnan(upper) or np.isnan(lower) or upper == lower:
+                    bb_b = 0.5
+                else:
+                    bb_b = (current - lower) / (upper - lower)
+            except Exception as bb_err:
+                logger.warning("Bollinger calc failed: %s", bb_err)
+                bb_b = 0.5
 
             # RSI divergence
             rsi_series = ta.momentum.rsi(close, 14)
