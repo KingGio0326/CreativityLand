@@ -559,7 +559,7 @@ export default function PatternsPage() {
       }))
     : [];
 
-  const historicChartData = best
+  const historicChartData = best?.prices
     ? best.prices.map((p, i) => ({
         day: i + 1,
         value: Math.round(p * 10000) / 10000,
@@ -573,7 +573,7 @@ export default function PatternsPage() {
         const currentNorm =
           ((data.current.prices[i] ?? data.current.prices[data.current.prices.length - 1]) - base0) /
           base0 * 100;
-        const historicNorm = best ? best.prices[i] * 100 : null;
+        const historicNorm = best?.prices ? best.prices[i] * 100 : null;
         return {
           day: i + 1,
           current: Math.round(currentNorm * 100) / 100,
