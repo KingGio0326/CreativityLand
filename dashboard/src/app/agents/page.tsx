@@ -20,10 +20,10 @@ interface AgentMeta {
 
 const AGENTS: AgentMeta[] = [
   { name: "Sentiment Agent",      initials: "SE", avatarBg: "#2563eb", avatarColor: "#fff", weightLabel: "w 22%", prefix: "SentimentAgent" },
-  { name: "Technical Agent",      initials: "TE", avatarBg: "#7c3aed", avatarColor: "#fff", weightLabel: "w 15%", prefix: "TechnicalAgent" },
+  { name: "Technical Agent",      initials: "TE", avatarBg: "#7c3aed", avatarColor: "#fff", weightLabel: "w 11%", prefix: "TechnicalAgent" },
   { name: "Fundamental Agent",    initials: "FU", avatarBg: "#0891b2", avatarColor: "#fff", weightLabel: "w 18%", prefix: "FundamentalAgent" },
   { name: "Liquidity Agent",      initials: "LI", avatarBg: "#E1F5EE", avatarColor: "#085041", weightLabel: "w 8%",  prefix: "LiquidityAgent" },
-  { name: "Options Agent",        initials: "OP", avatarBg: "#1e40af", avatarColor: "#fff", weightLabel: "w 6%",  prefix: "OptionsAgent" },
+  { name: "Options Agent",        initials: "OP", avatarBg: "#FAEEDA", avatarColor: "#633806", weightLabel: "w 6%",  prefix: "OptionsAgent" },
   { name: "Macro Agent",          initials: "MA", avatarBg: "#ea580c", avatarColor: "#fff", weightLabel: "w 6%",  prefix: "MacroAgent" },
   { name: "Momentum Agent",       initials: "MO", avatarBg: "#16a34a", avatarColor: "#fff", weightLabel: "w 12%", prefix: "MomentumAgent" },
   { name: "Mean Reversion Agent", initials: "MR", avatarBg: "#d946ef", avatarColor: "#fff", weightLabel: "w 6%",  prefix: "MeanReversionAgent" },
@@ -116,11 +116,28 @@ function parseResearch(line: string): Record<string, string | number> {
   };
 }
 
-function parseOptions(line: string): Record<string, string | number> {
+function parseOptions(line: string, data: ApiData | null): Record<string, string | number> {
+  const opt = data?.options;
+  if (opt) {
+    const pcVal = opt.pc_ratio;
+    let pcLabel = "";
+    if (pcVal != null) {
+      pcLabel = pcVal < 0.5 ? " (bullish)" : pcVal > 1.5 ? " (bearish)" : " (neutro)";
+    }
+    return {
+      "Put/Call Ratio": pcVal != null ? `${pcVal}${pcLabel}` : "—",
+      "Max Pain": opt.max_pain != null
+        ? `$${opt.max_pain}${opt.distance_to_max_pain ? ` (${opt.distance_to_max_pain})` : ""}`
+        : "—",
+      "IV Media": opt.avg_iv != null ? `${opt.avg_iv}%` : "—",
+    };
+  }
+  // Fallback: parse from reasoning line
+  const pcRatio = extractKV(line, "PC_ratio");
   return {
-    "P/C Ratio": extractKV(line, "PC_ratio") ?? "—",
+    "Put/Call Ratio": pcRatio ?? "—",
     "Max Pain": line.match(/MaxPain=\$?([\d.]+)/)?.[1] ? `$${line.match(/MaxPain=\$?([\d.]+)/)?.[1]}` : "—",
-    "IV": extractKV(line, "IV") ? `${extractKV(line, "IV")}` : "—",
+    "IV Media": extractKV(line, "IV") ? `${extractKV(line, "IV")}` : "—",
   };
 }
 
@@ -196,6 +213,15 @@ interface ResearchData {
   papers: { title: string; url: string }[];
 }
 
+interface OptionsData {
+  signal: string;
+  confidence: number;
+  pc_ratio: number | null;
+  max_pain: number | null;
+  avg_iv: number | null;
+  distance_to_max_pain: string | null;
+}
+
 interface LiquidityData {
   signal: string;
   confidence: number;
@@ -218,6 +244,7 @@ interface ApiData {
   sentiment: SentimentData;
   stats: ApiStats;
   research?: ResearchData;
+  options?: OptionsData | null;
   liquidity?: LiquidityData | null;
   history: HistoryEntry[];
 }
@@ -239,7 +266,7 @@ function buildCards(data: ApiData): AgentCardProps[] {
     MomentumAgent: parseMomentum,
     MeanReversionAgent: parseMeanReversion,
     MLAgent: parseML,
-    OptionsAgent: parseOptions,
+    OptionsAgent: (line: string) => parseOptions(line, data),
     LiquidityAgent: (line: string) => parseLiquidity(line, data),
     ResearchAgent: parseResearch,
     RiskAgent: parseRisk,
@@ -370,7 +397,7 @@ const WEIGHT_TABLE: { name: string; initials: string; weight: number; color: str
   { name: "Technical",      initials: "TE", weight: 11, color: "#7c3aed" },
   { name: "ML Prediction",  initials: "ML", weight: 11, color: "#eab308" },
   { name: "Liquidity",      initials: "LI", weight:  8, color: "#10b981" },
-  { name: "Options",        initials: "OP", weight:  6, color: "#1e40af" },
+  { name: "Options",        initials: "OP", weight:  6, color: "#b45309" },
   { name: "Macro",          initials: "MA", weight:  6, color: "#ea580c" },
   { name: "Mean Reversion", initials: "MR", weight:  6, color: "#d946ef" },
 ];

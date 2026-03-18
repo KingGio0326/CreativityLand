@@ -187,6 +187,24 @@ export async function GET(request: NextRequest) {
       vix: vixMatch ? { value: parseFloat(vixMatch[1]), regime: vixMatch[2] } : null,
     } : null;
 
+    // Extract options data from reasoning
+    const optionsLine = reasoning.find((l: string) => l.startsWith("OptionsAgent:")) ?? "";
+    const optSignalMatch = optionsLine.match(/OptionsAgent:\s*(BUY|SELL|HOLD)/);
+    const optConfMatch = optionsLine.match(/\((\d+)%\)/);
+    const optPcMatch = optionsLine.match(/PC_ratio=([\d.]+)/);
+    const optMaxPainMatch = optionsLine.match(/MaxPain=\$?([\d.]+)/);
+    const optIvMatch = optionsLine.match(/IV=([\d.]+)%/);
+    const optDistMatch = optionsLine.match(/Prezzo ([\d.]+)% (sopra|sotto) max pain/);
+
+    const options = optionsLine ? {
+      signal: optSignalMatch?.[1] ?? "HOLD",
+      confidence: optConfMatch ? parseInt(optConfMatch[1]) : 0,
+      pc_ratio: optPcMatch ? parseFloat(optPcMatch[1]) : null,
+      max_pain: optMaxPainMatch ? parseFloat(optMaxPainMatch[1]) : null,
+      avg_iv: optIvMatch ? parseFloat(optIvMatch[1]) : null,
+      distance_to_max_pain: optDistMatch ? `${optDistMatch[1]}% ${optDistMatch[2]}` : null,
+    } : null;
+
     return NextResponse.json({
       ticker,
       signal: signal
@@ -198,6 +216,7 @@ export async function GET(request: NextRequest) {
           }
         : null,
       liquidity,
+      options,
       sentiment: {
         articles_analyzed: articles.length,
         positive,
