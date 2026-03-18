@@ -8,7 +8,7 @@ const AGENT_PREFIXES = [
   "SentimentAgent:", "SocialAgent:", "TechnicalAgent:",
   "FundamentalAgent:", "MacroAgent:", "MomentumAgent:",
   "MeanReversionAgent:", "MLAgent:", "ResearchAgent:",
-  "RiskAgent:", "LiquidityAgent:", "WeightedVote:", "CriticAgent:",
+  "RiskAgent:", "LiquidityAgent:", "OptionsAgent:", "WeightedVote:", "CriticAgent:",
 ];
 
 function parseReasoning(raw: unknown): string[] {

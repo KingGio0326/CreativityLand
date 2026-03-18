@@ -3,13 +3,13 @@ from agents import TradingState
 WEIGHTS = {
     "sentiment":      0.22,
     "fundamental":    0.18,
-    "technical":      0.15,
     "momentum":       0.12,
+    "technical":      0.11,
     "ml_prediction":  0.11,
     "liquidity":      0.08,
     "macro":          0.06,
     "mean_reversion": 0.06,
-    "social":         0.02,
+    "options":        0.06,
 }
 
 
@@ -30,16 +30,28 @@ def _liquidity_as_source(state: TradingState) -> dict:
     }
 
 
+def _options_as_source(state: TradingState) -> dict:
+    """Convert options agent output to standard source format."""
+    sig = state.get("options_signal")
+    if not sig:
+        return {}
+    return {
+        "signal": sig,
+        "confidence": state.get("options_confidence", 0) / 100,
+        "available": True,
+    }
+
+
 def weighted_vote(state: TradingState) -> dict:
     sources = {
         "sentiment":      state.get("sentiment_summary", {}),
-        "social":         state.get("social_analysis", {}),
         "fundamental":    state.get("fundamental_analysis", {}),
         "technical":      state.get("technical_analysis", {}),
         "momentum":       state.get("momentum_analysis", {}),
         "mean_reversion": state.get("mean_reversion_analysis", {}),
         "ml_prediction":  state.get("ml_prediction", {}),
         "liquidity":      _liquidity_as_source(state),
+        "options":        _options_as_source(state),
         "macro":          state.get("macro_analysis", {}),
     }
 

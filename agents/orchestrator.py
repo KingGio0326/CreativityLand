@@ -11,6 +11,7 @@ from agents.mean_reversion_agent import mean_reversion_agent_node
 from agents.ml_prediction_agent import ml_agent_node
 from agents.risk_agent import risk_agent
 from agents.macro_agent import macro_agent_node
+from agents.options_agent import options_agent
 from agents.liquidity_agent import liquidity_agent
 from agents.weighted_signal_agent import weighted_signal_node
 from agents.critic_agent import critic_agent
@@ -31,6 +32,7 @@ def build_graph():
     g.add_node("research",       research_agent)
     g.add_node("fundamental",    fundamental_agent_node)
     g.add_node("technical",      technical_agent_node)
+    g.add_node("options",        options_agent)
     g.add_node("momentum",       momentum_agent_node)
     g.add_node("mean_reversion", mean_reversion_agent_node)
     g.add_node("ml",             ml_agent_node)
@@ -46,7 +48,8 @@ def build_graph():
     g.add_edge("sentiment",      "research")
     g.add_edge("research",       "fundamental")
     g.add_edge("fundamental",    "technical")
-    g.add_edge("technical",      "momentum")
+    g.add_edge("technical",      "options")
+    g.add_edge("options",        "momentum")
     g.add_edge("momentum",       "mean_reversion")
     g.add_edge("mean_reversion", "ml")
     g.add_edge("ml",             "risk")
