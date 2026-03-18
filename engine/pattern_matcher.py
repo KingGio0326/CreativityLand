@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 
 import numpy as np
@@ -12,6 +13,14 @@ from engine.pattern_extractor import PatternExtractor
 
 load_dotenv()
 logger = logging.getLogger("pattern_matcher")
+
+
+def sanitize_vector(v: list) -> list:
+    """Replace NaN and Inf with 0.0 to avoid JSON serialization errors."""
+    return [
+        0.0 if (math.isnan(x) or math.isinf(x)) else x
+        for x in v
+    ]
 
 
 class PatternMatcher:
@@ -29,7 +38,7 @@ class PatternMatcher:
         if not current:
             return {"error": "Dati non disponibili"}
 
-        vector = current["normalized"]
+        vector = sanitize_vector(current["normalized"])
         current_regime = current.get("market_regime", None)
 
         # Prima cerca nel regime corrente

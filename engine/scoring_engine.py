@@ -45,7 +45,8 @@ class ScoringEngine:
                 return None
             df.index = df.index.tz_localize(None)
             target_naive = target_date.replace(tzinfo=None)
-            closest_idx = (df.index - target_naive).abs().argmin()
+            deltas = [(idx - target_naive).total_seconds() for idx in df.index]
+            closest_idx = int(np.argmin([abs(d) for d in deltas]))
             return float(df["Close"].values.flatten()[closest_idx])
         except Exception as e:
             logger.warning("Price fetch error %s: %s", ticker, e)
@@ -101,7 +102,7 @@ class ScoringEngine:
         result = (
             self.supabase.table("signal_evaluations")
             .insert({
-                "signal_id": signal.get("id"),
+                "signal_id": str(signal.get("id", "")),
                 "ticker": ticker,
                 "signal_type": sig_type,
                 "confidence": confidence,
