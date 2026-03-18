@@ -22,7 +22,8 @@ const AGENTS: AgentMeta[] = [
   { name: "Sentiment Agent",      initials: "SE", avatarBg: "#2563eb", avatarColor: "#fff", weightLabel: "w 22%", prefix: "SentimentAgent" },
   { name: "Technical Agent",      initials: "TE", avatarBg: "#7c3aed", avatarColor: "#fff", weightLabel: "w 15%", prefix: "TechnicalAgent" },
   { name: "Fundamental Agent",    initials: "FU", avatarBg: "#0891b2", avatarColor: "#fff", weightLabel: "w 18%", prefix: "FundamentalAgent" },
-  { name: "Macro Agent",          initials: "MA", avatarBg: "#ea580c", avatarColor: "#fff", weightLabel: "w 8%",  prefix: "MacroAgent" },
+  { name: "Liquidity Agent",      initials: "LI", avatarBg: "#E1F5EE", avatarColor: "#085041", weightLabel: "w 8%",  prefix: "LiquidityAgent" },
+  { name: "Macro Agent",          initials: "MA", avatarBg: "#ea580c", avatarColor: "#fff", weightLabel: "w 6%",  prefix: "MacroAgent" },
   { name: "Momentum Agent",       initials: "MO", avatarBg: "#16a34a", avatarColor: "#fff", weightLabel: "w 12%", prefix: "MomentumAgent" },
   { name: "Mean Reversion Agent", initials: "MR", avatarBg: "#d946ef", avatarColor: "#fff", weightLabel: "w 6%",  prefix: "MeanReversionAgent" },
   { name: "ML Prediction Agent",  initials: "ML", avatarBg: "#eab308", avatarColor: "#000", weightLabel: "w 11%", prefix: "MLAgent" },
@@ -114,6 +115,30 @@ function parseResearch(line: string): Record<string, string | number> {
   };
 }
 
+function parseLiquidity(line: string, data: ApiData | null): Record<string, string | number> {
+  const liq = data?.liquidity;
+  if (liq) {
+    return {
+      "Liquidity Score": `${liq.score} (${liq.direction})`,
+      "Fed Balance Sheet": liq.fed_balance_sheet
+        ? `${liq.fed_balance_sheet.direction} (${liq.fed_balance_sheet.change_pct})`
+        : "—",
+      "Fed Funds Rate": liq.fed_funds_rate?.direction ?? "—",
+      "Yield Curve": liq.yield_curve?.inverted
+        ? `${liq.yield_curve.value}% INVERTITA`
+        : liq.yield_curve?.value
+          ? `${liq.yield_curve.value}% normale`
+          : "—",
+      "VIX": liq.vix ? `${liq.vix.value} (${liq.vix.regime})` : "—",
+    };
+  }
+  // Fallback: parse from reasoning line
+  const scoreMatch = extractKV(line, "score");
+  return {
+    "Liquidity Score": scoreMatch ?? "—",
+  };
+}
+
 function parseRisk(line: string): Record<string, string | number> {
   const level = line.match(/→\s*(HIGH|MEDIUM|LOW)/)?.[1] ?? "—";
   return {
@@ -162,6 +187,17 @@ interface ResearchData {
   papers: { title: string; url: string }[];
 }
 
+interface LiquidityData {
+  signal: string;
+  confidence: number;
+  score: number;
+  direction: string;
+  fed_balance_sheet: { direction: string; change_pct: string } | null;
+  fed_funds_rate: { direction: string } | null;
+  yield_curve: { value: string | null; inverted: boolean };
+  vix: { value: number; regime: string } | null;
+}
+
 interface ApiData {
   ticker: string;
   signal: {
@@ -173,6 +209,7 @@ interface ApiData {
   sentiment: SentimentData;
   stats: ApiStats;
   research?: ResearchData;
+  liquidity?: LiquidityData | null;
   history: HistoryEntry[];
 }
 
@@ -193,6 +230,7 @@ function buildCards(data: ApiData): AgentCardProps[] {
     MomentumAgent: parseMomentum,
     MeanReversionAgent: parseMeanReversion,
     MLAgent: parseML,
+    LiquidityAgent: (line: string) => parseLiquidity(line, data),
     ResearchAgent: parseResearch,
     RiskAgent: parseRisk,
   };
@@ -321,9 +359,10 @@ const WEIGHT_TABLE: { name: string; initials: string; weight: number; color: str
   { name: "Technical",      initials: "TE", weight: 15, color: "#7c3aed" },
   { name: "Momentum",       initials: "MO", weight: 12, color: "#16a34a" },
   { name: "ML Prediction",  initials: "ML", weight: 11, color: "#eab308" },
-  { name: "Social",         initials: "SO", weight:  8, color: "#f97316" },
-  { name: "Macro",          initials: "MA", weight:  8, color: "#ea580c" },
+  { name: "Liquidity",      initials: "LI", weight:  8, color: "#10b981" },
+  { name: "Macro",          initials: "MA", weight:  6, color: "#ea580c" },
   { name: "Mean Reversion", initials: "MR", weight:  6, color: "#d946ef" },
+  { name: "Social",         initials: "SO", weight:  2, color: "#f97316" },
 ];
 
 function WeightedVotingCard({

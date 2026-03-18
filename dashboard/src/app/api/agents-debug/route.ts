@@ -8,7 +8,7 @@ const AGENT_PREFIXES = [
   "SentimentAgent:", "SocialAgent:", "TechnicalAgent:",
   "FundamentalAgent:", "MacroAgent:", "MomentumAgent:",
   "MeanReversionAgent:", "MLAgent:", "ResearchAgent:",
-  "RiskAgent:", "WeightedVote:", "CriticAgent:",
+  "RiskAgent:", "LiquidityAgent:", "WeightedVote:", "CriticAgent:",
 ];
 
 function parseReasoning(raw: unknown): string[] {
@@ -164,6 +164,29 @@ export async function GET(request: NextRequest) {
     const researchPapers: { title: string; url: string }[] =
       (signal as Record<string, unknown>)?.research_papers as { title: string; url: string }[] ?? [];
 
+    // Extract liquidity data from reasoning
+    const liquidityLine = reasoning.find((l: string) => l.startsWith("LiquidityAgent:")) ?? "";
+    const liqScoreMatch = liquidityLine.match(/score=([\d.-]+)/);
+    const liqSignalMatch = liquidityLine.match(/LiquidityAgent:\s*(BUY|SELL|HOLD)/);
+    const liqConfMatch = liquidityLine.match(/\((\d+)%\)/);
+
+    // Parse individual indicators from the reasoning line
+    const fedBsMatch = liquidityLine.match(/Fed balance sheet (\w+) \(([^)]+)\)/);
+    const fedRateMatch = liquidityLine.match(/Fed funds rate (\w+)/);
+    const ycMatch = liquidityLine.match(/Yield curve invertita \(([^)]+)\)/);
+    const vixMatch = liquidityLine.match(/VIX ([\d.]+) \((\w+)\)/);
+
+    const liquidity = liquidityLine ? {
+      signal: liqSignalMatch?.[1] ?? "HOLD",
+      confidence: liqConfMatch ? parseInt(liqConfMatch[1]) : 0,
+      score: liqScoreMatch ? parseFloat(liqScoreMatch[1]) : 0,
+      direction: (liqScoreMatch ? (parseFloat(liqScoreMatch[1]) > 0.3 ? "bullish" : parseFloat(liqScoreMatch[1]) < -0.3 ? "bearish" : "neutral") : "neutral"),
+      fed_balance_sheet: fedBsMatch ? { direction: fedBsMatch[1], change_pct: fedBsMatch[2] } : null,
+      fed_funds_rate: fedRateMatch ? { direction: fedRateMatch[1] } : null,
+      yield_curve: ycMatch ? { value: ycMatch[1], inverted: true } : { value: null, inverted: false },
+      vix: vixMatch ? { value: parseFloat(vixMatch[1]), regime: vixMatch[2] } : null,
+    } : null;
+
     return NextResponse.json({
       ticker,
       signal: signal
@@ -174,6 +197,7 @@ export async function GET(request: NextRequest) {
             reasoning,
           }
         : null,
+      liquidity,
       sentiment: {
         articles_analyzed: articles.length,
         positive,
