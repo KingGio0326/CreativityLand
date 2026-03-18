@@ -11,6 +11,7 @@ from agents.mean_reversion_agent import mean_reversion_agent_node
 from agents.ml_prediction_agent import ml_agent_node
 from agents.risk_agent import risk_agent
 from agents.macro_agent import macro_agent_node
+from agents.liquidity_agent import liquidity_agent
 from agents.weighted_signal_agent import weighted_signal_node
 from agents.critic_agent import critic_agent
 
@@ -34,6 +35,7 @@ def build_graph():
     g.add_node("mean_reversion", mean_reversion_agent_node)
     g.add_node("ml",             ml_agent_node)
     g.add_node("risk",           risk_agent)
+    g.add_node("liquidity",      liquidity_agent)
     g.add_node("macro",          macro_agent_node)
     g.add_node("weighted",       weighted_signal_node)
     g.add_node("critic",         critic_agent)
@@ -48,7 +50,8 @@ def build_graph():
     g.add_edge("momentum",       "mean_reversion")
     g.add_edge("mean_reversion", "ml")
     g.add_edge("ml",             "risk")
-    g.add_edge("risk",           "macro")
+    g.add_edge("risk",           "liquidity")
+    g.add_edge("liquidity",      "macro")
     g.add_edge("macro",          "weighted")
     g.add_edge("weighted",       "critic")
     g.add_conditional_edges("critic", should_retry)
