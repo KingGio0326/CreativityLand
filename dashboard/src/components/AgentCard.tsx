@@ -9,6 +9,11 @@ export interface TopArticle {
   source: string;
 }
 
+export interface ResearchPaper {
+  title: string;
+  url: string;
+}
+
 export interface AgentCardProps {
   name: string;
   initials: string;
@@ -20,6 +25,8 @@ export interface AgentCardProps {
   details: Record<string, string | number>;
   reasoning: string[];
   topArticles?: TopArticle[];
+  researchPapers?: ResearchPaper[];
+  researchContext?: string;
 }
 
 const voteConfig = {
@@ -39,8 +46,11 @@ export default function AgentCard({
   details,
   reasoning,
   topArticles,
+  researchPapers,
+  researchContext,
 }: AgentCardProps) {
   const [open, setOpen] = useState(false);
+  const [insightOpen, setInsightOpen] = useState(false);
   const v = voteConfig[vote];
 
   const labelColor = (label: string) =>
@@ -113,6 +123,61 @@ export default function AgentCard({
               <span className="font-mono text-muted-foreground/60 shrink-0">{a.source}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Research papers (ResearchAgent only) */}
+      {researchPapers !== undefined && (
+        <div className="px-4 py-3 border-b space-y-2">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            Paper arXiv analizzati: {researchPapers.length}
+          </p>
+          {researchPapers.length === 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Nessun paper trovato — arXiv non raggiungibile
+            </p>
+          )}
+          {researchPapers.map((p, i) => (
+            <a
+              key={i}
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-[11px] text-sky-400 hover:text-sky-300 truncate transition-colors"
+            >
+              {p.title.length > 70 ? p.title.substring(0, 70) + "…" : p.title}
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Claude insight accordion (ResearchAgent only) */}
+      {researchContext && (
+        <div className="border-b">
+          <button
+            onClick={() => setInsightOpen(!insightOpen)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span className="font-medium">Insight Claude</span>
+            <svg
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${insightOpen ? "rotate-180" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {insightOpen && (
+            <div className="px-4 pb-3">
+              <div className="bg-muted/30 rounded-lg p-3 max-h-48 overflow-auto">
+                <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                  {researchContext}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

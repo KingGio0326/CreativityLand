@@ -148,6 +148,22 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Extract research data from reasoning
+    const researchLine = reasoning.find((l: string) => l.startsWith("ResearchAgent:")) ?? "";
+    const paperCountMatch = researchLine.match(/(\d+)\s*paper\s*arXiv/i);
+    const researchPapersCount = paperCountMatch ? parseInt(paperCountMatch[1]) : 0;
+
+    // Extract research_context (the Claude insight text after the count prefix)
+    let researchContext = "";
+    const contextMatch = researchLine.match(/paper arXiv analizzati\.\s*(.*)/i);
+    if (contextMatch) {
+      researchContext = contextMatch[1].replace(/\.\.\.$/,"");
+    }
+
+    // Research papers are stored in the signal record if available
+    const researchPapers: { title: string; url: string }[] =
+      (signal as Record<string, unknown>)?.research_papers as { title: string; url: string }[] ?? [];
+
     return NextResponse.json({
       ticker,
       signal: signal
@@ -173,6 +189,11 @@ export async function GET(request: NextRequest) {
         neutral,
         weighted_score: sentimentScore,
         articles_with_embedding: articlesWithEmbedding,
+      },
+      research: {
+        papers_count: researchPapersCount,
+        context: researchContext,
+        papers: researchPapers,
       },
       history,
     });

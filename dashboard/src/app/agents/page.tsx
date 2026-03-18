@@ -106,10 +106,10 @@ function parseML(line: string): Record<string, string | number> {
 }
 
 function parseResearch(line: string): Record<string, string | number> {
-  const countMatch = line.match(/trovati\s+(\d+)/);
+  const countMatch = line.match(/(\d+)\s*paper\s*arXiv/i);
   const queryMatch = line.match(/query='([^']+)'/);
   return {
-    "Similar Found": countMatch ? parseInt(countMatch[1]) : "—",
+    "Paper arXiv": countMatch ? parseInt(countMatch[1]) : "—",
     Context: queryMatch ? queryMatch[1].slice(0, 40) + "…" : "—",
   };
 }
@@ -156,6 +156,12 @@ interface HistoryEntry {
   sentiment_score: number | null;
 }
 
+interface ResearchData {
+  papers_count: number;
+  context: string;
+  papers: { title: string; url: string }[];
+}
+
 interface ApiData {
   ticker: string;
   signal: {
@@ -166,6 +172,7 @@ interface ApiData {
   } | null;
   sentiment: SentimentData;
   stats: ApiStats;
+  research?: ResearchData;
   history: HistoryEntry[];
 }
 
@@ -233,6 +240,11 @@ function buildCards(data: ApiData): AgentCardProps[] {
       reasoning: matchingLines,
       // Pass top articles for SentimentAgent
       ...(agent.prefix === "SentimentAgent" ? { topArticles: sent.top_articles } : {}),
+      // Pass research papers for ResearchAgent
+      ...(agent.prefix === "ResearchAgent" ? {
+        researchPapers: data.research?.papers ?? [],
+        researchContext: data.research?.context ?? "",
+      } : {}),
     };
   });
 }
