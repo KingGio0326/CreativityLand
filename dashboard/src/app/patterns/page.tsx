@@ -103,6 +103,15 @@ function regimeLabel(regime: string) {
   }
 }
 
+/* ── parse prices (may arrive as JSON string) ────────── */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parsePrices(prices: any): number[] {
+  if (!prices) return [];
+  if (Array.isArray(prices)) return prices;
+  try { return JSON.parse(prices); }
+  catch { return []; }
+}
+
 /* ── signal color helpers ─────────────────────────────── */
 function signalStyle(signal: string) {
   switch (signal) {
@@ -552,10 +561,10 @@ export default function PatternsPage() {
   const combined = data?.pipeline_signal?.combined_signal ?? "HOLD";
 
   /* ── chart data ──────────────────────────────────────── */
-  const currentPrices = data?.current?.prices ?? [];
+  const currentPrices = parsePrices(data?.current?.prices);
   const currentDates = data?.current?.dates ?? [];
   const similarList = data?.similar ?? [];
-  const bestPrices = best?.prices ?? [];
+  const bestPrices = parsePrices(best?.prices);
 
   const currentChartData = currentDates.map((d, i) => ({
     date: fmtDate(d),
