@@ -14,13 +14,57 @@ interface AVDaily {
   };
 }
 
+async function fetchPricesYahoo(
+  ticker: string,
+): Promise<{ dates: string[]; prices: number[] } | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=2mo`;
+    const res = await fetch(url, { next: { revalidate: 0 } });
+    if (!res.ok) {
+      console.error("Yahoo Finance HTTP error:", res.status);
+      return null;
+    }
+    const json = await res.json();
+    const result = json.chart?.result?.[0];
+    if (!result) {
+      console.error("Yahoo Finance no result");
+      return null;
+    }
+    const timestamps: number[] = result.timestamp ?? [];
+    const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+    const filtered: { date: string; price: number }[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      if (closes[i] != null) {
+        const d = new Date(timestamps[i] * 1000);
+        filtered.push({
+          date: d.toISOString().slice(0, 10),
+          price: closes[i] as number,
+        });
+      }
+    }
+    const last30 = filtered.slice(-30);
+    if (last30.length < 20) {
+      console.error("Yahoo Finance insufficient data:", last30.length);
+      return null;
+    }
+    console.log("Yahoo Finance fallback OK:", last30.length, "closes for", ticker);
+    return {
+      dates: last30.map((d) => d.date),
+      prices: last30.map((d) => d.price),
+    };
+  } catch (err) {
+    console.error("Yahoo Finance fetch error:", err);
+    return null;
+  }
+}
+
 async function fetchPrices(
   ticker: string,
 ): Promise<{ dates: string[]; prices: number[] } | null> {
   const key = process.env.ALPHA_VANTAGE_KEY ?? process.env.ALPHA_VANTAGE_API_KEY;
   if (!key) {
-    console.error("ALPHA_VANTAGE_KEY not set");
-    return null;
+    console.error("ALPHA_VANTAGE_KEY not set, trying Yahoo fallback");
+    return fetchPricesYahoo(ticker);
   }
 
   const url =
@@ -28,13 +72,16 @@ async function fetchPrices(
     `&symbol=${encodeURIComponent(ticker)}&outputsize=compact&apikey=${key}`;
 
   const res = await fetch(url, { next: { revalidate: 0 } });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.error("Alpha Vantage HTTP error:", res.status, "— trying Yahoo fallback");
+    return fetchPricesYahoo(ticker);
+  }
 
   const json = await res.json();
   const series: AVDaily | undefined = json["Time Series (Daily)"];
   if (!series) {
-    console.error("Alpha Vantage no data:", JSON.stringify(json).slice(0, 200));
-    return null;
+    console.error("Alpha Vantage no data:", JSON.stringify(json).slice(0, 200), "— trying Yahoo fallback");
+    return fetchPricesYahoo(ticker);
   }
 
   // Sorted descending by date — take 30 most recent then reverse to ascending
@@ -178,13 +225,18 @@ export async function GET(request: NextRequest) {
     // 2. Normalize and search similar patterns via RPC
     const vector = normalizePattern(prices);
 
-    // Detect current market regime from SPY trend
-    // Simple heuristic: use the regime from matched patterns or default
+    console.log("Current vector length:", vector?.length);
+    console.log("Current vector sample:", vector?.slice(0, 5));
+
     const matchRes = await supabase.rpc("match_patterns", {
       query_vector: vector,
       match_ticker: ticker,
       match_count: 10,
     });
+
+    console.log("RPC result count:", matchRes.data?.length);
+    console.log("RPC error:", matchRes.error);
+    console.log("RPC first result:", matchRes.data?.[0]);
 
     interface MatchedPattern {
       start_date: string;
