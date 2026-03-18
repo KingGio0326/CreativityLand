@@ -133,8 +133,9 @@ jobs:
       FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
       ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
       ALPHA_VANTAGE_KEY: ${{ secrets.ALPHA_VANTAGE_KEY }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
       REDDIT_USER_AGENT: "trading-bot/1.0"
-      INPUT_TICKERS: ${{ inputs.tickers }}
+      INPUT_TICKERS: ${{ inputs.tickers || 'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD' }}
 
   build-patterns:
     needs: run-bot
