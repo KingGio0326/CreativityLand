@@ -552,35 +552,37 @@ export default function PatternsPage() {
   const combined = data?.pipeline_signal?.combined_signal ?? "HOLD";
 
   /* ── chart data ──────────────────────────────────────── */
-  const currentChartData = data
-    ? data.current.dates.map((d, i) => ({
-        date: fmtDate(d),
-        price: Math.round(data.current.prices[i] * 100) / 100,
-      }))
-    : [];
+  const currentPrices = data?.current?.prices ?? [];
+  const currentDates = data?.current?.dates ?? [];
+  const similarList = data?.similar ?? [];
+  const bestPrices = best?.prices ?? [];
 
-  const historicChartData = best?.prices
-    ? best.prices.map((p, i) => ({
-        day: i + 1,
-        value: Math.round(p * 10000) / 10000,
-      }))
-    : [];
+  const currentChartData = currentDates.map((d, i) => ({
+    date: fmtDate(d),
+    price: Math.round((currentPrices[i] ?? 0) * 100) / 100,
+  }));
+
+  const historicChartData = bestPrices.map((p, i) => ({
+    day: i + 1,
+    value: Math.round(p * 10000) / 10000,
+  }));
 
   // Overlay: both normalized from 0%
-  const overlayData = data
-    ? Array.from({ length: 30 }, (_, i) => {
-        const base0 = data.current.prices[0];
-        const currentNorm =
-          ((data.current.prices[i] ?? data.current.prices[data.current.prices.length - 1]) - base0) /
-          base0 * 100;
-        const historicNorm = best?.prices ? best.prices[i] * 100 : null;
-        return {
-          day: i + 1,
-          current: Math.round(currentNorm * 100) / 100,
-          historic: historicNorm != null ? Math.round(historicNorm * 100) / 100 : null,
-        };
-      })
-    : [];
+  const overlayData =
+    currentPrices.length > 0
+      ? Array.from({ length: 30 }, (_, i) => {
+          const base0 = currentPrices[0];
+          const currentNorm =
+            ((currentPrices[i] ?? currentPrices[currentPrices.length - 1]) - base0) /
+            (base0 || 1) * 100;
+          const historicNorm = bestPrices.length > 0 ? bestPrices[i] * 100 : null;
+          return {
+            day: i + 1,
+            current: Math.round(currentNorm * 100) / 100,
+            historic: historicNorm != null ? Math.round(historicNorm * 100) / 100 : null,
+          };
+        })
+      : [];
 
   return (
     <div className="space-y-6">
@@ -618,12 +620,12 @@ export default function PatternsPage() {
 
           {/* Pipeline signal */}
           <div className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${signalDot(data.pipeline_signal.signal)}`} />
+            <span className={`w-2 h-2 rounded-full ${signalDot(data?.pipeline_signal?.signal ?? null)}`} />
             <span className="text-muted-foreground">Pipeline:</span>
             <span className="font-bold">
-              {data.pipeline_signal.signal ?? "N/A"}
+              {data?.pipeline_signal?.signal ?? "N/A"}
             </span>
-            {data.pipeline_signal.confidence != null && (
+            {data?.pipeline_signal?.confidence != null && (
               <span className="font-mono text-muted-foreground">
                 ({Math.round(data.pipeline_signal.confidence * 100)}%)
               </span>
@@ -677,16 +679,16 @@ export default function PatternsPage() {
               <div className="flex items-baseline justify-between mb-4">
                 <p className="text-sm font-semibold">Pattern Attuale</p>
                 <p className="text-xs text-muted-foreground font-mono">
-                  ${data.current.current_price}{" "}
+                  ${data?.current?.current_price ?? 0}{" "}
                   <span
                     className={
-                      data.current.change_30d_pct >= 0
+                      (data?.current?.change_30d_pct ?? 0) >= 0
                         ? "text-emerald-400"
                         : "text-red-400"
                     }
                   >
-                    {data.current.change_30d_pct >= 0 ? "+" : ""}
-                    {data.current.change_30d_pct}%
+                    {(data?.current?.change_30d_pct ?? 0) >= 0 ? "+" : ""}
+                    {data?.current?.change_30d_pct ?? 0}%
                   </span>
                 </p>
               </div>
@@ -879,7 +881,7 @@ export default function PatternsPage() {
           {/* ── SECTION 4: Outcome stats ───────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {(["5d", "10d", "20d"] as const).map((horizon) => {
-              const s = data.analysis.outcomes[horizon];
+              const s = data?.analysis?.outcomes?.[horizon] ?? null;
               const label =
                 horizon === "5d" ? "5 giorni" : horizon === "10d" ? "10 giorni" : "20 giorni";
               return (
@@ -963,7 +965,7 @@ export default function PatternsPage() {
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {rec.reason}
-                {data.pipeline_signal.signal &&
+                {data?.pipeline_signal?.signal &&
                   rec.signal !== "HOLD" && (
                     <>
                       {" "}
@@ -975,7 +977,7 @@ export default function PatternsPage() {
                       <span className="font-semibold text-foreground">{combined}</span>.
                     </>
                   )}
-                {data.pipeline_signal.signal &&
+                {data?.pipeline_signal?.signal &&
                   rec.signal === "HOLD" && (
                     <>
                       {" "}
@@ -994,7 +996,7 @@ export default function PatternsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <TradingPanel
               ticker={ticker}
-              currentPrice={data.current.current_price}
+              currentPrice={data?.current?.current_price ?? 0}
             />
             <PortfolioPanel />
           </div>
