@@ -79,6 +79,41 @@ jobs:
                   print(f'{ticker}: ERRORE - {e}')
           print('Done.')
           "
+      - name: Evaluate pending signals + register new
+        run: |
+          python -c "
+          from engine.scoring_engine import ScoringEngine
+          from supabase import create_client
+          import os
+          from datetime import datetime, timedelta
+
+          se = ScoringEngine()
+
+          # 1. Valuta segnali precedenti
+          updated = se.evaluate_pending()
+          print(f'Segnali valutati/aggiornati: {updated}')
+
+          # 2. Registra i nuovi segnali appena generati
+          supabase = create_client(
+              os.getenv('SUPABASE_URL'),
+              os.getenv('SUPABASE_KEY')
+          )
+          cutoff = (datetime.now() - timedelta(hours=1)).isoformat()
+          new_signals = supabase.table('signals') \
+              .select('*') \
+              .gte('created_at', cutoff) \
+              .execute()
+
+          registered = 0
+          for sig in (new_signals.data or []):
+              se.register_signal(sig)
+              registered += 1
+          print(f'Nuovi segnali registrati: {registered}')
+
+          # 3. Aggiorna performance aggregate
+          se.update_agent_performance()
+          print('Performance aggiornata.')
+          "
       - name: Retrain ML (domenica)
         if: github.event.schedule == '0 2 * * 0'
         run: |
