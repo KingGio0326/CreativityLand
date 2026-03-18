@@ -60,6 +60,25 @@ class TradingOrchestrator:
         self.graph = build_graph()
 
     def decide(self, ticker: str) -> dict:
+        # Fetch pattern matching data before running the graph
+        pattern_signal = "HOLD"
+        pattern_found = 0
+        pattern_similarity = 0.0
+        try:
+            from engine.pattern_matcher import PatternMatcher
+            pm = PatternMatcher()
+            pr = pm.find_similar_patterns(ticker)
+            if "analysis" in pr:
+                rec = pr["analysis"].get("recommendation", {})
+                pattern_signal = rec.get("signal", "HOLD")
+                pattern_found = pr["analysis"].get("patterns_found", 0)
+                pattern_similarity = pr["analysis"].get("best_similarity", 0)
+        except Exception as e:
+            import logging
+            logging.getLogger("orchestrator").warning(
+                "Pattern matching failed for %s: %s", ticker, e
+            )
+
         state = TradingState(
             ticker=ticker, articles=[],
             sentiment_summary={}, historical_context="",
@@ -69,7 +88,10 @@ class TradingOrchestrator:
             macro_adjusted=False, technical_analysis={},
             fundamental_analysis={}, momentum_analysis={},
             mean_reversion_analysis={}, ml_prediction={},
-            social_analysis={}, vote_breakdown={}
+            social_analysis={}, vote_breakdown={},
+            pattern_signal=pattern_signal,
+            pattern_patterns_found=pattern_found,
+            pattern_best_similarity=pattern_similarity,
         )
         result = self.graph.invoke(state)
         vb = result.get("vote_breakdown", {})

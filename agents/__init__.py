@@ -21,3 +21,6 @@ class TradingState(TypedDict):
     ml_prediction: dict
     social_analysis: dict
     vote_breakdown: dict
+    pattern_signal: str
+    pattern_patterns_found: int
+    pattern_best_similarity: float

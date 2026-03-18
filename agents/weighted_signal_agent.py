@@ -116,16 +116,61 @@ def weighted_vote(state: TradingState) -> dict:
     }
 
 
+def pattern_multiplier(
+    pipeline_signal: str,
+    pattern_signal: str,
+    patterns_found: int,
+    similarity: float,
+) -> float:
+    """Adjust confidence based on pattern matching agreement."""
+    if patterns_found < 5 or similarity < 0.75:
+        return 1.0
+    if pattern_signal == "HOLD":
+        return 1.0
+    if pipeline_signal == pattern_signal:
+        boost = 1.0 + (0.15 * min(similarity, 1.0))
+        return round(boost, 3)
+    else:
+        penalty = 1.0 - (0.15 * min(similarity, 1.0))
+        return round(penalty, 3)
+
+
 def weighted_signal_node(state: TradingState) -> TradingState:
     result = weighted_vote(state)
+
+    # Apply pattern matching multiplier
+    pat_signal = state.get("pattern_signal", "HOLD")
+    pat_found = state.get("pattern_patterns_found", 0)
+    pat_sim = state.get("pattern_best_similarity", 0.0)
+
+    mult = pattern_multiplier(
+        result["signal"], pat_signal, pat_found, pat_sim
+    )
+    base_confidence = result["confidence"]
+    final_confidence = min(base_confidence * mult, 1.0)
+
     state["proposed_signal"] = result["signal"]
-    state["confidence"] = result["confidence"]
+    state["confidence"] = round(final_confidence, 3)
     state["reasoning"].append(
         f"WeightedVote: {result['signal']} "
-        f"({result['confidence']:.0%}) | "
+        f"({final_confidence:.0%}) | "
         f"consensus={result['consensus_level']} "
         f"({result['agents_agree']}/{result['agents_total']}) | "
         f"dominant={result['dominant_factor']}"
     )
+
+    if mult > 1.0:
+        state["reasoning"].append(
+            f"PatternMatching: CONFERMA segnale "
+            f"(similarity={pat_sim:.2f}, "
+            f"boost=+{(mult - 1) * 100:.0f}%)"
+        )
+    elif mult < 1.0:
+        state["reasoning"].append(
+            f"PatternMatching: SMENTISCE segnale "
+            f"(similarity={pat_sim:.2f}, "
+            f"penalita=-{(1 - mult) * 100:.0f}%)"
+        )
+
     state["vote_breakdown"] = result
     return state
