@@ -2,16 +2,18 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import AgentChat from "@/components/AgentChat";
 
-interface VoteDetail {
-  signal: string;
-  confidence: number;
-}
+/* ── Types ─────────────────────────────────────────────── */
 
 interface Signal {
   id: string;
@@ -20,61 +22,119 @@ interface Signal {
   confidence: number;
   reasoning: string;
   created_at: string;
-  vote_breakdown?: Record<string, VoteDetail>;
   consensus_level?: string;
   agents_agree?: number;
   agents_total?: number;
-  dominant_factor?: string;
-  macro_adjusted?: boolean;
-  macro_events?: string[];
 }
 
-interface Article {
-  id: string;
-  title: string;
-  source: string;
-  ticker: string;
-  sentiment_label: string;
-  published_at: string;
-}
+/* ── Constants ─────────────────────────────────────────── */
 
 const TICKERS = ["AAPL", "TSLA", "NVDA", "BTC-USD", "ETH-USD", "MSFT", "XOM", "GLD"];
 
-const signalColor = (s: string) =>
-  s === "BUY" ? "bg-green-600" : s === "SELL" ? "bg-red-600" : "bg-gray-500";
+const QUICK_LINKS = [
+  {
+    href: "/agents",
+    icon: "🤖",
+    title: "Agents",
+    desc: "Visualizza tutti gli agenti e i loro voti in dettaglio",
+  },
+  {
+    href: "/patterns",
+    icon: "🔮",
+    title: "Patterns",
+    desc: "Pattern storici con matching e previsioni ML",
+  },
+  {
+    href: "/performance",
+    icon: "🏆",
+    title: "Performance",
+    desc: "Metriche e hit-rate degli agenti nel tempo",
+  },
+  {
+    href: "/guide",
+    icon: "📖",
+    title: "Guida",
+    desc: "Come funziona ogni agente e come leggere i segnali",
+  },
+];
 
-const sentimentColor = (s: string) =>
-  s === "positive"
-    ? "bg-green-600"
-    : s === "negative"
-      ? "bg-red-600"
-      : "bg-gray-500";
+/* ── Helpers ───────────────────────────────────────────── */
+
+const signalColor = (s: string) =>
+  s === "BUY"
+    ? "bg-[var(--green)] text-white"
+    : s === "SELL"
+      ? "bg-[var(--red)] text-white"
+      : "bg-[var(--text-muted)] text-white";
+
+const signalDot = (s: string) =>
+  s === "BUY" ? "bg-[var(--green)]" : s === "SELL" ? "bg-[var(--red)]" : "bg-[var(--yellow)]";
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m fa`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h fa`;
+  return `${Math.floor(hrs / 24)}d fa`;
+}
+
+/* ── Component ─────────────────────────────────────────── */
 
 export default function DashboardPage() {
   const [signals, setSignals] = useState<Signal[]>([]);
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [lastUpdate, setLastUpdate] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [selectedTicker, setSelectedTicker] = useState("AAPL");
+  const [chartData, setChartData] = useState<{ day: string; confidence: number }[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sigRes, artRes] = await Promise.all([
-        fetch("/api/signals"),
-        fetch("/api/articles?limit=5"),
-      ]);
-      const sigData = await sigRes.json();
-      const artData = await artRes.json();
-      setSignals(Array.isArray(sigData) ? sigData : []);
-      setArticles(Array.isArray(artData) ? artData : []);
-      setLastUpdate(new Date().toLocaleString());
+      const res = await fetch("/api/signals");
+      const data = await res.json();
+      const sigs: Signal[] = Array.isArray(data) ? data : [];
+      setSignals(sigs);
+
+      // Build chart data from last 7 unique signals per ticker (or mock)
+      const tickerSigs = sigs
+        .filter((s) => s.ticker === selectedTicker)
+        .slice(0, 7)
+        .reverse();
+
+      if (tickerSigs.length > 0) {
+        setChartData(
+          tickerSigs.map((s, i) => ({
+            day: `Run ${i + 1}`,
+            confidence: Math.round((s.confidence ?? 0) * 100),
+          })),
+        );
+      } else {
+        // Mock data when no real data
+        setChartData([
+          { day: "Lun", confidence: 62 },
+          { day: "Mar", confidence: 58 },
+          { day: "Mer", confidence: 71 },
+          { day: "Gio", confidence: 65 },
+          { day: "Ven", confidence: 74 },
+          { day: "Sab", confidence: 69 },
+          { day: "Dom", confidence: 78 },
+        ]);
+      }
     } catch {
-      /* ignore */
+      // Mock fallback
+      setChartData([
+        { day: "Lun", confidence: 62 },
+        { day: "Mar", confidence: 58 },
+        { day: "Mer", confidence: 71 },
+        { day: "Gio", confidence: 65 },
+        { day: "Ven", confidence: 74 },
+        { day: "Sab", confidence: 69 },
+        { day: "Dom", confidence: 78 },
+      ]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedTicker]);
 
   useEffect(() => {
     fetchData();
@@ -82,150 +142,341 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const latestSignal = (ticker: string) =>
-    signals.find((s) => s.ticker === ticker);
+  /* Compute stats */
+  const latestPerTicker = TICKERS.map((t) => signals.find((s) => s.ticker === t)).filter(Boolean) as Signal[];
+  const todaySignals = latestPerTicker.length;
+  const buyCount = latestPerTicker.filter((s) => s.signal === "BUY").length;
+  const sellCount = latestPerTicker.filter((s) => s.signal === "SELL").length;
+  const avgConfidence =
+    latestPerTicker.length > 0
+      ? Math.round(
+          (latestPerTicker.reduce((sum, s) => sum + (s.confidence ?? 0), 0) /
+            latestPerTicker.length) *
+            100,
+        )
+      : 0;
+
+  const selectedSignal = signals.find((s) => s.ticker === selectedTicker);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <span className="text-xs text-muted-foreground">
-          Last update: {lastUpdate || "loading..."}
-        </span>
+      {/* ── Ticker Selector ─────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {TICKERS.map((t) => {
+          const sig = signals.find((s) => s.ticker === t);
+          return (
+            <button
+              key={t}
+              onClick={() => setSelectedTicker(t)}
+              className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-full font-mono transition-all ${
+                t === selectedTicker
+                  ? "bg-[var(--accent)] text-white border border-[var(--accent-light)] shadow-[0_0_12px_rgba(124,58,237,0.3)]"
+                  : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border border-transparent hover:bg-[rgba(255,255,255,0.08)] hover:text-[var(--text-secondary)]"
+              }`}
+            >
+              {sig && (
+                <span className={`w-1.5 h-1.5 rounded-full ${signalDot(sig.signal)}`} />
+              )}
+              {t}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: Signal Cards */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {TICKERS.map((ticker) => {
-              const sig = latestSignal(ticker);
-              const isSelected = ticker === selectedTicker;
-              if (loading)
-                return (
-                  <Card key={ticker}>
-                    <CardHeader>
-                      <Skeleton className="h-6 w-20" />
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <Skeleton className="h-5 w-14" />
-                      <Skeleton className="h-4 w-full" />
-                    </CardContent>
-                  </Card>
-                );
-              return (
-                <Card
-                  key={ticker}
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    isSelected ? "ring-2 ring-primary shadow-md" : ""
-                  }`}
-                  onClick={() => setSelectedTicker(ticker)}
-                >
-                  <CardHeader className="pb-1.5 pt-3 px-4">
-                    <CardTitle className="font-mono text-base flex items-center justify-between">
-                      {ticker}
-                      {sig?.consensus_level && sig.consensus_level !== "?" && (
-                        <Badge
-                          variant="outline"
-                          className={`text-[9px] border ${
-                            sig.consensus_level === "strong"
-                              ? "border-green-500 text-green-600"
-                              : sig.consensus_level === "moderate"
-                                ? "border-yellow-500 text-yellow-600"
-                                : "border-red-500 text-red-600"
-                          }`}
+      {/* ── Stat Cards ──────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          icon="📊"
+          iconBg="rgba(168,85,247,0.15)"
+          label="Segnali oggi"
+          value={loading ? "—" : String(todaySignals)}
+          sub={`su ${TICKERS.length} ticker`}
+          trend={todaySignals > 0 ? "up" : "neutral"}
+        />
+        <StatCard
+          icon="🟢"
+          iconBg="var(--green-bg)"
+          label="BUY"
+          value={loading ? "—" : String(buyCount)}
+          sub={todaySignals > 0 ? `${Math.round((buyCount / todaySignals) * 100)}% del totale` : "—"}
+          trend="up"
+        />
+        <StatCard
+          icon="🔴"
+          iconBg="var(--red-bg)"
+          label="SELL"
+          value={loading ? "—" : String(sellCount)}
+          sub={todaySignals > 0 ? `${Math.round((sellCount / todaySignals) * 100)}% del totale` : "—"}
+          trend="down"
+        />
+        <StatCard
+          icon="🎯"
+          iconBg="rgba(245,158,11,0.12)"
+          label="Confidence media"
+          value={loading ? "—" : `${avgConfidence}%`}
+          sub={avgConfidence >= 70 ? "Alta" : avgConfidence >= 50 ? "Moderata" : "Bassa"}
+          trend={avgConfidence >= 60 ? "up" : "down"}
+        />
+      </div>
+
+      {/* ── Main Grid: Table + Chart ────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        {/* Signal Table */}
+        <div className="lg:col-span-3 card-gradient rounded-2xl overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-[rgba(139,92,246,0.12)] flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+              Segnali per ticker
+            </h2>
+            <span className="text-[10px] text-[var(--text-muted)] font-mono">
+              {selectedSignal ? timeAgo(selectedSignal.created_at) : "—"}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">
+                  <th className="text-left px-5 py-2.5 font-medium">Ticker</th>
+                  <th className="text-left px-3 py-2.5 font-medium">Segnale</th>
+                  <th className="text-left px-3 py-2.5 font-medium">Confidence</th>
+                  <th className="text-left px-3 py-2.5 font-medium hidden sm:table-cell">Consensus</th>
+                  <th className="text-right px-5 py-2.5 font-medium hidden md:table-cell">Aggiornato</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading
+                  ? Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i}>
+                        <td colSpan={5} className="px-5 py-3">
+                          <div className="h-4 rounded bg-[rgba(255,255,255,0.04)] animate-pulse" />
+                        </td>
+                      </tr>
+                    ))
+                  : TICKERS.map((ticker, i) => {
+                      const sig = signals.find((s) => s.ticker === ticker);
+                      const conf = Math.round((sig?.confidence ?? 0) * 100);
+                      const isSelected = ticker === selectedTicker;
+                      return (
+                        <tr
+                          key={ticker}
+                          onClick={() => setSelectedTicker(ticker)}
+                          className={`cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-[rgba(124,58,237,0.1)]"
+                              : i % 2 === 0
+                                ? "bg-[var(--bg-card)]"
+                                : "bg-[var(--bg-secondary)]"
+                          } hover:bg-[rgba(124,58,237,0.05)]`}
                         >
-                          {sig.consensus_level}
-                        </Badge>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 pb-3 px-4">
-                    <div className="flex items-center gap-2">
-                      <Badge className={`${signalColor(sig?.signal ?? "HOLD")} text-xs`}>
-                        {sig?.signal ?? "HOLD"}
-                      </Badge>
-                      <span className="text-xs font-mono text-muted-foreground">
-                        {Math.round((sig?.confidence ?? 0) * 100)}%
-                      </span>
-                    </div>
-                    <Progress value={(sig?.confidence ?? 0) * 100} className="h-1.5" />
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {sig?.reasoning?.slice(0, 60) ?? "No data yet"}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                          <td className="px-5 py-2.5">
+                            <span className="font-mono font-semibold text-[var(--text-primary)]">
+                              {ticker}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold ${signalColor(
+                                sig?.signal ?? "HOLD",
+                              )}`}
+                            >
+                              {sig?.signal ?? "HOLD"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 max-w-[80px] h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-[var(--accent-light)] transition-all"
+                                  style={{ width: `${conf}%` }}
+                                />
+                              </div>
+                              <span className="text-xs font-mono text-[var(--text-secondary)]">
+                                {conf}%
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 hidden sm:table-cell">
+                            {sig?.consensus_level && sig.consensus_level !== "?" ? (
+                              <span
+                                className={`text-[11px] font-medium ${
+                                  sig.consensus_level === "strong"
+                                    ? "text-[var(--green)]"
+                                    : sig.consensus_level === "moderate"
+                                      ? "text-[var(--yellow)]"
+                                      : "text-[var(--red)]"
+                                }`}
+                              >
+                                {sig.consensus_level}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-[var(--text-muted)]">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-2.5 text-right hidden md:table-cell">
+                            <span className="text-[11px] text-[var(--text-muted)]">
+                              {sig ? timeAgo(sig.created_at) : "—"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Right: Agent Chat */}
-        <div className="lg:col-span-2">
-          {/* Ticker pills */}
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {TICKERS.map((t) => (
-              <button
-                key={t}
-                onClick={() => setSelectedTicker(t)}
-                className={`text-[11px] px-2.5 py-1 rounded-full font-mono transition-colors ${
-                  t === selectedTicker
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+        {/* Mini Chart */}
+        <div className="lg:col-span-2 card-gradient rounded-2xl p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                Confidence trend
+              </h3>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                {selectedTicker} — ultimi run
+              </p>
+            </div>
+            <span className="font-mono text-lg font-bold text-[var(--accent-light)]">
+              {selectedSignal ? `${Math.round((selectedSignal.confidence ?? 0) * 100)}%` : "—"}
+            </span>
           </div>
+          <div className="flex-1 min-h-[200px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a855f7" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(255,255,255,0.05)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 11, fill: "#4a4a6a" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 11, fill: "#4a4a6a" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={30}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#12122a",
+                    border: "1px solid rgba(139,92,246,0.3)",
+                    borderRadius: "8px",
+                    color: "#f0f0ff",
+                    fontSize: "12px",
+                  }}
+                  labelStyle={{ color: "#8b8ba8" }}
+                  formatter={(value: number) => [`${value}%`, "Confidence"]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="confidence"
+                  stroke="#a855f7"
+                  strokeWidth={2}
+                  fill="url(#purpleGradient)"
+                  dot={{ r: 3, fill: "#a855f7", strokeWidth: 0 }}
+                  activeDot={{ r: 5, fill: "#a855f7", stroke: "#12122a", strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Agent Chat ──────────────────────────────────── */}
+      <div className="card-gradient rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-[rgba(139,92,246,0.12)]">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+            Agent Chat — {selectedTicker}
+          </h2>
+        </div>
+        <div className="p-0">
           <AgentChat ticker={selectedTicker} />
         </div>
       </div>
 
-      {/* Guide link */}
-      <div className="rounded-xl border bg-card px-5 py-4 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium">Non sai come leggere i segnali?</p>
-          <p className="text-xs text-muted-foreground">Scopri come funziona ogni agente e come interpretare i dati.</p>
-        </div>
-        <Link
-          href="/guide"
-          className="text-sm font-medium text-primary hover:underline whitespace-nowrap"
-        >
-          Scopri come funziona ogni agente &rarr;
-        </Link>
-      </div>
-
-      {/* Latest News */}
+      {/* ── Quick Links ─────────────────────────────────── */}
       <div>
-        <h2 className="text-lg font-semibold mb-3">Latest News</h2>
-        <div className="space-y-2">
-          {loading
-            ? Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))
-            : articles.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center justify-between border rounded-md px-4 py-2"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{a.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {a.source} &middot; {a.ticker}
-                    </p>
-                  </div>
-                  <Badge
-                    className={`ml-3 shrink-0 ${sentimentColor(a.sentiment_label)}`}
-                  >
-                    {a.sentiment_label ?? "n/a"}
-                  </Badge>
-                </div>
-              ))}
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+          Link rapidi
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {QUICK_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="group card-gradient rounded-2xl p-5 transition-all hover:border-[rgba(139,92,246,0.4)] hover:shadow-[0_0_24px_rgba(124,58,237,0.12)] no-underline"
+            >
+              <span className="text-3xl block mb-3">{link.icon}</span>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-light)] transition-colors">
+                {link.title}
+              </h3>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1 leading-relaxed">
+                {link.desc}
+              </p>
+            </Link>
+          ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Stat Card ─────────────────────────────────────────── */
+
+function StatCard({
+  icon,
+  iconBg,
+  label,
+  value,
+  sub,
+  trend,
+}: {
+  icon: string;
+  iconBg: string;
+  label: string;
+  value: string;
+  sub: string;
+  trend: "up" | "down" | "neutral";
+}) {
+  return (
+    <div className="card-gradient rounded-2xl p-4 flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-base"
+          style={{ background: iconBg }}
+        >
+          {icon}
+        </span>
+        <span
+          className={`text-xs font-bold ${
+            trend === "up"
+              ? "text-[var(--green)]"
+              : trend === "down"
+                ? "text-[var(--red)]"
+                : "text-[var(--text-muted)]"
+          }`}
+        >
+          {trend === "up" ? "▲" : trend === "down" ? "▼" : "—"}
+        </span>
+      </div>
+      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">
+        {label}
+      </p>
+      <p className="text-2xl font-bold text-[var(--text-primary)] font-mono leading-none">
+        {value}
+      </p>
+      <p className="text-[10px] text-[var(--text-secondary)]">{sub}</p>
     </div>
   );
 }
