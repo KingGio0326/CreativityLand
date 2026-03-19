@@ -17,6 +17,50 @@ from supabase import create_client
 
 CRYPTO_TICKERS = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"]
 
+# ── Geopolitical classification ───────────────────────────────
+
+GEOPOLITICAL_KEYWORDS: dict[str, list[str]] = {
+    "high": [
+        "war", "guerra", "invasion", "invasione", "missile strike",
+        "nuclear", "nucleare", "sanctions package", "oil embargo",
+        "embargo petrolifero", "military escalation", "escalation militare",
+        "coup", "colpo di stato", "blockade", "blocco navale",
+        "martial law", "legge marziale",
+    ],
+    "medium": [
+        "sanctions", "sanzioni", "tariff", "dazi", "trade war",
+        "guerra commerciale", "NATO", "OPEC", "ceasefire", "cessate il fuoco",
+        "diplomatic crisis", "crisi diplomatica", "arms deal",
+        "military deployment", "dispiegamento militare",
+        "export ban", "divieto di esportazione",
+    ],
+    "low": [
+        "geopolitical", "geopolitico", "tension", "tensione",
+        "diplomat", "diplomazia", "summit", "vertice",
+        "bilateral", "bilaterale", "treaty", "trattato",
+        "UN resolution", "risoluzione ONU", "peacekeeping",
+    ],
+}
+
+
+def classify_geopolitical_relevance(
+    title: str, content: str,
+) -> tuple[str, float]:
+    """Classify an article's geopolitical relevance.
+
+    Returns (level, weight_multiplier):
+      - "high"   → 2.0x
+      - "medium" → 1.5x
+      - "low"    → 1.2x
+      - "none"   → 1.0x
+    """
+    combined = f"{title} {content}".lower()
+    for level, keywords in GEOPOLITICAL_KEYWORDS.items():
+        if any(kw.lower() in combined for kw in keywords):
+            weight = {"high": 2.0, "medium": 1.5, "low": 1.2}[level]
+            return level, weight
+    return "none", 1.0
+
 RSS_SOURCES_STOCKS = {
     "google_news": "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en",
     "cnbc": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
@@ -471,6 +515,14 @@ class NewsScraper:
             ]
             if not new_articles:
                 return 0
+
+            # Classify geopolitical relevance
+            for a in new_articles:
+                geo_level, geo_weight = classify_geopolitical_relevance(
+                    a.get("title", ""), a.get("content", ""),
+                )
+                a["geo_relevance"] = geo_level
+                a["geo_weight"] = geo_weight
 
             self.supabase.table("articles").upsert(
                 new_articles, on_conflict="url",

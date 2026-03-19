@@ -41,7 +41,11 @@ class SentimentAnalyzer:
         return [{"label": r["label"], "score": round(r["score"], 4)} for r in results]
 
     def process_unanalyzed(self, limit: int = 100) -> int:
-        """Fetch unprocessed articles from Supabase, analyze, and update."""
+        """Fetch unprocessed articles from Supabase, analyze, and update.
+
+        Uses geo_weight to produce a weighted sentiment score:
+        weighted_score = raw_score * geo_weight
+        """
         response = (
             self.supabase.table("articles")
             .select("*")
@@ -59,9 +63,11 @@ class SentimentAnalyzer:
 
         updated = 0
         for article, sentiment in zip(articles, sentiments):
+            geo_weight = article.get("geo_weight", 1.0) or 1.0
+            weighted_score = round(sentiment["score"] * geo_weight, 4)
             self.supabase.table("articles").update({
                 "sentiment_label": sentiment["label"],
-                "sentiment_score": sentiment["score"],
+                "sentiment_score": weighted_score,
                 "processed": True,
             }).eq("id", article["id"]).execute()
             updated += 1

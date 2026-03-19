@@ -1,7 +1,11 @@
 import os
 import json
 import anthropic
+from supabase import create_client
+from dotenv import load_dotenv
 from agents import TradingState
+
+load_dotenv()
 
 MACRO_KEYWORDS = [
     "war", "guerra", "missile", "sanctions", "sanzioni",
@@ -20,6 +24,24 @@ class MacroAgent:
         if self.enabled:
             self.client = anthropic.Anthropic(api_key=api_key)
         self.model = "claude-haiku-4-5-20251001"
+        self.supabase = create_client(
+            os.getenv("SUPABASE_URL", ""),
+            os.getenv("SUPABASE_KEY", ""),
+        )
+
+    def fetch_geo_articles(self, ticker: str, limit: int = 10) -> list[dict]:
+        """Fetch recent high/medium geopolitical articles for a ticker."""
+        try:
+            res = self.supabase.table("articles") \
+                .select("title,content,geo_relevance,geo_weight,published_at") \
+                .eq("ticker", ticker) \
+                .in_("geo_relevance", ["high", "medium"]) \
+                .order("published_at", desc=True) \
+                .limit(limit) \
+                .execute()
+            return res.data or []
+        except Exception:
+            return []
 
     def is_macro_relevant(self, articles: list[dict]) -> bool:
         count = sum(
@@ -68,6 +90,22 @@ Rispondi SOLO con JSON valido, niente altro:
   "relevant_events": ["lista eventi"],
   "time_horizon": "immediate"|"short_term"|"long_term"
 }}"""
+        # Append high-relevance geopolitical articles
+        geo_articles = self.fetch_geo_articles(ticker, limit=5)
+        if geo_articles:
+            prompt += f"""
+
+ARTICOLI GEOPOLITICI AD ALTA RILEVANZA (peso maggiore):
+{json.dumps([{
+    "title": a["title"],
+    "geo_relevance": a.get("geo_relevance", "unknown"),
+    "geo_weight": a.get("geo_weight", 1.0),
+    "content": (a.get("content") or "")[:200],
+} for a in geo_articles], indent=2, ensure_ascii=False)}
+
+Dai peso maggiore a questi articoli nella tua analisi: hanno
+rilevanza geopolitica confermata (high/medium).
+"""
         if research_context and research_papers_count > 0:
             prompt += f"""
 
@@ -196,6 +234,16 @@ def macro_agent_node(state: TradingState) -> TradingState:
         state["reasoning"].append(
             "MacroAgent: nessun evento geopolitico/macro rilevato"
         )
+    # Count geo-relevant articles for reasoning
+    geo_articles = agent.fetch_geo_articles(state["ticker"], limit=10)
+    if geo_articles:
+        high_count = sum(1 for a in geo_articles if a.get("geo_relevance") == "high")
+        med_count = sum(1 for a in geo_articles if a.get("geo_relevance") == "medium")
+        state["reasoning"].append(
+            f"MacroAgent: {len(geo_articles)} articoli geopolitici "
+            f"(high={high_count}, medium={med_count})"
+        )
+
     if current_rate_dir != "unknown":
         state["reasoning"].append(
             f"MacroAgent: Rate direction: {current_rate_dir}"
