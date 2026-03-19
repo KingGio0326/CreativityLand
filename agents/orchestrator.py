@@ -13,6 +13,7 @@ from agents.risk_agent import risk_agent
 from agents.macro_agent import macro_agent_node
 from agents.options_agent import options_agent
 from agents.liquidity_agent import liquidity_agent
+from agents.intermarket_agent import intermarket_agent
 from agents.weighted_signal_agent import weighted_signal_node
 from agents.critic_agent import critic_agent
 
@@ -39,6 +40,7 @@ def build_graph():
     g.add_node("risk",           risk_agent)
     g.add_node("liquidity",      liquidity_agent)
     g.add_node("macro",          macro_agent_node)
+    g.add_node("intermarket",    intermarket_agent)
     g.add_node("weighted",       weighted_signal_node)
     g.add_node("critic",         critic_agent)
     # Edges
@@ -55,7 +57,8 @@ def build_graph():
     g.add_edge("ml",             "risk")
     g.add_edge("risk",           "liquidity")
     g.add_edge("liquidity",      "macro")
-    g.add_edge("macro",          "weighted")
+    g.add_edge("macro",          "intermarket")
+    g.add_edge("intermarket",    "weighted")
     g.add_edge("weighted",       "critic")
     g.add_conditional_edges("critic", should_retry)
     return g.compile()

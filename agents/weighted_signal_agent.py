@@ -7,9 +7,10 @@ WEIGHTS = {
     "technical":      0.11,
     "ml_prediction":  0.11,
     "liquidity":      0.08,
-    "macro":          0.06,
+    "macro":          0.04,
     "mean_reversion": 0.06,
     "options":        0.06,
+    "intermarket":    0.04,
 }
 
 
@@ -42,6 +43,18 @@ def _options_as_source(state: TradingState) -> dict:
     }
 
 
+def _intermarket_as_source(state: TradingState) -> dict:
+    """Convert intermarket agent output to standard source format."""
+    sig = state.get("intermarket_signal")
+    if not sig:
+        return {}
+    return {
+        "signal": sig,
+        "confidence": state.get("intermarket_confidence", 0) / 100,
+        "available": True,
+    }
+
+
 def weighted_vote(state: TradingState) -> dict:
     sources = {
         "sentiment":      state.get("sentiment_summary", {}),
@@ -53,6 +66,7 @@ def weighted_vote(state: TradingState) -> dict:
         "liquidity":      _liquidity_as_source(state),
         "options":        _options_as_source(state),
         "macro":          state.get("macro_analysis", {}),
+        "intermarket":    _intermarket_as_source(state),
     }
 
     total_weight = 0
