@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
+import Sidebar from "@/components/Sidebar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,19 +18,6 @@ export const metadata: Metadata = {
   description: "AI-powered trading signals dashboard",
 };
 
-const navLinks = [
-  { href: "/", label: "Dashboard" },
-  { href: "/articles", label: "Articles" },
-  { href: "/finbert", label: "FinBERT Debug" },
-  { href: "/backtest", label: "Backtest" },
-  { href: "/search", label: "Search" },
-  { href: "/agents", label: "Agents" },
-  { href: "/patterns", label: "Patterns" },
-  { href: "/performance", label: "Performance" },
-  { href: "/correlation", label: "Correlazioni" },
-  { href: "/guide", label: "Guida" },
-];
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,19 +28,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <nav className="border-b px-6 py-3 flex items-center gap-6">
-          <span className="font-bold text-lg tracking-tight">TradingBot</span>
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-        <main className="p-6 max-w-7xl mx-auto">{children}</main>
+        <Sidebar>{children}</Sidebar>
       </body>
     </html>
   );
