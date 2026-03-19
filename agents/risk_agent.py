@@ -31,16 +31,43 @@ def risk_agent(state):
             risk_level = "MEDIUM"
         else:
             risk_level = "LOW"
+        # Portfolio correlation risk
+        corr_risk = {"risk": "unknown", "avg_correlation": 0.0}
+        try:
+            from engine.correlation_engine import get_portfolio_correlation_risk
+            open_positions = [
+                t for t in [
+                    "AAPL", "TSLA", "NVDA", "BTC-USD",
+                    "ETH-USD", "MSFT", "XOM", "GLD",
+                ]
+                if t != state["ticker"]
+            ]
+            corr_risk = get_portfolio_correlation_risk(
+                open_positions, state["ticker"],
+            )
+            if corr_risk["risk"] == "high":
+                risk_level = "HIGH"
+        except Exception:
+            pass
+
         state["risk_assessment"] = {
             "risk_level": risk_level,
             "volatility": volatility,
             "trend": trend,
-            "max_drawdown": drawdown
+            "max_drawdown": drawdown,
+            "correlation_risk": corr_risk["risk"],
+            "avg_correlation": corr_risk.get("avg_correlation", 0.0),
         }
-        state["reasoning"].append(
+        reasoning_line = (
             f"RiskAgent: volatility={volatility:.3f} → "
             f"{risk_level} | drawdown={drawdown:.1%}"
         )
+        if corr_risk["risk"] in ("high", "medium"):
+            reasoning_line += (
+                f" | corr_risk={corr_risk['risk']}"
+                f" (avg={corr_risk['avg_correlation']:.2f})"
+            )
+        state["reasoning"].append(reasoning_line)
     except Exception as e:
         state["risk_assessment"] = {
             "risk_level": "MEDIUM",
