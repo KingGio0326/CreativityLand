@@ -24,7 +24,7 @@ interface Article {
   published_at: string;
 }
 
-const TICKERS = ["", "AAPL", "TSLA", "NVDA", "BTC-USD", "SPY"];
+const TICKERS = ["", "AAPL", "TSLA", "NVDA", "BTC-USD", "ETH-USD", "MSFT", "XOM", "GLD", "SPY"];
 const SENTIMENTS = ["", "positive", "negative", "neutral"];
 
 const sentimentColor = (s: string) =>
@@ -41,7 +41,7 @@ export default function ArticlesPage() {
   const [ticker, setTicker] = useState("");
   const [sentiment, setSentiment] = useState("");
   const [loading, setLoading] = useState(true);
-  const limit = 20;
+  const limit = 50;
 
   const fetchArticles = useCallback(async () => {
     setLoading(true);
@@ -52,9 +52,9 @@ export default function ArticlesPage() {
     try {
       const res = await fetch(`/api/articles?${params}`);
       const json = await res.json();
-      const arr = Array.isArray(json) ? json : [];
+      const arr = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
       setArticles(arr);
-      setCount(arr.length);
+      setCount(typeof json.count === "number" ? json.count : arr.length);
     } catch {
       /* ignore */
     } finally {
