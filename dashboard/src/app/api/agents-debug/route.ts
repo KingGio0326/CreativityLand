@@ -8,7 +8,8 @@ const AGENT_PREFIXES = [
   "SentimentAgent:", "SocialAgent:", "TechnicalAgent:",
   "FundamentalAgent:", "MacroAgent:", "MomentumAgent:",
   "MeanReversionAgent:", "MLAgent:", "ResearchAgent:",
-  "RiskAgent:", "LiquidityAgent:", "OptionsAgent:", "WeightedVote:", "CriticAgent:",
+  "RiskAgent:", "LiquidityAgent:", "OptionsAgent:",
+  "IntermarketAgent:", "WeightedVote:", "CriticAgent:",
 ];
 
 function parseReasoning(raw: unknown): string[] {
@@ -205,6 +206,21 @@ export async function GET(request: NextRequest) {
       distance_to_max_pain: optDistMatch ? `${optDistMatch[1]}% ${optDistMatch[2]}` : null,
     } : null;
 
+    // Extract intermarket data from reasoning
+    const intermarketLine = reasoning.find((l: string) => l.startsWith("IntermarketAgent:")) ?? "";
+    const imSignalMatch = intermarketLine.match(/IntermarketAgent:\s*(BUY|SELL|HOLD)/);
+    const imConfMatch = intermarketLine.match(/\((\d+)%\)/);
+    const imSummaryMatch = intermarketLine.match(/\|\s*(\d+\/\d+\s*segnali\s*bullish\s*\|\s*\d+\/\d+\s*bearish)/);
+    // Extract detail fragments after the summary
+    const imDetailParts = intermarketLine.split(" | ").slice(2);
+
+    const intermarket = intermarketLine ? {
+      signal: imSignalMatch?.[1] ?? "HOLD",
+      confidence: imConfMatch ? parseInt(imConfMatch[1]) : 0,
+      summary: imSummaryMatch?.[1] ?? "",
+      details: imDetailParts.filter(Boolean),
+    } : null;
+
     return NextResponse.json({
       ticker,
       signal: signal
@@ -217,6 +233,7 @@ export async function GET(request: NextRequest) {
         : null,
       liquidity,
       options,
+      intermarket,
       sentiment: {
         articles_analyzed: articles.length,
         positive,
