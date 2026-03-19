@@ -47,6 +47,33 @@ CRISIS_PERIODS = [
 ]
 
 
+def get_seasonal_features(date) -> dict:
+    """Ritorna features stagionali per una data."""
+    month = date.month
+    day_of_week = date.weekday()  # 0=lunedì, 4=venerdì
+    day_of_month = date.day
+    quarter = (month - 1) // 3 + 1
+
+    # Effetti stagionali noti
+    is_january_effect = month == 1
+    is_sell_in_may = month in [5, 6, 7, 8, 9]  # maggio-settembre
+    is_santa_rally = month in [11, 12]
+    is_opex_week = 15 <= day_of_month <= 21
+    is_quarter_end = month in [3, 6, 9, 12] and day_of_month >= 25
+    is_monday_effect = day_of_week == 0
+
+    return {
+        "month": month / 12.0,
+        "quarter": quarter / 4.0,
+        "is_january_effect": float(is_january_effect),
+        "is_sell_in_may": float(is_sell_in_may),
+        "is_santa_rally": float(is_santa_rally),
+        "is_opex_week": float(is_opex_week),
+        "is_quarter_end": float(is_quarter_end),
+        "is_monday_effect": float(is_monday_effect),
+    }
+
+
 def is_crisis_date(date) -> tuple[bool, str]:
     """Controlla se una data e in un periodo di crisi."""
     date_str = date.strftime("%Y-%m-%d") if hasattr(date, "strftime") else str(date)
@@ -230,6 +257,8 @@ class PatternExtractor:
                 if spy_idx and spy_idx >= 200:
                     regime_data = detect_market_regime(spy_prices, spy_idx)
 
+            seasonal = get_seasonal_features(current_date)
+
             batch.append(
                 {
                     "ticker": ticker,
@@ -243,6 +272,13 @@ class PatternExtractor:
                     "vix_approx": regime_data["vix_approx"],
                     "spy_trend_30d": regime_data["spy_trend_30d"],
                     "is_crisis": in_crisis,
+                    "month": seasonal["month"],
+                    "quarter": seasonal["quarter"],
+                    "is_january_effect": seasonal["is_january_effect"],
+                    "is_sell_in_may": seasonal["is_sell_in_may"],
+                    "is_santa_rally": seasonal["is_santa_rally"],
+                    "is_opex_week": seasonal["is_opex_week"],
+                    "is_quarter_end": seasonal["is_quarter_end"],
                 }
             )
 

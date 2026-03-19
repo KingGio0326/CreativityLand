@@ -4,12 +4,13 @@ import json
 import logging
 import math
 import os
+from datetime import datetime
 
 import numpy as np
 from dotenv import load_dotenv
 from supabase import create_client
 
-from engine.pattern_extractor import PatternExtractor
+from engine.pattern_extractor import PatternExtractor, get_seasonal_features
 
 load_dotenv()
 logger = logging.getLogger("pattern_matcher")
@@ -21,6 +22,39 @@ def sanitize_vector(v: list) -> list:
         0.0 if (math.isnan(x) or math.isinf(x)) else x
         for x in v
     ]
+
+
+def seasonal_similarity_boost(
+    current_date,
+    pattern_date_str: str,
+) -> float:
+    """Ritorna un boost 1.0-1.1 se le condizioni stagionali coincidono."""
+    try:
+        pattern_date = datetime.strptime(pattern_date_str[:10], "%Y-%m-%d")
+        current = get_seasonal_features(current_date)
+        historical = get_seasonal_features(pattern_date)
+
+        matches = 0
+        total = 0
+
+        seasonal_flags = [
+            "is_january_effect", "is_sell_in_may",
+            "is_santa_rally", "is_opex_week", "is_quarter_end",
+        ]
+
+        for flag in seasonal_flags:
+            if current[flag] == 1.0 or historical[flag] == 1.0:
+                total += 1
+                if current[flag] == historical[flag]:
+                    matches += 1
+
+        if total == 0:
+            return 1.0
+
+        boost = 1.0 + (matches / total) * 0.10
+        return round(boost, 3)
+    except Exception:
+        return 1.0
 
 
 class PatternMatcher:
@@ -75,6 +109,19 @@ class PatternMatcher:
                 "similar": [],
                 "analysis": self._empty_analysis(),
             }
+
+        # Apply seasonal similarity boost
+        now = datetime.now()
+        for p in similar:
+            base_sim = p.get("similarity", 0)
+            boost = seasonal_similarity_boost(
+                now, p.get("end_date", "")
+            )
+            p["seasonal_boost"] = boost
+            p["similarity"] = round(base_sim * boost, 4)
+
+        # Re-sort by boosted similarity
+        similar.sort(key=lambda p: p.get("similarity", 0), reverse=True)
 
         # Analyze outcomes of similar patterns
         outcomes_5d = [
