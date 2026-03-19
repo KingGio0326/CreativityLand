@@ -27,8 +27,9 @@ const AGENTS: AgentMeta[] = [
   { name: "Macro Agent",          initials: "MA", avatarBg: "#ea580c", avatarColor: "#fff", weightLabel: "w 4%",  prefix: "MacroAgent" },
   { name: "Intermarket Agent",    initials: "IM", avatarBg: "#EEF2FF", avatarColor: "#3730A3", weightLabel: "w 4%",  prefix: "IntermarketAgent" },
   { name: "Momentum Agent",       initials: "MO", avatarBg: "#16a34a", avatarColor: "#fff", weightLabel: "w 12%", prefix: "MomentumAgent" },
-  { name: "Mean Reversion Agent", initials: "MR", avatarBg: "#d946ef", avatarColor: "#fff", weightLabel: "w 4%",  prefix: "MeanReversionAgent" },
+  { name: "Mean Reversion Agent", initials: "MR", avatarBg: "#d946ef", avatarColor: "#fff", weightLabel: "w 2%",  prefix: "MeanReversionAgent" },
   { name: "Seasonal Agent",      initials: "SN", avatarBg: "#FEF3C7", avatarColor: "#92400E", weightLabel: "w 4%",  prefix: "SeasonalAgent" },
+  { name: "Institutional Agent", initials: "IN", avatarBg: "#DBEAFE", avatarColor: "#1E40AF", weightLabel: "w 4%",  prefix: "InstitutionalAgent" },
   { name: "ML Prediction Agent",  initials: "ML", avatarBg: "#eab308", avatarColor: "#000", weightLabel: "w 11%", prefix: "MLAgent" },
   { name: "Research Agent",       initials: "RE", avatarBg: "#64748b", avatarColor: "#fff", weightLabel: "context", prefix: "ResearchAgent" },
   { name: "Risk Agent",           initials: "RI", avatarBg: "#dc2626", avatarColor: "#fff", weightLabel: "gate",   prefix: "RiskAgent" },
@@ -164,6 +165,18 @@ function parseLiquidity(line: string, data: ApiData | null): Record<string, stri
   const scoreMatch = extractKV(line, "score");
   return {
     "Liquidity Score": scoreMatch ?? "—",
+  };
+}
+
+function parseInstitutional(line: string): Record<string, string | number> {
+  const insiderMatch = line.match(/Insider:\s*(BULLISH|BEARISH|NEUTRAL)/);
+  const etfMatch = line.match(/ETF:\s*(inflow|outflow|neutral|unknown)/);
+  // Extract detail fragments after the summary fields
+  const parts = line.split(" | ").slice(3);
+  return {
+    Insider: insiderMatch?.[1] ?? "—",
+    "ETF Flow": etfMatch?.[1] ?? "—",
+    Dettagli: parts.slice(0, 2).join("; ") || "—",
   };
 }
 
@@ -309,6 +322,7 @@ function buildCards(data: ApiData): AgentCardProps[] {
     LiquidityAgent: (line: string) => parseLiquidity(line, data),
     IntermarketAgent: (line: string) => parseIntermarket(line, data),
     SeasonalAgent: parseSeasonal,
+    InstitutionalAgent: parseInstitutional,
     ResearchAgent: parseResearch,
     RiskAgent: parseRisk,
   };
@@ -439,10 +453,11 @@ const WEIGHT_TABLE: { name: string; initials: string; weight: number; color: str
   { name: "ML Prediction",  initials: "ML", weight: 11, color: "#eab308" },
   { name: "Liquidity",      initials: "LI", weight:  8, color: "#10b981" },
   { name: "Options",        initials: "OP", weight:  6, color: "#b45309" },
-  { name: "Mean Reversion", initials: "MR", weight:  4, color: "#d946ef" },
   { name: "Macro",          initials: "MA", weight:  4, color: "#ea580c" },
   { name: "Intermarket",    initials: "IM", weight:  4, color: "#3730A3" },
   { name: "Seasonal",       initials: "SN", weight:  4, color: "#92400E" },
+  { name: "Institutional",  initials: "IN", weight:  4, color: "#1E40AF" },
+  { name: "Mean Reversion", initials: "MR", weight:  2, color: "#d946ef" },
 ];
 
 function WeightedVotingCard({
