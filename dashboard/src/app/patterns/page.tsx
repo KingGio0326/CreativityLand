@@ -8,7 +8,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ComposedChart,
 } from "recharts";
@@ -259,10 +258,12 @@ function TradingPanel({
   };
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
+    <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b">
-        <p className="text-sm font-semibold">Esegui Ordine</p>
+      <div className="flex items-center justify-between px-5 py-3 border-b border-[rgba(139,92,246,0.12)]">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <span>📊</span> Position Sizing
+        </p>
         <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
           PAPER MODE
         </span>
@@ -272,14 +273,14 @@ function TradingPanel({
         {/* Side + Qty */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="text-[11px] text-muted-foreground">Direzione</label>
+            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Direzione</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setSide("buy")}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${
                   side === "buy"
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                    : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50"
+                    ? "bg-[rgba(16,185,129,0.2)] text-[#10b981] border-[rgba(16,185,129,0.4)]"
+                    : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border-[rgba(139,92,246,0.12)] hover:bg-[rgba(255,255,255,0.08)]"
                 }`}
               >
                 BUY
@@ -288,8 +289,8 @@ function TradingPanel({
                 onClick={() => setSide("sell")}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${
                   side === "sell"
-                    ? "bg-red-500/20 text-red-400 border-red-500/40"
-                    : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50"
+                    ? "bg-[rgba(239,68,68,0.2)] text-[#ef4444] border-[rgba(239,68,68,0.4)]"
+                    : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border-[rgba(139,92,246,0.12)] hover:bg-[rgba(255,255,255,0.08)]"
                 }`}
               >
                 SELL
@@ -297,13 +298,13 @@ function TradingPanel({
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[11px] text-muted-foreground">Quantita</label>
+            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Quantita</label>
             <input
               type="number"
               min={1}
               value={qty}
               onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-full px-3 py-2 text-xs font-mono rounded-lg border bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border bg-[rgba(255,255,255,0.04)] border-[rgba(139,92,246,0.15)] focus:outline-none focus:ring-1 focus:ring-[#7c3aed]"
             />
           </div>
         </div>
@@ -311,7 +312,7 @@ function TradingPanel({
         {/* Stop Loss slider */}
         <div className="space-y-1.5">
           <div className="flex justify-between text-[11px]">
-            <span className="text-muted-foreground">Stop Loss</span>
+            <span className="text-[var(--text-muted)]">Stop Loss</span>
             <span className="font-mono text-red-400">
               -{stopLossPct}% (${stopLossPrice})
             </span>
@@ -323,14 +324,14 @@ function TradingPanel({
             step={0.5}
             value={stopLossPct}
             onChange={(e) => setStopLossPct(parseFloat(e.target.value))}
-            className="w-full h-1.5 rounded-full appearance-none bg-muted/40 accent-red-500"
+            className="w-full h-1.5 rounded-full appearance-none bg-[rgba(255,255,255,0.06)] accent-[#ef4444]"
           />
         </div>
 
         {/* Take Profit slider */}
         <div className="space-y-1.5">
           <div className="flex justify-between text-[11px]">
-            <span className="text-muted-foreground">Take Profit</span>
+            <span className="text-[var(--text-muted)]">Take Profit</span>
             <span className="font-mono text-emerald-400">
               +{takeProfitPct}% (${takeProfitPrice})
             </span>
@@ -342,22 +343,22 @@ function TradingPanel({
             step={0.5}
             value={takeProfitPct}
             onChange={(e) => setTakeProfitPct(parseFloat(e.target.value))}
-            className="w-full h-1.5 rounded-full appearance-none bg-muted/40 accent-emerald-500"
+            className="w-full h-1.5 rounded-full appearance-none bg-[rgba(255,255,255,0.06)] accent-[#10b981]"
           />
         </div>
 
         {/* Kelly position sizing */}
         {kellySizing && (
-          <div className="rounded-lg bg-muted/20 border p-3 space-y-1 text-[11px]">
+          <div className="rounded-xl bg-[rgba(124,58,237,0.08)] border border-[rgba(139,92,246,0.2)] p-3 space-y-1 text-[11px]">
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">
+              <span className="text-[var(--text-muted)]">
                 Position sizing consigliato (Kelly)
               </span>
-              <span className="font-mono font-semibold text-sky-400">
-                {kellySizing.suggested_pct}% del capitale
+              <span className="text-2xl font-bold text-[#a855f7] font-mono">
+                {kellySizing.suggested_pct}%
               </span>
             </div>
-            <div className="flex gap-4 text-muted-foreground">
+            <div className="flex gap-4 text-[var(--text-muted)]">
               <span>
                 Edge:{" "}
                 <span
@@ -382,14 +383,14 @@ function TradingPanel({
         {/* Order type */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="text-[11px] text-muted-foreground">Tipo ordine</label>
+            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Tipo ordine</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setOrderType("market")}
                 className={`flex-1 py-1.5 text-[11px] font-medium rounded-lg border transition-all ${
                   orderType === "market"
-                    ? "bg-primary/10 text-foreground border-primary/40"
-                    : "bg-muted/30 text-muted-foreground border-border"
+                    ? "bg-[rgba(124,58,237,0.15)] text-foreground border-[rgba(139,92,246,0.4)]"
+                    : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border-[rgba(139,92,246,0.12)]"
                 }`}
               >
                 Market
@@ -398,8 +399,8 @@ function TradingPanel({
                 onClick={() => setOrderType("limit")}
                 className={`flex-1 py-1.5 text-[11px] font-medium rounded-lg border transition-all ${
                   orderType === "limit"
-                    ? "bg-primary/10 text-foreground border-primary/40"
-                    : "bg-muted/30 text-muted-foreground border-border"
+                    ? "bg-[rgba(124,58,237,0.15)] text-foreground border-[rgba(139,92,246,0.4)]"
+                    : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border-[rgba(139,92,246,0.12)]"
                 }`}
               >
                 Limit
@@ -408,34 +409,34 @@ function TradingPanel({
           </div>
           {orderType === "limit" && (
             <div className="space-y-1.5">
-              <label className="text-[11px] text-muted-foreground">Prezzo limite</label>
+              <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Prezzo limite</label>
               <input
                 type="number"
                 step={0.01}
                 value={limitPrice}
                 onChange={(e) => setLimitPrice(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border bg-[rgba(255,255,255,0.04)] border-[rgba(139,92,246,0.15)] focus:outline-none focus:ring-1 focus:ring-[#7c3aed]"
               />
             </div>
           )}
         </div>
 
         {/* Order summary */}
-        <div className="rounded-lg bg-muted/20 border p-3 space-y-1 text-[11px]">
+        <div className="rounded-xl bg-[#07070f] border border-[rgba(139,92,246,0.12)] p-3 space-y-1 text-[11px]">
           <p className="font-medium text-foreground">
             {side.toUpperCase()} {qty} {ticker} @{" "}
             {orderType === "market" ? "Market" : `$${limitPrice}`}
           </p>
-          <p className="text-muted-foreground">
+          <p className="text-[var(--text-muted)]">
             Stop Loss: <span className="font-mono text-red-400">${stopLossPrice}</span> (-
             {stopLossPct}%)
           </p>
-          <p className="text-muted-foreground">
+          <p className="text-[var(--text-muted)]">
             Take Profit:{" "}
             <span className="font-mono text-emerald-400">${takeProfitPrice}</span> (+
             {takeProfitPct}%)
           </p>
-          <div className="flex gap-4 pt-1 border-t border-border/50 mt-1">
+          <div className="flex gap-4 pt-1 border-t border-[rgba(139,92,246,0.12)] mt-1">
             <p className="text-red-400 font-mono">
               Rischio max: -${maxRisk}
             </p>
@@ -451,8 +452,8 @@ function TradingPanel({
           disabled={submitting}
           className={`w-full py-2.5 rounded-lg text-xs font-bold transition-all ${
             side === "buy"
-              ? "bg-emerald-500 hover:bg-emerald-600 text-white"
-              : "bg-red-500 hover:bg-red-600 text-white"
+              ? "bg-gradient-to-r from-[#10b981] to-[#059669] text-white shadow-[0_4px_20px_rgba(16,185,129,0.3)]"
+              : "bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-[0_4px_20px_rgba(239,68,68,0.3)]"
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {submitting ? "Invio in corso..." : "CONFERMA ORDINE"}
@@ -524,8 +525,8 @@ function PortfolioPanel() {
   };
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b">
+    <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-[rgba(139,92,246,0.12)]">
         <p className="text-sm font-semibold">Portfolio Aperto</p>
         <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
           PAPER MODE
@@ -534,7 +535,7 @@ function PortfolioPanel() {
 
       {loading && (
         <div className="p-5">
-          <div className="h-16 rounded-lg bg-muted/30 animate-pulse" />
+          <div className="h-16 rounded-lg bg-[rgba(255,255,255,0.04)] animate-pulse" />
         </div>
       )}
 
@@ -543,7 +544,7 @@ function PortfolioPanel() {
       )}
 
       {!loading && !error && positions.length === 0 && (
-        <div className="p-5 text-xs text-muted-foreground text-center">
+        <div className="p-5 text-xs text-[var(--text-muted)] text-center">
           Nessuna posizione aperta
         </div>
       )}
@@ -552,26 +553,26 @@ function PortfolioPanel() {
         <div className="overflow-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b bg-muted/30">
-                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+              <tr className="border-b border-[rgba(139,92,246,0.12)] bg-[rgba(255,255,255,0.03)]">
+                <th className="text-left px-4 py-2.5 font-medium text-[var(--text-muted)]">
                   Simbolo
                 </th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
                   Qty
                 </th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
                   Ingresso
                 </th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
                   Attuale
                 </th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
                   P&L
                 </th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
                   P&L %
                 </th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground" />
+                <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]" />
               </tr>
             </thead>
             <tbody>
@@ -581,13 +582,13 @@ function PortfolioPanel() {
                 return (
                   <tr
                     key={p.symbol}
-                    className="border-b last:border-0 hover:bg-muted/20 transition-colors"
+                    className="border-b border-[rgba(139,92,246,0.12)] last:border-0 hover:bg-[rgba(124,58,237,0.05)] transition-colors"
                   >
                     <td className="px-4 py-2.5 font-bold">{p.symbol}</td>
                     <td className="px-4 py-2.5 text-right font-mono">
                       {p.qty}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-muted-foreground">
+                    <td className="px-4 py-2.5 text-right font-mono text-[var(--text-muted)]">
                       ${p.avg_entry_price.toFixed(2)}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono">
@@ -609,7 +610,7 @@ function PortfolioPanel() {
                       <button
                         onClick={() => handleClose(p.symbol)}
                         disabled={closing === p.symbol}
-                        className="px-2 py-1 text-[10px] font-medium rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                        className="px-2 py-1 text-[10px] font-medium rounded border border-[rgba(239,68,68,0.3)] text-[#ef4444] hover:bg-[rgba(239,68,68,0.1)] transition-colors disabled:opacity-50"
                       >
                         {closing === p.symbol ? "..." : "Chiudi"}
                       </button>
@@ -708,7 +709,14 @@ export default function PatternsPage() {
     <div className="space-y-6">
       {/* ── SECTION 1: Header ──────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Pattern Matching</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold tracking-tight">Pattern Matching</h1>
+          {best && (
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[rgba(124,58,237,0.15)] text-[#a855f7] border border-[rgba(124,58,237,0.3)]">
+              sim {(best.similarity * 100).toFixed(0)}%
+            </span>
+          )}
+        </div>
         <div className="flex gap-1.5 flex-wrap">
           {TICKERS.map((t) => (
             <button
@@ -716,8 +724,8 @@ export default function PatternsPage() {
               onClick={() => setTicker(t)}
               className={`px-3 py-1 text-xs font-medium rounded-full border transition-all ${
                 ticker === t
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                  ? "bg-[var(--accent)] text-white border-[var(--accent-light)] shadow-[0_0_12px_rgba(124,58,237,0.3)]"
+                  : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border-transparent hover:bg-[rgba(255,255,255,0.08)]"
               }`}
             >
               {t}
@@ -728,44 +736,46 @@ export default function PatternsPage() {
 
       {/* Signal badges + Regime */}
       {data && (
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* Regime badge */}
-          {data.market_regime && data.market_regime !== "unknown" && (
-            <span
-              className={`px-3 py-1 rounded-full text-[11px] font-bold border ${regimeStyle(data.market_regime)}`}
-            >
-              {regimeLabel(data.market_regime)}
-            </span>
-          )}
-
-          {/* Pipeline signal */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${signalDot(data?.pipeline_signal?.signal ?? null)}`} />
-            <span className="text-muted-foreground">Pipeline:</span>
-            <span className="font-bold">
-              {data?.pipeline_signal?.signal ?? "N/A"}
-            </span>
-            {data?.pipeline_signal?.confidence != null && (
-              <span className="font-mono text-muted-foreground">
-                ({Math.round(data.pipeline_signal.confidence * 100)}%)
+        <div className="card-gradient rounded-2xl p-4 border border-[rgba(139,92,246,0.2)]">
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Regime badge */}
+            {data.market_regime && data.market_regime !== "unknown" && (
+              <span
+                className={`px-3 py-1 rounded-full text-[11px] font-bold border ${regimeStyle(data.market_regime)}`}
+              >
+                {regimeLabel(data.market_regime)}
               </span>
             )}
-          </div>
 
-          {/* Pattern signal */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${signalDot(rec?.signal ?? null)}`} />
-            <span className="text-muted-foreground">Pattern:</span>
-            <span className="font-bold">{rec?.signal ?? "N/A"}</span>
-          </div>
+            {/* Pipeline signal */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`w-2 h-2 rounded-full ${signalDot(data?.pipeline_signal?.signal ?? null)}`} />
+              <span className="text-[var(--text-muted)]">Pipeline:</span>
+              <span className="font-bold">
+                {data?.pipeline_signal?.signal ?? "N/A"}
+              </span>
+              {data?.pipeline_signal?.confidence != null && (
+                <span className="font-mono text-[var(--text-muted)]">
+                  ({Math.round(data.pipeline_signal.confidence * 100)}%)
+                </span>
+              )}
+            </div>
 
-          {/* Combined signal — large badge */}
-          <div className="ml-auto">
-            <span
-              className={`px-5 py-2 rounded-lg text-sm font-black tracking-wide border ${signalStyle(combined)}`}
-            >
-              {combined}
-            </span>
+            {/* Pattern signal */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`w-2 h-2 rounded-full ${signalDot(rec?.signal ?? null)}`} />
+              <span className="text-[var(--text-muted)]">Pattern:</span>
+              <span className="font-bold">{rec?.signal ?? "N/A"}</span>
+            </div>
+
+            {/* Combined signal — large badge */}
+            <div className="ml-auto">
+              <span
+                className={`px-5 py-2 rounded-lg text-sm font-black tracking-wide border shadow-[0_0_16px_rgba(124,58,237,0.2)] ${signalStyle(combined)}`}
+              >
+                {combined}
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -773,20 +783,20 @@ export default function PatternsPage() {
       {/* Loading */}
       {loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-xl border bg-card p-6">
-            <div className="h-52 rounded-lg bg-muted/30 animate-pulse" />
+          <div className="card-gradient rounded-2xl p-6">
+            <div className="h-52 rounded-lg bg-[rgba(255,255,255,0.04)] animate-pulse" />
           </div>
-          <div className="rounded-xl border bg-card p-6">
-            <div className="h-52 rounded-lg bg-muted/30 animate-pulse" />
+          <div className="card-gradient rounded-2xl p-6">
+            <div className="h-52 rounded-lg bg-[rgba(255,255,255,0.04)] animate-pulse" />
           </div>
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-5">
+        <div className="rounded-2xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.05)] p-5">
           <p className="text-red-400 text-sm font-medium">Errore</p>
-          <p className="text-xs text-muted-foreground mt-1">{error}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{error}</p>
         </div>
       )}
 
@@ -795,10 +805,10 @@ export default function PatternsPage() {
           {/* ── SECTION 2: Dual charts ─────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Current pattern */}
-            <div className="rounded-xl border bg-card p-5">
+            <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5">
               <div className="flex items-baseline justify-between mb-4">
                 <p className="text-sm font-semibold">Pattern Attuale</p>
-                <p className="text-xs text-muted-foreground font-mono">
+                <p className="text-xs text-[var(--text-muted)] font-mono">
                   ${data?.current?.current_price ?? 0}{" "}
                   <span
                     className={
@@ -814,23 +824,24 @@ export default function PatternsPage() {
               </div>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={currentChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{ fontSize: 10, fill: "#4a4a6a" }}
                     interval={4}
                   />
                   <YAxis
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{ fontSize: 10, fill: "#4a4a6a" }}
                     domain={["auto", "auto"]}
                     tickFormatter={(v: number) => `$${v}`}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 8,
-                      fontSize: 11,
+                      backgroundColor: "#12122a",
+                      border: "1px solid rgba(139,92,246,0.3)",
+                      borderRadius: "8px",
+                      color: "#f0f0ff",
+                      fontSize: "12px",
                     }}
                     formatter={(v: number) => [`$${v}`, "Prezzo"]}
                   />
@@ -846,11 +857,11 @@ export default function PatternsPage() {
             </div>
 
             {/* Best similar pattern */}
-            <div className="rounded-xl border bg-card p-5">
+            <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5">
               <div className="flex items-baseline justify-between mb-4">
                 <p className="text-sm font-semibold">Pattern Storico Simile</p>
                 {best && (
-                  <p className="text-xs text-muted-foreground font-mono">
+                  <p className="text-xs text-[var(--text-muted)] font-mono">
                     Similarity:{" "}
                     <span className="text-foreground font-medium">
                       {(best.similarity * 100).toFixed(1)}%
@@ -862,27 +873,28 @@ export default function PatternsPage() {
                 <>
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={historicChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                       <XAxis
                         dataKey="day"
-                        tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                        tick={{ fontSize: 10, fill: "#4a4a6a" }}
                         label={{
                           value: "Giorno",
                           position: "insideBottomRight",
                           offset: -5,
-                          style: { fontSize: 10, fill: "hsl(var(--muted-foreground))" },
+                          style: { fontSize: 10, fill: "#4a4a6a" },
                         }}
                       />
                       <YAxis
-                        tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                        tick={{ fontSize: 10, fill: "#4a4a6a" }}
                         tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`}
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: 8,
-                          fontSize: 11,
+                          backgroundColor: "#12122a",
+                          border: "1px solid rgba(139,92,246,0.3)",
+                          borderRadius: "8px",
+                          color: "#f0f0ff",
+                          fontSize: "12px",
                         }}
                         formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]}
                       />
@@ -895,12 +907,12 @@ export default function PatternsPage() {
                       />
                     </LineChart>
                   </ResponsiveContainer>
-                  <p className="text-[11px] text-muted-foreground text-center mt-2">
+                  <p className="text-[11px] text-[var(--text-muted)] text-center mt-2">
                     Periodo: {fmtDateFull(best.start_date)} — {fmtDateFull(best.end_date)}
                   </p>
                 </>
               ) : (
-                <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                <div className="h-[220px] flex items-center justify-center text-sm text-[var(--text-muted)]">
                   Nessun pattern storico trovato
                 </div>
               )}
@@ -910,26 +922,46 @@ export default function PatternsPage() {
           {/* ── SECTION 3: Overlay top 3 patterns ────── */}
           {best && (
             <>
-              <div className="rounded-xl border bg-card p-5">
+              <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5">
                 <p className="text-sm font-semibold mb-4">Overlay Comparativo — Top 3 Pattern</p>
+                {/* Custom legend */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[rgba(59,130,246,0.15)]">
+                    <span className="w-2 h-2 rounded-full bg-[#3b82f6]" />
+                    <span className="text-[#3b82f6]">Attuale</span>
+                  </span>
+                  {best && <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[rgba(245,158,11,0.15)]">
+                    <span className="w-2 h-2 rounded-full bg-[#f59e0b]" />
+                    <span className="text-[#f59e0b]">Match #1 — {(best.similarity * 100).toFixed(0)}%</span>
+                  </span>}
+                  {match2 && <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[rgba(16,185,129,0.15)]">
+                    <span className="w-2 h-2 rounded-full bg-[#10b981]" />
+                    <span className="text-[#10b981]">Match #2 — {(match2.similarity * 100).toFixed(0)}%</span>
+                  </span>}
+                  {match3 && <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[rgba(139,92,246,0.15)]">
+                    <span className="w-2 h-2 rounded-full bg-[#8b5cf6]" />
+                    <span className="text-[#8b5cf6]">Match #3 — {(match3.similarity * 100).toFixed(0)}%</span>
+                  </span>}
+                </div>
                 <ResponsiveContainer width="100%" height={300}>
                   <ComposedChart data={overlayData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                     <XAxis
                       dataKey="day"
-                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                      tick={{ fontSize: 10, fill: "#4a4a6a" }}
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                      tick={{ fontSize: 10, fill: "#4a4a6a" }}
                       domain={[0, 100]}
                       tickFormatter={(v: number) => `${v}`}
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 8,
-                        fontSize: 11,
+                        backgroundColor: "#12122a",
+                        border: "1px solid rgba(139,92,246,0.3)",
+                        borderRadius: "8px",
+                        color: "#f0f0ff",
+                        fontSize: "12px",
                       }}
                       formatter={(v: number, name: string) => {
                         const label =
@@ -939,19 +971,6 @@ export default function PatternsPage() {
                                 : "Match #3";
                         return [v != null ? v.toFixed(1) : "—", label];
                       }}
-                    />
-                    <Legend
-                      formatter={(value: string) => {
-                        if (value === "current") return "Attuale";
-                        if (value === "match1" && best)
-                          return `Match #1 (sim: ${(best.similarity * 100).toFixed(0)}%) — ${fmtMonthYear(best.end_date)}`;
-                        if (value === "match2" && match2)
-                          return `Match #2 (sim: ${(match2.similarity * 100).toFixed(0)}%) — ${fmtMonthYear(match2.end_date)}`;
-                        if (value === "match3" && match3)
-                          return `Match #3 (sim: ${(match3.similarity * 100).toFixed(0)}%) — ${fmtMonthYear(match3.end_date)}`;
-                        return value;
-                      }}
-                      wrapperStyle={{ fontSize: 11 }}
                     />
                     <Line type="monotone" dataKey="current" stroke="#3B82F6" strokeWidth={2.5} dot={false} />
                     <Line type="monotone" dataKey="match1" stroke="#F59E0B" strokeWidth={2} strokeDasharray="6 3" dot={false} />
@@ -967,12 +986,12 @@ export default function PatternsPage() {
 
               {/* ── Consensus storico ──────────────────────── */}
               {allMatches.length > 0 && (
-                <div className="rounded-xl border bg-card p-5 space-y-3">
+                <div className="space-y-3">
                   <p className="text-sm font-semibold">Consensus Storico</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="rounded-lg bg-muted/20 border p-3 space-y-1">
-                      <p className="text-[11px] text-muted-foreground">5 giorni</p>
-                      <p className={`text-lg font-bold font-mono ${positiveCount5d > allMatches.length / 2 ? "text-emerald-400" : positiveCount5d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
+                    <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-4 space-y-1">
+                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">5 giorni</p>
+                      <p className={`text-2xl font-bold font-mono ${positiveCount5d > allMatches.length / 2 ? "text-emerald-400" : positiveCount5d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
                         {positiveCount5d}/{allMatches.length} rialzo
                       </p>
                       {avgReturn5d != null && (
@@ -981,9 +1000,9 @@ export default function PatternsPage() {
                         </p>
                       )}
                     </div>
-                    <div className="rounded-lg bg-muted/20 border p-3 space-y-1">
-                      <p className="text-[11px] text-muted-foreground">10 giorni</p>
-                      <p className={`text-lg font-bold font-mono ${positiveCount10d > allMatches.length / 2 ? "text-emerald-400" : positiveCount10d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
+                    <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-4 space-y-1">
+                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">10 giorni</p>
+                      <p className={`text-2xl font-bold font-mono ${positiveCount10d > allMatches.length / 2 ? "text-emerald-400" : positiveCount10d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
                         {positiveCount10d}/{allMatches.length} rialzo
                       </p>
                       {avgReturn10d != null && (
@@ -992,9 +1011,9 @@ export default function PatternsPage() {
                         </p>
                       )}
                     </div>
-                    <div className="rounded-lg bg-muted/20 border p-3 space-y-1">
-                      <p className="text-[11px] text-muted-foreground">20 giorni</p>
-                      <p className={`text-lg font-bold font-mono ${positiveCount20d > allMatches.length / 2 ? "text-emerald-400" : positiveCount20d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
+                    <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-4 space-y-1">
+                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">20 giorni</p>
+                      <p className={`text-2xl font-bold font-mono ${positiveCount20d > allMatches.length / 2 ? "text-emerald-400" : positiveCount20d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
                         {positiveCount20d}/{allMatches.length} rialzo
                       </p>
                       {avgReturn20d != null && (
@@ -1004,7 +1023,7 @@ export default function PatternsPage() {
                       )}
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-[var(--text-muted)]">
                     {positiveCount5d === allMatches.length
                       ? `Tutti i ${allMatches.length} pattern storici simili hanno portato a un rialzo nei 5gg successivi`
                       : positiveCount5d === 0
@@ -1018,25 +1037,25 @@ export default function PatternsPage() {
 
           {/* ── Regime context note ────────────────────── */}
           {data.market_regime && data.market_regime !== "unknown" && (
-            <div className="rounded-xl border bg-card p-4">
+            <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-4">
               <div className="flex items-center gap-3 flex-wrap text-xs">
                 <span
                   className={`px-2.5 py-1 rounded-md font-bold border ${regimeStyle(data.market_regime)}`}
                 >
                   {regimeLabel(data.market_regime)}
                 </span>
-                <span className="text-muted-foreground">
+                <span className="text-[var(--text-muted)]">
                   Pattern cercati in regime:{" "}
                   <span className="text-foreground font-medium">{data.market_regime}</span>
                 </span>
                 {data.vix_approx != null && (
-                  <span className="text-muted-foreground">
+                  <span className="text-[var(--text-muted)]">
                     VIX stimato:{" "}
                     <span className="text-foreground font-mono">{data.vix_approx}%</span>
                   </span>
                 )}
                 {data.spy_trend_30d != null && (
-                  <span className="text-muted-foreground">
+                  <span className="text-[var(--text-muted)]">
                     SPY trend 30gg:{" "}
                     <span
                       className={`font-mono font-medium ${
@@ -1059,12 +1078,12 @@ export default function PatternsPage() {
               const label =
                 horizon === "5d" ? "5 giorni" : horizon === "10d" ? "10 giorni" : "20 giorni";
               return (
-                <div key={horizon} className="rounded-xl border bg-card p-5 space-y-3">
+                <div key={horizon} className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5 space-y-3">
                   <p className="text-sm font-semibold">Orizzonte {label}</p>
                   {s ? (
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Media</span>
+                        <span className="text-[var(--text-muted)]">Media</span>
                         <span
                           className={`font-mono font-medium ${
                             s.mean >= 0 ? "text-emerald-400" : "text-red-400"
@@ -1075,7 +1094,7 @@ export default function PatternsPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Mediana</span>
+                        <span className="text-[var(--text-muted)]">Mediana</span>
                         <span
                           className={`font-mono font-medium ${
                             s.median >= 0 ? "text-emerald-400" : "text-red-400"
@@ -1086,29 +1105,30 @@ export default function PatternsPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Casi positivi</span>
+                        <span className="text-[var(--text-muted)]">Casi positivi</span>
                         <span className="font-mono font-medium">{s.positive_rate}%</span>
                       </div>
                       {/* visual bar */}
-                      <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            s.positive_rate >= 60
-                              ? "bg-emerald-500"
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${s.positive_rate}%`,
+                            background: s.positive_rate >= 60
+                              ? "linear-gradient(90deg, #7c3aed, #a855f7)"
                               : s.positive_rate <= 40
-                                ? "bg-red-500"
-                                : "bg-zinc-500"
-                          }`}
-                          style={{ width: `${s.positive_rate}%` }}
+                                ? "#ef4444"
+                                : "#71717a",
+                          }}
                         />
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Campione</span>
+                        <span className="text-[var(--text-muted)]">Campione</span>
                         <span className="font-mono">{s.count} casi</span>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">Dati insufficienti</p>
+                    <p className="text-xs text-[var(--text-muted)]">Dati insufficienti</p>
                   )}
                 </div>
               );
@@ -1118,12 +1138,12 @@ export default function PatternsPage() {
           {/* ── SECTION 5: Recommendation box ──────────── */}
           {rec && (
             <div
-              className={`rounded-xl border p-5 ${
+              className={`rounded-2xl border p-5 ${
                 combined.includes("BUY")
-                  ? "bg-emerald-500/5 border-emerald-500/25"
+                  ? "bg-[rgba(16,185,129,0.05)] border-[rgba(16,185,129,0.2)]"
                   : combined.includes("SELL")
-                    ? "bg-red-500/5 border-red-500/25"
-                    : "bg-zinc-500/5 border-zinc-500/25"
+                    ? "bg-[rgba(239,68,68,0.05)] border-[rgba(239,68,68,0.2)]"
+                    : "bg-[rgba(255,255,255,0.03)] border-[rgba(139,92,246,0.15)]"
               }`}
             >
               <div className="flex items-center gap-3 mb-3">
@@ -1137,7 +1157,7 @@ export default function PatternsPage() {
                   {combined}
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm text-[var(--text-muted)] leading-relaxed">
                 {rec.reason}
                 {data?.pipeline_signal?.signal &&
                   rec.signal !== "HOLD" && (
@@ -1179,8 +1199,8 @@ export default function PatternsPage() {
 
       {/* No data */}
       {!loading && !error && !data && (
-        <div className="rounded-xl border bg-card p-8 text-center">
-          <p className="text-muted-foreground text-sm">
+        <div className="card-gradient rounded-2xl p-8 text-center">
+          <p className="text-[var(--text-muted)] text-sm">
             Nessun dato per <span className="font-mono font-medium">{ticker}</span>
           </p>
         </div>

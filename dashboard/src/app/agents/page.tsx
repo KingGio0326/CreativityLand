@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AgentCard, { type AgentCardProps } from "@/components/AgentCard";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 const TICKERS = [
   "AAPL", "TSLA", "NVDA", "BTC-USD",
@@ -459,7 +460,7 @@ function ConfidenceGauge({ value, signal }: { value: number; signal: string }) {
   const offset = circumference * (1 - pct);
   const color =
     signal === "BUY" ? "#10b981" : signal === "SELL" ? "#ef4444" : "#71717a";
-  const trackColor = signal === "BUY" ? "#10b98120" : signal === "SELL" ? "#ef444420" : "#71717a20";
+  const trackColor = signal === "BUY" ? "#10b98110" : signal === "SELL" ? "#ef444410" : "#71717a10";
 
   return (
     <div className="relative flex items-center justify-center">
@@ -481,7 +482,7 @@ function ConfidenceGauge({ value, signal }: { value: number; signal: string }) {
         <span className="text-2xl font-bold font-mono tabular-nums" style={{ color }}>
           {Math.round(pct * 100)}%
         </span>
-        <span className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+        <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mt-0.5">
           confidence
         </span>
       </div>
@@ -504,6 +505,8 @@ const WEIGHT_TABLE: { name: string; initials: string; weight: number; color: str
   { name: "Institutional",  initials: "IN", weight:  4, color: "#14532D" },
   { name: "Mean Reversion", initials: "MR", weight:  2, color: "#d946ef" },
 ];
+
+const donutData = WEIGHT_TABLE.map(w => ({ name: w.name, value: w.weight, color: w.color }));
 
 function WeightedVotingCard({
   cards,
@@ -530,29 +533,29 @@ function WeightedVotingCard({
   const total = votingCards.length || 1;
 
   const signalColor =
-    signal === "BUY" ? "text-emerald-400" : signal === "SELL" ? "text-red-400" : "text-zinc-400";
+    signal === "BUY" ? "text-[#10b981]" : signal === "SELL" ? "text-[#ef4444]" : "text-[#f59e0b]";
   const signalBg =
     signal === "BUY"
-      ? "bg-emerald-500/10 border-emerald-500/25"
+      ? "bg-[rgba(16,185,129,0.08)] border-[rgba(16,185,129,0.2)]"
       : signal === "SELL"
-        ? "bg-red-500/10 border-red-500/25"
-        : "bg-zinc-500/10 border-zinc-500/25";
+        ? "bg-[rgba(239,68,68,0.08)] border-[rgba(239,68,68,0.2)]"
+        : "bg-[rgba(255,255,255,0.04)] border-[rgba(139,92,246,0.15)]";
 
   return (
-    <div className={`rounded-xl border ${signalBg} overflow-hidden`}>
+    <div className={`card-gradient rounded-2xl border ${signalBg} overflow-hidden`}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-inherit">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-[rgba(139,92,246,0.12)]">
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
           WV
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-base font-bold">Weighted Voting Agent</p>
-          <p className="text-xs text-muted-foreground">
-            Consensus: <span className="font-medium text-foreground">{wv.consensus}</span>
+          <p className="text-base font-bold text-[var(--text-primary)]">Weighted Voting Agent</p>
+          <p className="text-xs text-[var(--text-muted)]">
+            Consensus: <span className="font-medium text-[var(--text-primary)]">{wv.consensus}</span>
             {" · "}
             {wv.agentsAgree}/{wv.agentsTotal} agents agree
             {" · "}
-            Dominant: <span className="font-medium text-foreground">{wv.dominant}</span>
+            Dominant: <span className="font-medium text-[var(--text-primary)]">{wv.dominant}</span>
           </p>
         </div>
         <span className={`text-2xl font-black tracking-tight ${signalColor}`}>
@@ -561,18 +564,18 @@ function WeightedVotingCard({
       </div>
 
       {/* Body: 3 columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-border/50">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-[rgba(139,92,246,0.12)]">
         {/* Col 1: Vote distribution */}
         <div className="p-5 space-y-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+          <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] font-medium">
             Vote Distribution
           </p>
 
           {/* Stacked bar */}
-          <div className="flex h-7 rounded-lg overflow-hidden border border-border/50">
+          <div className="flex h-7 rounded-xl overflow-hidden border border-[rgba(139,92,246,0.12)]">
             {buys > 0 && (
               <div
-                className="bg-emerald-500 flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
+                className="bg-[#10b981] flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
                 style={{ width: `${(buys / total) * 100}%` }}
               >
                 {buys}
@@ -580,7 +583,7 @@ function WeightedVotingCard({
             )}
             {holds > 0 && (
               <div
-                className="bg-zinc-500 flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
+                className="bg-[#f59e0b] flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
                 style={{ width: `${(holds / total) * 100}%` }}
               >
                 {holds}
@@ -588,7 +591,7 @@ function WeightedVotingCard({
             )}
             {sells > 0 && (
               <div
-                className="bg-red-500 flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
+                className="bg-[#ef4444] flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
                 style={{ width: `${(sells / total) * 100}%` }}
               >
                 {sells}
@@ -597,26 +600,26 @@ function WeightedVotingCard({
           </div>
 
           {/* Legend */}
-          <div className="flex gap-4 text-xs">
+          <div className="flex gap-4 text-xs text-[var(--text-secondary)]">
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
+              <span className="w-2.5 h-2.5 rounded-sm bg-[#10b981]" />
               BUY ({buys})
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm bg-zinc-500" />
+              <span className="w-2.5 h-2.5 rounded-sm bg-[#f59e0b]" />
               HOLD ({holds})
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm bg-red-500" />
+              <span className="w-2.5 h-2.5 rounded-sm bg-[#ef4444]" />
               SELL ({sells})
             </span>
           </div>
 
           {/* Critic verdict */}
           {wv.criticLine && (
-            <div className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Critic</p>
-              <p className="text-[11px] font-mono text-muted-foreground leading-relaxed">
+            <div className="rounded-lg bg-[#07070f] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Critic</p>
+              <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">
                 {wv.criticLine.replace("CriticAgent: ", "")}
               </p>
             </div>
@@ -625,7 +628,7 @@ function WeightedVotingCard({
 
         {/* Col 2: Weight table */}
         <div className="p-5 space-y-3">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+          <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] font-medium">
             Agent Weights
           </p>
           <div className="space-y-1.5">
@@ -634,10 +637,10 @@ function WeightedVotingCard({
               const agentVote = agentCard?.vote ?? "—";
               const voteColor =
                 agentVote === "BUY"
-                  ? "text-emerald-400"
+                  ? "text-[#10b981]"
                   : agentVote === "SELL"
-                    ? "text-red-400"
-                    : "text-zinc-400";
+                    ? "text-[#ef4444]"
+                    : "text-[#f59e0b]";
               return (
                 <div key={w.initials} className="flex items-center gap-2 text-[11px]">
                   <span
@@ -646,17 +649,17 @@ function WeightedVotingCard({
                   >
                     {w.initials}
                   </span>
-                  <span className="flex-1 text-muted-foreground truncate">{w.name}</span>
+                  <span className="flex-1 text-[var(--text-muted)] truncate">{w.name}</span>
                   <span className={`font-mono font-medium w-8 text-right ${voteColor}`}>
                     {agentVote}
                   </span>
-                  <div className="w-16 h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                  <div className="w-16 h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${w.weight}%`, backgroundColor: w.color, maxWidth: "100%" }}
                     />
                   </div>
-                  <span className="font-mono text-muted-foreground w-7 text-right">{w.weight}%</span>
+                  <span className="font-mono text-[var(--text-muted)] w-7 text-right">{w.weight}%</span>
                 </div>
               );
             })}
@@ -665,11 +668,11 @@ function WeightedVotingCard({
 
         {/* Col 3: Confidence gauge */}
         <div className="p-5 flex flex-col items-center justify-center gap-3">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+          <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] font-medium">
             Final Signal
           </p>
           <ConfidenceGauge value={confidence} signal={signal} />
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="text-xs text-[var(--text-muted)] text-center">
             Updated {new Date(overall.created_at).toLocaleString()}
           </p>
         </div>
@@ -683,13 +686,13 @@ function highlightLine(line: string) {
   // Split into tokens and colorize BUY/SELL/numbers
   return line.split(/(\bBUY\b|\bSELL\b|\bHOLD\b|\bHIGH\b|\bMEDIUM\b|\bLOW\b|\bAPPROVATO\b|\bRIGETTATO\b|\d+\.?\d*%?)/g).map((token, i) => {
     if (token === "BUY" || token === "APPROVATO")
-      return <span key={i} className="text-emerald-400 font-bold">{token}</span>;
+      return <span key={i} className="text-[#10b981] font-bold">{token}</span>;
     if (token === "SELL" || token === "RIGETTATO" || token === "HIGH")
-      return <span key={i} className="text-red-400 font-bold">{token}</span>;
+      return <span key={i} className="text-[#ef4444] font-bold">{token}</span>;
     if (token === "HOLD" || token === "MEDIUM")
-      return <span key={i} className="text-zinc-400 font-bold">{token}</span>;
+      return <span key={i} className="text-[#f59e0b] font-bold">{token}</span>;
     if (token === "LOW")
-      return <span key={i} className="text-emerald-400/70 font-medium">{token}</span>;
+      return <span key={i} className="text-[#10b981] opacity-70 font-medium">{token}</span>;
     if (/^\d+\.?\d*%?$/.test(token))
       return <span key={i} className="font-mono text-sky-400">{token}</span>;
     return <span key={i}>{token}</span>;
@@ -709,16 +712,16 @@ function PipelineLog({ reasoning }: { reasoning: string[] }) {
   if (reasoning.length === 0) return null;
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b">
-        <p className="text-sm font-semibold">Pipeline Log</p>
+    <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-[rgba(139,92,246,0.12)]">
+        <p className="text-sm font-semibold text-[var(--text-primary)]">Pipeline Log</p>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-lg border bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-lg border bg-[rgba(124,58,237,0.1)] border-[rgba(139,92,246,0.2)] hover:bg-[rgba(124,58,237,0.2)] text-[var(--text-secondary)] transition-colors"
         >
           {copied ? (
             <>
-              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-3.5 h-3.5 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               Copiato
@@ -733,13 +736,13 @@ function PipelineLog({ reasoning }: { reasoning: string[] }) {
           )}
         </button>
       </div>
-      <div className="p-4 space-y-0.5 max-h-[400px] overflow-auto">
+      <div className="bg-[#07070f] rounded-xl m-2 p-4 space-y-0.5 max-h-[400px] overflow-auto">
         {reasoning.map((line, i) => (
-          <div key={i} className="flex gap-3 py-1 text-[11px] leading-relaxed group hover:bg-muted/20 rounded px-2 -mx-2">
-            <span className="text-muted-foreground/40 font-mono select-none shrink-0 w-5 text-right tabular-nums">
+          <div key={i} className="flex gap-3 py-1 text-[11px] leading-relaxed group hover:bg-[rgba(124,58,237,0.05)] rounded px-2 -mx-2">
+            <span className="text-[var(--text-muted)] opacity-40 font-mono select-none shrink-0 w-5 text-right tabular-nums">
               {i + 1}
             </span>
-            <p className="font-mono text-muted-foreground min-w-0">
+            <p className="font-mono text-[var(--text-muted)] min-w-0">
               {highlightLine(line)}
             </p>
           </div>
@@ -754,51 +757,51 @@ function SignalHistory({ history, ticker }: { history: HistoryEntry[]; ticker: s
   if (history.length === 0) return null;
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
-      <div className="px-5 py-3 border-b">
-        <p className="text-sm font-semibold">
+    <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] overflow-hidden">
+      <div className="px-5 py-3 border-b border-[rgba(139,92,246,0.12)]">
+        <p className="text-sm font-semibold text-[var(--text-primary)]">
           Storico segnali{" "}
-          <span className="text-muted-foreground font-normal">— {ticker}</span>
+          <span className="text-[var(--text-muted)] font-normal">— {ticker}</span>
         </p>
       </div>
       <div className="overflow-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b bg-muted/30">
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Data</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Segnale</th>
-              <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Confidence</th>
-              <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Sentiment Score</th>
+            <tr className="border-b border-[rgba(139,92,246,0.12)]">
+              <th className="text-left px-4 py-2.5 font-medium text-[var(--text-muted)]">Data</th>
+              <th className="text-left px-4 py-2.5 font-medium text-[var(--text-muted)]">Segnale</th>
+              <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">Confidence</th>
+              <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">Sentiment Score</th>
             </tr>
           </thead>
           <tbody>
             {history.map((h, i) => {
               const sigColor =
                 h.signal === "BUY"
-                  ? "text-emerald-400"
+                  ? "text-[#10b981]"
                   : h.signal === "SELL"
-                    ? "text-red-400"
-                    : "text-zinc-400";
+                    ? "text-[#ef4444]"
+                    : "text-[#f59e0b]";
               const sentColor =
                 h.sentiment_score != null
                   ? h.sentiment_score > 0
-                    ? "text-emerald-400"
+                    ? "text-[#10b981]"
                     : h.sentiment_score < 0
-                      ? "text-red-400"
-                      : "text-zinc-400"
-                  : "text-muted-foreground";
+                      ? "text-[#ef4444]"
+                      : "text-[#f59e0b]"
+                  : "text-[var(--text-muted)]";
               return (
                 <tr
                   key={i}
-                  className={`border-b last:border-0 hover:bg-muted/20 transition-colors ${i === 0 ? "bg-muted/10" : ""}`}
+                  className={`border-b border-[rgba(139,92,246,0.12)] last:border-0 hover:bg-[rgba(124,58,237,0.05)] transition-colors ${i % 2 === 0 ? "bg-[var(--bg-card)]" : "bg-[var(--bg-secondary)]"}`}
                 >
-                  <td className="px-4 py-2.5 font-mono tabular-nums text-muted-foreground">
+                  <td className="px-4 py-2.5 font-mono tabular-nums text-[var(--text-muted)]">
                     {new Date(h.created_at).toLocaleString()}
                   </td>
                   <td className={`px-4 py-2.5 font-bold ${sigColor}`}>
                     {h.signal}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                  <td className="px-4 py-2.5 text-right font-mono tabular-nums text-[var(--text-secondary)]">
                     {Math.round(h.confidence * 100)}%
                   </td>
                   <td className={`px-4 py-2.5 text-right font-mono tabular-nums ${sentColor}`}>
@@ -812,6 +815,27 @@ function SignalHistory({ history, ticker }: { history: HistoryEntry[]; ticker: s
       </div>
     </div>
   );
+}
+
+/* ── Custom Tooltip for Donut Chart ───────────────────── */
+function DonutTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) {
+  if (active && payload && payload.length) {
+    return (
+      <div
+        style={{
+          backgroundColor: "#12122a",
+          border: "1px solid rgba(139,92,246,0.3)",
+          borderRadius: "8px",
+          color: "#f0f0ff",
+          fontSize: "12px",
+          padding: "8px 12px",
+        }}
+      >
+        <p style={{ margin: 0 }}>{payload[0].name}: <strong>{payload[0].value}%</strong></p>
+      </div>
+    );
+  }
+  return null;
 }
 
 /* ── page ──────────────────────────────────────────────── */
@@ -849,7 +873,11 @@ export default function AgentsPage() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Agent Monitor</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Agenti Attivi</h1>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[rgba(16,185,129,0.15)] text-[#10b981] border border-[rgba(16,185,129,0.3)]">12 LIVE</span>
+          <span className="text-xs font-mono text-[var(--text-muted)]">&Sigma; 100%</span>
+        </div>
         <div className="flex gap-1.5 flex-wrap">
           {TICKERS.map((t) => (
             <button
@@ -857,8 +885,8 @@ export default function AgentsPage() {
               onClick={() => setTicker(t)}
               className={`px-3 py-1 text-xs font-medium rounded-full border transition-all ${
                 ticker === t
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                  ? "bg-[var(--accent)] text-white border-[var(--accent-light)] shadow-[0_0_12px_rgba(124,58,237,0.3)]"
+                  : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border-transparent hover:bg-[rgba(255,255,255,0.08)]"
               }`}
             >
               {t}
@@ -870,41 +898,87 @@ export default function AgentsPage() {
       {/* Overall signal banner */}
       {overall && (
         <div
-          className={`rounded-xl border px-5 py-4 flex items-center justify-between flex-wrap gap-3 ${
+          className={`card-gradient rounded-2xl border px-5 py-4 flex items-center justify-between flex-wrap gap-3 ${
             overall.signal === "BUY"
-              ? "bg-emerald-500/10 border-emerald-500/30"
+              ? "border-[rgba(16,185,129,0.2)]"
               : overall.signal === "SELL"
-                ? "bg-red-500/10 border-red-500/30"
-                : "bg-zinc-500/10 border-zinc-500/30"
+                ? "border-[rgba(239,68,68,0.2)]"
+                : "border-[rgba(139,92,246,0.2)]"
           }`}
         >
           <div className="flex items-center gap-3">
             <span
               className={`text-lg font-bold ${
                 overall.signal === "BUY"
-                  ? "text-emerald-400"
+                  ? "text-[#10b981]"
                   : overall.signal === "SELL"
-                    ? "text-red-400"
-                    : "text-zinc-400"
+                    ? "text-[#ef4444]"
+                    : "text-[#f59e0b]"
               }`}
             >
               {overall.signal}
             </span>
-            <span className="text-sm text-muted-foreground">{ticker}</span>
+            <span className="text-sm text-[var(--text-muted)]">{ticker}</span>
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
             <span>
               Confidence{" "}
-              <span className="font-mono font-medium text-foreground">
+              <span className="font-mono font-medium text-[var(--text-primary)]">
                 {Math.round(overall.confidence * 100)}%
               </span>
             </span>
             <span>
               Updated{" "}
-              <span className="font-mono text-foreground">
+              <span className="font-mono text-[var(--text-primary)]">
                 {new Date(overall.created_at).toLocaleString()}
               </span>
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Donut Chart - Weight Distribution */}
+      {!loading && !error && cards.length > 0 && (
+        <div className="card-gradient rounded-2xl p-5 border border-[rgba(139,92,246,0.2)]">
+          <p className="text-sm font-semibold text-[var(--text-primary)] mb-4">Distribuzione Pesi Agenti</p>
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            {/* Chart */}
+            <div className="relative" style={{ width: 200, height: 200 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={donutData}
+                    innerRadius={55}
+                    outerRadius={85}
+                    dataKey="value"
+                    paddingAngle={2}
+                    stroke="none"
+                  >
+                    {donutData.map((d, i) => (
+                      <Cell key={i} fill={d.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<DonutTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Center text */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-xl font-bold font-mono text-[var(--text-primary)]">100%</span>
+              </div>
+            </div>
+            {/* Legend */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5">
+              {donutData.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-[11px]">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: d.color }}
+                  />
+                  <span className="text-[var(--text-muted)]">{d.name}</span>
+                  <span className="font-mono text-[var(--text-secondary)] ml-auto">{d.value}%</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -913,8 +987,8 @@ export default function AgentsPage() {
       {loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="rounded-xl border bg-card p-6">
-              <div className="h-28 rounded-lg bg-muted/30 animate-pulse" />
+            <div key={i} className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-6">
+              <div className="h-28 rounded-lg bg-[rgba(255,255,255,0.04)] animate-pulse" />
             </div>
           ))}
         </div>
@@ -922,9 +996,9 @@ export default function AgentsPage() {
 
       {/* Error */}
       {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-5">
-          <p className="text-red-400 text-sm font-medium">Errore</p>
-          <p className="text-xs text-muted-foreground mt-1">{error}</p>
+        <div className="rounded-2xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.05)] p-5">
+          <p className="text-[#ef4444] text-sm font-medium">Errore</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{error}</p>
         </div>
       )}
 
@@ -954,8 +1028,8 @@ export default function AgentsPage() {
 
       {/* No signal */}
       {!loading && !error && data && !data.signal && (
-        <div className="rounded-xl border bg-card p-8 text-center">
-          <p className="text-muted-foreground text-sm">
+        <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-8 text-center">
+          <p className="text-[var(--text-muted)] text-sm">
             Nessun segnale disponibile per <span className="font-mono font-medium">{ticker}</span>
           </p>
         </div>
