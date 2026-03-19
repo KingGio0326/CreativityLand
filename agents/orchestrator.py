@@ -104,6 +104,7 @@ class TradingOrchestrator:
             pattern_signal=pattern_signal,
             pattern_patterns_found=pattern_found,
             pattern_best_similarity=pattern_similarity,
+            rate_direction="unknown",
         )
         result = self.graph.invoke(state)
         vb = result.get("vote_breakdown", {})

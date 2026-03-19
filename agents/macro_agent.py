@@ -154,6 +154,16 @@ specialmente se confermano o contraddicono i segnali di mercato.
 
 def macro_agent_node(state: TradingState) -> TradingState:
     agent = MacroAgent()
+
+    # Compute current rate direction and store in state
+    try:
+        from engine.pattern_extractor import get_rate_direction
+        from datetime import datetime
+        current_rate_dir = get_rate_direction(datetime.now())
+    except Exception:
+        current_rate_dir = "unknown"
+    state["rate_direction"] = current_rate_dir
+
     research_context = state.get("historical_context", "")
     research_papers_count = state.get("research_papers_count", 0)
     if agent.is_macro_relevant(state["articles"]):
@@ -185,5 +195,9 @@ def macro_agent_node(state: TradingState) -> TradingState:
         }
         state["reasoning"].append(
             "MacroAgent: nessun evento geopolitico/macro rilevato"
+        )
+    if current_rate_dir != "unknown":
+        state["reasoning"].append(
+            f"MacroAgent: Rate direction: {current_rate_dir}"
         )
     return state

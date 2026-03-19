@@ -47,6 +47,58 @@ CRISIS_PERIODS = [
 ]
 
 
+def get_rate_direction(date, lookback_days=90) -> str:
+    """
+    Determina la direzione dei tassi Fed in una data storica.
+    Usa il proxy TLT (Treasury 10Y ETF):
+    - TLT scende = tassi in salita (rising)
+    - TLT sale = tassi in calo (falling)
+    - stabile = tassi stabili
+    """
+    try:
+        start = (date - timedelta(days=lookback_days + 5))
+        end = date
+        df = yf.download(
+            "TLT",
+            start=start.strftime("%Y-%m-%d"),
+            end=end.strftime("%Y-%m-%d"),
+            progress=False,
+            auto_adjust=True,
+        )
+        if df.empty or len(df) < 10:
+            return "unknown"
+
+        prices = df["Close"].values.flatten()
+        change_pct = (prices[-1] - prices[0]) / prices[0] * 100
+
+        if change_pct < -3:
+            return "rising"
+        elif change_pct > 3:
+            return "falling"
+        else:
+            return "stable"
+    except Exception:
+        return "unknown"
+
+
+def _rate_direction_from_prices(prices: np.ndarray, idx: int, lookback: int = 60) -> str:
+    """Compute rate direction from pre-loaded TLT prices array (fast path)."""
+    start_idx = idx - lookback
+    if start_idx < 0 or idx >= len(prices):
+        return "unknown"
+    p0 = prices[start_idx]
+    p1 = prices[idx]
+    if p0 == 0:
+        return "unknown"
+    change_pct = (p1 - p0) / p0 * 100
+    if change_pct < -3:
+        return "rising"
+    elif change_pct > 3:
+        return "falling"
+    else:
+        return "stable"
+
+
 def get_seasonal_features(date) -> dict:
     """Ritorna features stagionali per una data."""
     month = date.month
@@ -142,6 +194,8 @@ class PatternExtractor:
         )
         self._spy_cache = None
         self._spy_dates_cache = None
+        self._tlt_cache = None
+        self._tlt_dates_cache = None
 
     def _load_spy_data(self):
         """Carica SPY una volta sola per calcolare regime."""
@@ -157,6 +211,21 @@ class PatternExtractor:
                 self._spy_cache = df["Close"].values.flatten()
                 self._spy_dates_cache = df.index
         return self._spy_cache, self._spy_dates_cache
+
+    def _load_tlt_data(self):
+        """Carica TLT una volta sola per calcolare rate direction."""
+        if self._tlt_cache is None:
+            df = yf.download(
+                "TLT",
+                start="2002-07-30",
+                end=datetime.now().strftime("%Y-%m-%d"),
+                progress=False,
+                auto_adjust=True,
+            )
+            if not df.empty:
+                self._tlt_cache = df["Close"].values.flatten()
+                self._tlt_dates_cache = df.index
+        return self._tlt_cache, self._tlt_dates_cache
 
     def normalize_pattern(self, prices: np.ndarray) -> list[float]:
         """Normalizza prezzi a rendimenti % e resample a 30 punti."""
@@ -192,8 +261,9 @@ class PatternExtractor:
         closes = df["Close"].values.flatten()
         dates = df.index
 
-        # Carica SPY per calcolo regime
+        # Carica SPY per calcolo regime e TLT per rate direction
         spy_prices, spy_dates = self._load_spy_data()
+        tlt_prices, tlt_dates = self._load_tlt_data()
 
         # Controlla pattern gia esistenti
         existing = (
@@ -259,6 +329,19 @@ class PatternExtractor:
 
             seasonal = get_seasonal_features(current_date)
 
+            # Calcola rate direction da TLT cache
+            rate_dir = "unknown"
+            if tlt_prices is not None and tlt_dates is not None:
+                tlt_idx = None
+                for j, td in enumerate(tlt_dates):
+                    if td >= current_date:
+                        tlt_idx = j
+                        break
+                if tlt_idx is not None:
+                    rate_dir = _rate_direction_from_prices(
+                        tlt_prices, tlt_idx
+                    )
+
             batch.append(
                 {
                     "ticker": ticker,
@@ -279,6 +362,7 @@ class PatternExtractor:
                     "is_santa_rally": seasonal["is_santa_rally"],
                     "is_opex_week": seasonal["is_opex_week"],
                     "is_quarter_end": seasonal["is_quarter_end"],
+                    "rate_direction": rate_dir,
                 }
             )
 

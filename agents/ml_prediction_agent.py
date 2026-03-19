@@ -12,6 +12,11 @@ from agents import TradingState
 MODEL_DIR = "models/"
 
 
+def encode_rate_direction(direction: str) -> float:
+    return {"rising": -1.0, "stable": 0.0,
+            "falling": 1.0, "unknown": 0.0}.get(direction, 0.0)
+
+
 class MLPredictionAgent:
     def build_features(self, ticker: str) -> pd.DataFrame:
         df = yf.download(
@@ -62,6 +67,9 @@ class MLPredictionAgent:
         feat["dow"] = pd.to_datetime(df.index).dayofweek
         feat["month"] = pd.to_datetime(df.index).month
 
+        # Rate direction (default stable for training data)
+        feat["rate_dir"] = 0.0
+
         # Target: sale > 1% nei prossimi 5 giorni?
         feat["target"] = (
             close.shift(-5) / close - 1 > 0.01
@@ -92,7 +100,7 @@ class MLPredictionAgent:
         print(f"  Model {ticker}: accuracy={acc:.1%}")
         return acc
 
-    def predict(self, ticker: str) -> dict:
+    def predict(self, ticker: str, rate_direction: str = "unknown") -> dict:
         path = f"{MODEL_DIR}{ticker.replace('-', '_')}_gb.pkl"
         retrain = (
             not os.path.exists(path)
@@ -117,6 +125,10 @@ class MLPredictionAgent:
             (time.time() - os.path.getmtime(path)) / 86400
         )
         df = self.build_features(ticker)
+        if "rate_dir" in df.columns:
+            df.loc[df.index[-1], "rate_dir"] = encode_rate_direction(
+                rate_direction
+            )
         X_latest = df.drop(columns=["target"])[feats].iloc[[-1]]
         prob_up = float(model.predict_proba(X_latest)[0][1])
         prob_down = 1 - prob_up
@@ -151,7 +163,8 @@ class MLPredictionAgent:
 
 def ml_agent_node(state: TradingState) -> TradingState:
     agent = MLPredictionAgent()
-    analysis = agent.predict(state["ticker"])
+    rate_dir = state.get("rate_direction", "unknown")
+    analysis = agent.predict(state["ticker"], rate_direction=rate_dir)
     state["ml_prediction"] = analysis
     state["reasoning"].append(
         f"MLAgent: {analysis['signal']} "

@@ -10,7 +10,7 @@ import numpy as np
 from dotenv import load_dotenv
 from supabase import create_client
 
-from engine.pattern_extractor import PatternExtractor, get_seasonal_features
+from engine.pattern_extractor import PatternExtractor, get_seasonal_features, get_rate_direction
 
 load_dotenv()
 logger = logging.getLogger("pattern_matcher")
@@ -119,6 +119,19 @@ class PatternMatcher:
             )
             p["seasonal_boost"] = boost
             p["similarity"] = round(base_sim * boost, 4)
+
+        # Apply rate direction boost
+        current_rate_dir = get_rate_direction(now)
+        for p in similar:
+            pattern_rate_dir = p.get("rate_direction", "unknown")
+            if (current_rate_dir != "unknown"
+                    and pattern_rate_dir != "unknown"
+                    and current_rate_dir == pattern_rate_dir):
+                p["similarity"] = round(p["similarity"] * 1.05, 4)
+            elif (current_rate_dir != "unknown"
+                    and pattern_rate_dir != "unknown"
+                    and current_rate_dir != pattern_rate_dir):
+                p["similarity"] = round(p["similarity"] * 0.97, 4)
 
         # Re-sort by boosted similarity
         similar.sort(key=lambda p: p.get("similarity", 0), reverse=True)
