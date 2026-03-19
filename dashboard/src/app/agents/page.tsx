@@ -29,7 +29,7 @@ const AGENTS: AgentMeta[] = [
   { name: "Momentum Agent",       initials: "MO", avatarBg: "#16a34a", avatarColor: "#fff", weightLabel: "w 12%", prefix: "MomentumAgent" },
   { name: "Mean Reversion Agent", initials: "MR", avatarBg: "#d946ef", avatarColor: "#fff", weightLabel: "w 2%",  prefix: "MeanReversionAgent" },
   { name: "Seasonal Agent",      initials: "SN", avatarBg: "#FEF3C7", avatarColor: "#92400E", weightLabel: "w 4%",  prefix: "SeasonalAgent" },
-  { name: "Institutional Agent", initials: "IN", avatarBg: "#DBEAFE", avatarColor: "#1E40AF", weightLabel: "w 4%",  prefix: "InstitutionalAgent" },
+  { name: "Institutional Agent", initials: "IN", avatarBg: "#F0FDF4", avatarColor: "#14532D", weightLabel: "w 4%",  prefix: "InstitutionalAgent" },
   { name: "ML Prediction Agent",  initials: "ML", avatarBg: "#eab308", avatarColor: "#000", weightLabel: "w 11%", prefix: "MLAgent" },
   { name: "Research Agent",       initials: "RE", avatarBg: "#64748b", avatarColor: "#fff", weightLabel: "context", prefix: "ResearchAgent" },
   { name: "Risk Agent",           initials: "RI", avatarBg: "#dc2626", avatarColor: "#fff", weightLabel: "gate",   prefix: "RiskAgent" },
@@ -168,15 +168,29 @@ function parseLiquidity(line: string, data: ApiData | null): Record<string, stri
   };
 }
 
-function parseInstitutional(line: string): Record<string, string | number> {
+function parseInstitutional(line: string, data: ApiData | null): Record<string, string | number> {
+  const inst = data?.institutional;
+  if (inst) {
+    const insiderLabel = inst.insider_signal === "BULLISH"
+      ? "Smart money in acquisto"
+      : inst.insider_signal === "BEARISH"
+        ? "Smart money in vendita"
+        : "Neutro";
+    return {
+      "Insider": `${inst.insider_buy_count} acquisti / ${inst.insider_sell_count} vendite`,
+      "Smart Money": insiderLabel,
+      "ETF Flow": inst.etf_symbol
+        ? `${inst.etf_symbol} ${inst.etf_flow}${inst.etf_return_30d != null ? ` (${inst.etf_return_30d > 0 ? "+" : ""}${inst.etf_return_30d}% 30d)` : ""}`
+        : inst.etf_flow ?? "—",
+      "Ownership Ist.": inst.institutional_pct != null ? `${inst.institutional_pct}%` : "—",
+    };
+  }
+  // Fallback: parse from reasoning line
   const insiderMatch = line.match(/Insider:\s*(BULLISH|BEARISH|NEUTRAL)/);
   const etfMatch = line.match(/ETF:\s*(inflow|outflow|neutral|unknown)/);
-  // Extract detail fragments after the summary fields
-  const parts = line.split(" | ").slice(3);
   return {
     Insider: insiderMatch?.[1] ?? "—",
     "ETF Flow": etfMatch?.[1] ?? "—",
-    Dettagli: parts.slice(0, 2).join("; ") || "—",
   };
 }
 
@@ -273,6 +287,20 @@ interface IntermarketData {
   details: string[];
 }
 
+interface InstitutionalData {
+  signal: string;
+  confidence: number;
+  insider_signal: string;
+  insider_buy_count: number;
+  insider_sell_count: number;
+  insider_net_shares: string;
+  etf_flow: string;
+  etf_symbol: string;
+  etf_return_30d: number | null;
+  institutional_pct: number | null;
+  details: string[];
+}
+
 interface LiquidityData {
   signal: string;
   confidence: number;
@@ -298,6 +326,7 @@ interface ApiData {
   options?: OptionsData | null;
   liquidity?: LiquidityData | null;
   intermarket?: IntermarketData | null;
+  institutional?: InstitutionalData | null;
   history: HistoryEntry[];
 }
 
@@ -322,7 +351,7 @@ function buildCards(data: ApiData): AgentCardProps[] {
     LiquidityAgent: (line: string) => parseLiquidity(line, data),
     IntermarketAgent: (line: string) => parseIntermarket(line, data),
     SeasonalAgent: parseSeasonal,
-    InstitutionalAgent: parseInstitutional,
+    InstitutionalAgent: (line: string) => parseInstitutional(line, data),
     ResearchAgent: parseResearch,
     RiskAgent: parseRisk,
   };
@@ -456,7 +485,7 @@ const WEIGHT_TABLE: { name: string; initials: string; weight: number; color: str
   { name: "Macro",          initials: "MA", weight:  4, color: "#ea580c" },
   { name: "Intermarket",    initials: "IM", weight:  4, color: "#3730A3" },
   { name: "Seasonal",       initials: "SN", weight:  4, color: "#92400E" },
-  { name: "Institutional",  initials: "IN", weight:  4, color: "#1E40AF" },
+  { name: "Institutional",  initials: "IN", weight:  4, color: "#14532D" },
   { name: "Mean Reversion", initials: "MR", weight:  2, color: "#d946ef" },
 ];
 

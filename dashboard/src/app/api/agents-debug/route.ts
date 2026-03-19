@@ -221,6 +221,36 @@ export async function GET(request: NextRequest) {
       details: imDetailParts.filter(Boolean),
     } : null;
 
+    // Extract institutional data from reasoning
+    const instLine = reasoning.find((l: string) => l.startsWith("InstitutionalAgent:")) ?? "";
+    const instSignalMatch = instLine.match(/InstitutionalAgent:\s*(BUY|SELL|HOLD)/);
+    const instConfMatch = instLine.match(/\((\d+)%\)/);
+    const instInsiderMatch = instLine.match(/Insider:\s*(BULLISH|BEARISH|NEUTRAL)/);
+    const instEtfMatch = instLine.match(/ETF:\s*(inflow|outflow|neutral|unknown)/);
+    const instDetailParts = instLine.split(" | ").slice(3);
+
+    // Parse insider counts from detail fragments
+    const insiderBuyMatch = instLine.match(/(\d+)\s*acquist/);
+    const insiderSellMatch = instLine.match(/(\d+)\s*vendit/);
+    const insiderNetMatch = instLine.match(/net\s*([+-]?[\d,]+)\s*azioni/);
+    const ownershipMatch = instLine.match(/Ownership istituzionale\s*\w+:\s*([\d.]+)%/);
+    const etfSymbolMatch = instLine.match(/ETF\s+(\w+):/);
+    const etfReturnMatch = instLine.match(/([+-]?[\d.]+)%\s*30d/);
+
+    const institutional = instLine ? {
+      signal: instSignalMatch?.[1] ?? "HOLD",
+      confidence: instConfMatch ? parseInt(instConfMatch[1]) : 0,
+      insider_signal: instInsiderMatch?.[1] ?? "NEUTRAL",
+      insider_buy_count: insiderBuyMatch ? parseInt(insiderBuyMatch[1]) : 0,
+      insider_sell_count: insiderSellMatch ? parseInt(insiderSellMatch[1]) : 0,
+      insider_net_shares: insiderNetMatch ? insiderNetMatch[1] : "0",
+      etf_flow: instEtfMatch?.[1] ?? "unknown",
+      etf_symbol: etfSymbolMatch?.[1] ?? "",
+      etf_return_30d: etfReturnMatch ? parseFloat(etfReturnMatch[1]) : null,
+      institutional_pct: ownershipMatch ? parseFloat(ownershipMatch[1]) : null,
+      details: instDetailParts.filter(Boolean),
+    } : null;
+
     return NextResponse.json({
       ticker,
       signal: signal
@@ -234,6 +264,7 @@ export async function GET(request: NextRequest) {
       liquidity,
       options,
       intermarket,
+      institutional,
       sentiment: {
         articles_analyzed: articles.length,
         positive,
