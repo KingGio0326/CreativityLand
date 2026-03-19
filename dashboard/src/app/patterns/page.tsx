@@ -193,10 +193,24 @@ function TradingPanel({
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [kellySizing, setKellySizing] = useState<{
+    suggested_pct: number;
+    edge: number;
+    win_rate: number;
+  } | null>(null);
 
   useEffect(() => {
     setLimitPrice(currentPrice);
   }, [currentPrice]);
+
+  useEffect(() => {
+    fetch(`/api/agents-debug?ticker=${ticker}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.kelly_sizing) setKellySizing(d.kelly_sizing);
+      })
+      .catch(() => {});
+  }, [ticker]);
 
   const stopLossPrice =
     side === "buy"
@@ -331,6 +345,39 @@ function TradingPanel({
             className="w-full h-1.5 rounded-full appearance-none bg-muted/40 accent-emerald-500"
           />
         </div>
+
+        {/* Kelly position sizing */}
+        {kellySizing && (
+          <div className="rounded-lg bg-muted/20 border p-3 space-y-1 text-[11px]">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">
+                Position sizing consigliato (Kelly)
+              </span>
+              <span className="font-mono font-semibold text-sky-400">
+                {kellySizing.suggested_pct}% del capitale
+              </span>
+            </div>
+            <div className="flex gap-4 text-muted-foreground">
+              <span>
+                Edge:{" "}
+                <span
+                  className={`font-mono ${
+                    kellySizing.edge > 0 ? "text-emerald-400" : "text-red-400"
+                  }`}
+                >
+                  {kellySizing.edge > 0 ? "+" : ""}
+                  {kellySizing.edge.toFixed(3)}
+                </span>
+              </span>
+              <span>
+                Win rate:{" "}
+                <span className="font-mono text-foreground">
+                  {(kellySizing.win_rate * 100).toFixed(0)}%
+                </span>
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Order type */}
         <div className="grid grid-cols-2 gap-4">

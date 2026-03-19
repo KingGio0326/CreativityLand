@@ -223,13 +223,22 @@ function parseIntermarket(line: string, data: ApiData | null): Record<string, st
   };
 }
 
-function parseRisk(line: string): Record<string, string | number> {
+function parseRisk(line: string, data: ApiData | null): Record<string, string | number> {
   const level = line.match(/→\s*(HIGH|MEDIUM|LOW)/)?.[1] ?? "—";
-  return {
+  const kelly = data?.kelly_sizing;
+  const result: Record<string, string | number> = {
     "Risk Level": level,
     Volatility: extractKV(line, "volatility") ?? "—",
     Drawdown: extractKV(line, "drawdown") ?? "—",
   };
+  if (kelly) {
+    result["Kelly Sizing"] = `${kelly.suggested_pct}% capitale`;
+    result["Edge"] = kelly.edge > 0
+      ? `+${kelly.edge.toFixed(3)} (positivo)`
+      : `${kelly.edge.toFixed(3)} (negativo)`;
+    result["Win Rate"] = `${(kelly.win_rate * 100).toFixed(0)}%`;
+  }
+  return result;
 }
 
 /* ── types ─────────────────────────────────────────────── */
@@ -312,6 +321,12 @@ interface LiquidityData {
   vix: { value: number; regime: string } | null;
 }
 
+interface KellySizing {
+  suggested_pct: number;
+  edge: number;
+  win_rate: number;
+}
+
 interface ApiData {
   ticker: string;
   signal: {
@@ -327,6 +342,7 @@ interface ApiData {
   liquidity?: LiquidityData | null;
   intermarket?: IntermarketData | null;
   institutional?: InstitutionalData | null;
+  kelly_sizing?: KellySizing | null;
   history: HistoryEntry[];
 }
 
@@ -353,7 +369,7 @@ function buildCards(data: ApiData): AgentCardProps[] {
     SeasonalAgent: parseSeasonal,
     InstitutionalAgent: (line: string) => parseInstitutional(line, data),
     ResearchAgent: parseResearch,
-    RiskAgent: parseRisk,
+    RiskAgent: (line: string) => parseRisk(line, data),
   };
 
   return AGENTS.map((agent) => {

@@ -251,6 +251,20 @@ export async function GET(request: NextRequest) {
       details: instDetailParts.filter(Boolean),
     } : null;
 
+    // Extract Kelly sizing from reasoning
+    const kellyLine = reasoning.find((l: string) =>
+      l.startsWith("RiskAgent: Kelly sizing"),
+    ) ?? "";
+    const kellyPctMatch = kellyLine.match(/→\s*([\d.]+)%\s*capitale/);
+    const kellyEdgeMatch = kellyLine.match(/edge=([\d.-]+)/);
+    const kellyWrMatch = kellyLine.match(/win_rate=([\d.]+)/);
+
+    const kelly_sizing = kellyLine ? {
+      suggested_pct: kellyPctMatch ? parseFloat(kellyPctMatch[1]) : 0,
+      edge: kellyEdgeMatch ? parseFloat(kellyEdgeMatch[1]) : 0,
+      win_rate: kellyWrMatch ? parseFloat(kellyWrMatch[1]) : 0.55,
+    } : null;
+
     return NextResponse.json({
       ticker,
       signal: signal
@@ -265,6 +279,7 @@ export async function GET(request: NextRequest) {
       options,
       intermarket,
       institutional,
+      kelly_sizing,
       sentiment: {
         articles_analyzed: articles.length,
         positive,
