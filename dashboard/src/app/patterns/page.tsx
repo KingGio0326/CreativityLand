@@ -149,6 +149,18 @@ function fmtDateFull(d: string) {
   });
 }
 
+function fmtMonthYear(d: string) {
+  return new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function normalizeTo100(values: number[]): (number | null)[] {
+  if (values.length === 0) return [];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  return values.map((v) => Math.round(((v - min) / range) * 10000) / 100);
+}
+
 /* ── portfolio types ───────────────────────────────────── */
 interface Position {
   symbol: string;
@@ -603,6 +615,10 @@ export default function PatternsPage() {
   const currentDates = data?.current?.dates ?? [];
   const similarList = data?.similar ?? [];
   const bestPrices = parsePrices(best?.prices);
+  const match2 = similarList[1] ?? null;
+  const match3 = similarList[2] ?? null;
+  const match2Prices = parsePrices(match2?.prices);
+  const match3Prices = parsePrices(match3?.prices);
 
   const currentChartData = currentDates.map((d, i) => ({
     date: fmtDate(d),
@@ -614,22 +630,32 @@ export default function PatternsPage() {
     value: Math.round(p * 10000) / 10000,
   }));
 
-  // Overlay: both normalized from 0%
+  // Overlay: all series normalized to 0-100 scale
+  const curNorm = normalizeTo100(currentPrices);
+  const m1Norm = normalizeTo100(bestPrices);
+  const m2Norm = normalizeTo100(match2Prices);
+  const m3Norm = normalizeTo100(match3Prices);
+
   const overlayData =
     currentPrices.length > 0
-      ? Array.from({ length: 30 }, (_, i) => {
-          const base0 = currentPrices[0];
-          const currentNorm =
-            ((currentPrices[i] ?? currentPrices[currentPrices.length - 1]) - base0) /
-            (base0 || 1) * 100;
-          const historicNorm = bestPrices.length > 0 ? bestPrices[i] * 100 : null;
-          return {
-            day: i + 1,
-            current: Math.round(currentNorm * 100) / 100,
-            historic: historicNorm != null ? Math.round(historicNorm * 100) / 100 : null,
-          };
-        })
+      ? Array.from({ length: 30 }, (_, i) => ({
+          day: i + 1,
+          current: curNorm[i] ?? null,
+          match1: m1Norm[i] ?? null,
+          match2: m2Norm[i] ?? null,
+          match3: m3Norm[i] ?? null,
+        }))
       : [];
+
+  // Consensus stats
+  const allMatches = [best, match2, match3].filter(Boolean) as SimilarPattern[];
+  const positiveCount5d = allMatches.filter((m) => (m.outcome_5d ?? 0) > 0).length;
+  const positiveCount10d = allMatches.filter((m) => (m.outcome_10d ?? 0) > 0).length;
+  const positiveCount20d = allMatches.filter((m) => (m.outcome_20d ?? 0) > 0).length;
+  const avg = (vals: number[]) => vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : null;
+  const avgReturn5d = avg(allMatches.filter((m) => m.outcome_5d != null).map((m) => m.outcome_5d!));
+  const avgReturn10d = avg(allMatches.filter((m) => m.outcome_10d != null).map((m) => m.outcome_10d!));
+  const avgReturn20d = avg(allMatches.filter((m) => m.outcome_20d != null).map((m) => m.outcome_20d!));
 
   return (
     <div className="space-y-6">
@@ -834,59 +860,113 @@ export default function PatternsPage() {
             </div>
           </div>
 
-          {/* ── SECTION 3: Overlay ─────────────────────── */}
+          {/* ── SECTION 3: Overlay top 3 patterns ────── */}
           {best && (
-            <div className="rounded-xl border bg-card p-5">
-              <p className="text-sm font-semibold mb-4">Overlay Comparativo</p>
-              <ResponsiveContainer width="100%" height={260}>
-                <ComposedChart data={overlayData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="day"
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                    tickFormatter={(v: number) => `${v}%`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 8,
-                      fontSize: 11,
-                    }}
-                    formatter={(v: number, name: string) => [
-                      `${v.toFixed(2)}%`,
-                      name === "current" ? "Attuale" : `Storico (${fmtDateFull(best.end_date)})`,
-                    ]}
-                  />
-                  <Legend
-                    formatter={(value: string) =>
-                      value === "current"
-                        ? "Attuale"
-                        : `Storico (${fmtDateFull(best.end_date)})`
-                    }
-                    wrapperStyle={{ fontSize: 11 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="current"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="historic"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    strokeDasharray="6 3"
-                    dot={false}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
+            <>
+              <div className="rounded-xl border bg-card p-5">
+                <p className="text-sm font-semibold mb-4">Overlay Comparativo — Top 3 Pattern</p>
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={overlayData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="day"
+                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                      domain={[0, 100]}
+                      tickFormatter={(v: number) => `${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: 8,
+                        fontSize: 11,
+                      }}
+                      formatter={(v: number, name: string) => {
+                        const label =
+                          name === "current" ? "Attuale"
+                            : name === "match1" ? "Match #1"
+                              : name === "match2" ? "Match #2"
+                                : "Match #3";
+                        return [v != null ? v.toFixed(1) : "—", label];
+                      }}
+                    />
+                    <Legend
+                      formatter={(value: string) => {
+                        if (value === "current") return "Attuale";
+                        if (value === "match1" && best)
+                          return `Match #1 (sim: ${(best.similarity * 100).toFixed(0)}%) — ${fmtMonthYear(best.end_date)}`;
+                        if (value === "match2" && match2)
+                          return `Match #2 (sim: ${(match2.similarity * 100).toFixed(0)}%) — ${fmtMonthYear(match2.end_date)}`;
+                        if (value === "match3" && match3)
+                          return `Match #3 (sim: ${(match3.similarity * 100).toFixed(0)}%) — ${fmtMonthYear(match3.end_date)}`;
+                        return value;
+                      }}
+                      wrapperStyle={{ fontSize: 11 }}
+                    />
+                    <Line type="monotone" dataKey="current" stroke="#3B82F6" strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="match1" stroke="#F59E0B" strokeWidth={2} strokeDasharray="6 3" dot={false} />
+                    {match2 && (
+                      <Line type="monotone" dataKey="match2" stroke="#10B981" strokeWidth={2} strokeDasharray="6 3" dot={false} />
+                    )}
+                    {match3 && (
+                      <Line type="monotone" dataKey="match3" stroke="#8B5CF6" strokeWidth={2} strokeDasharray="6 3" dot={false} />
+                    )}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* ── Consensus storico ──────────────────────── */}
+              {allMatches.length > 0 && (
+                <div className="rounded-xl border bg-card p-5 space-y-3">
+                  <p className="text-sm font-semibold">Consensus Storico</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="rounded-lg bg-muted/20 border p-3 space-y-1">
+                      <p className="text-[11px] text-muted-foreground">5 giorni</p>
+                      <p className={`text-lg font-bold font-mono ${positiveCount5d > allMatches.length / 2 ? "text-emerald-400" : positiveCount5d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
+                        {positiveCount5d}/{allMatches.length} rialzo
+                      </p>
+                      {avgReturn5d != null && (
+                        <p className={`text-xs font-mono ${avgReturn5d >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          media: {avgReturn5d >= 0 ? "+" : ""}{avgReturn5d}%
+                        </p>
+                      )}
+                    </div>
+                    <div className="rounded-lg bg-muted/20 border p-3 space-y-1">
+                      <p className="text-[11px] text-muted-foreground">10 giorni</p>
+                      <p className={`text-lg font-bold font-mono ${positiveCount10d > allMatches.length / 2 ? "text-emerald-400" : positiveCount10d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
+                        {positiveCount10d}/{allMatches.length} rialzo
+                      </p>
+                      {avgReturn10d != null && (
+                        <p className={`text-xs font-mono ${avgReturn10d >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          media: {avgReturn10d >= 0 ? "+" : ""}{avgReturn10d}%
+                        </p>
+                      )}
+                    </div>
+                    <div className="rounded-lg bg-muted/20 border p-3 space-y-1">
+                      <p className="text-[11px] text-muted-foreground">20 giorni</p>
+                      <p className={`text-lg font-bold font-mono ${positiveCount20d > allMatches.length / 2 ? "text-emerald-400" : positiveCount20d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
+                        {positiveCount20d}/{allMatches.length} rialzo
+                      </p>
+                      {avgReturn20d != null && (
+                        <p className={`text-xs font-mono ${avgReturn20d >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          media: {avgReturn20d >= 0 ? "+" : ""}{avgReturn20d}%
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {positiveCount5d === allMatches.length
+                      ? `Tutti i ${allMatches.length} pattern storici simili hanno portato a un rialzo nei 5gg successivi`
+                      : positiveCount5d === 0
+                        ? `Nessuno dei ${allMatches.length} pattern storici simili ha portato a un rialzo nei 5gg successivi`
+                        : `${positiveCount5d}/${allMatches.length} pattern storici simili hanno portato a un rialzo nei 5gg successivi`}
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           {/* ── Regime context note ────────────────────── */}
