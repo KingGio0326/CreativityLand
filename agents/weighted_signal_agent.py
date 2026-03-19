@@ -7,10 +7,11 @@ WEIGHTS = {
     "technical":      0.11,
     "ml_prediction":  0.11,
     "liquidity":      0.08,
-    "macro":          0.04,
-    "mean_reversion": 0.06,
     "options":        0.06,
+    "mean_reversion": 0.04,
+    "macro":          0.04,
     "intermarket":    0.04,
+    "seasonal":       0.04,
 }
 
 
@@ -55,6 +56,18 @@ def _intermarket_as_source(state: TradingState) -> dict:
     }
 
 
+def _seasonal_as_source(state: TradingState) -> dict:
+    """Convert seasonal agent output to standard source format."""
+    sig = state.get("seasonal_signal")
+    if not sig:
+        return {}
+    return {
+        "signal": sig,
+        "confidence": state.get("seasonal_confidence", 0) / 100,
+        "available": True,
+    }
+
+
 def weighted_vote(state: TradingState) -> dict:
     sources = {
         "sentiment":      state.get("sentiment_summary", {}),
@@ -67,6 +80,7 @@ def weighted_vote(state: TradingState) -> dict:
         "options":        _options_as_source(state),
         "macro":          state.get("macro_analysis", {}),
         "intermarket":    _intermarket_as_source(state),
+        "seasonal":       _seasonal_as_source(state),
     }
 
     total_weight = 0

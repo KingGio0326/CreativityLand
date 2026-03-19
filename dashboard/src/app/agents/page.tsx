@@ -27,7 +27,8 @@ const AGENTS: AgentMeta[] = [
   { name: "Macro Agent",          initials: "MA", avatarBg: "#ea580c", avatarColor: "#fff", weightLabel: "w 4%",  prefix: "MacroAgent" },
   { name: "Intermarket Agent",    initials: "IM", avatarBg: "#EEF2FF", avatarColor: "#3730A3", weightLabel: "w 4%",  prefix: "IntermarketAgent" },
   { name: "Momentum Agent",       initials: "MO", avatarBg: "#16a34a", avatarColor: "#fff", weightLabel: "w 12%", prefix: "MomentumAgent" },
-  { name: "Mean Reversion Agent", initials: "MR", avatarBg: "#d946ef", avatarColor: "#fff", weightLabel: "w 6%",  prefix: "MeanReversionAgent" },
+  { name: "Mean Reversion Agent", initials: "MR", avatarBg: "#d946ef", avatarColor: "#fff", weightLabel: "w 4%",  prefix: "MeanReversionAgent" },
+  { name: "Seasonal Agent",      initials: "SN", avatarBg: "#FEF3C7", avatarColor: "#92400E", weightLabel: "w 4%",  prefix: "SeasonalAgent" },
   { name: "ML Prediction Agent",  initials: "ML", avatarBg: "#eab308", avatarColor: "#000", weightLabel: "w 11%", prefix: "MLAgent" },
   { name: "Research Agent",       initials: "RE", avatarBg: "#64748b", avatarColor: "#fff", weightLabel: "context", prefix: "ResearchAgent" },
   { name: "Risk Agent",           initials: "RI", avatarBg: "#dc2626", avatarColor: "#fff", weightLabel: "gate",   prefix: "RiskAgent" },
@@ -166,6 +167,19 @@ function parseLiquidity(line: string, data: ApiData | null): Record<string, stri
   };
 }
 
+function parseSeasonal(line: string): Record<string, string | number> {
+  const effectsMatch = line.match(/Effetti attivi:\s*([^|]+)/);
+  const bullishMatch = line.match(/Bullish:\s*(\d+)/);
+  const bearishMatch = line.match(/Bearish:\s*(\d+)/);
+  const volatileMatch = line.match(/Volatile:\s*(\d+)/);
+  return {
+    "Effetti": effectsMatch ? effectsMatch[1].trim() : "—",
+    "Bullish": bullishMatch ? parseInt(bullishMatch[1]) : 0,
+    "Bearish": bearishMatch ? parseInt(bearishMatch[1]) : 0,
+    "Volatile": volatileMatch ? parseInt(volatileMatch[1]) : 0,
+  };
+}
+
 function parseIntermarket(line: string, data: ApiData | null): Record<string, string | number> {
   const im = data?.intermarket;
   if (im) {
@@ -294,6 +308,7 @@ function buildCards(data: ApiData): AgentCardProps[] {
     OptionsAgent: (line: string) => parseOptions(line, data),
     LiquidityAgent: (line: string) => parseLiquidity(line, data),
     IntermarketAgent: (line: string) => parseIntermarket(line, data),
+    SeasonalAgent: parseSeasonal,
     ResearchAgent: parseResearch,
     RiskAgent: parseRisk,
   };
@@ -424,9 +439,10 @@ const WEIGHT_TABLE: { name: string; initials: string; weight: number; color: str
   { name: "ML Prediction",  initials: "ML", weight: 11, color: "#eab308" },
   { name: "Liquidity",      initials: "LI", weight:  8, color: "#10b981" },
   { name: "Options",        initials: "OP", weight:  6, color: "#b45309" },
-  { name: "Mean Reversion", initials: "MR", weight:  6, color: "#d946ef" },
+  { name: "Mean Reversion", initials: "MR", weight:  4, color: "#d946ef" },
   { name: "Macro",          initials: "MA", weight:  4, color: "#ea580c" },
   { name: "Intermarket",    initials: "IM", weight:  4, color: "#3730A3" },
+  { name: "Seasonal",       initials: "SN", weight:  4, color: "#92400E" },
 ];
 
 function WeightedVotingCard({
