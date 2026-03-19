@@ -33,7 +33,9 @@ class MacroAgent:
         return count >= 2
 
     def analyze_causal_impact(
-        self, ticker: str, articles: list[dict]
+        self, ticker: str, articles: list[dict],
+        research_context: str = "",
+        research_papers_count: int = 0,
     ) -> dict:
         if not self.enabled:
             return {
@@ -66,6 +68,15 @@ Rispondi SOLO con JSON valido, niente altro:
   "relevant_events": ["lista eventi"],
   "time_horizon": "immediate"|"short_term"|"long_term"
 }}"""
+        if research_context and research_papers_count > 0:
+            prompt += f"""
+
+CONTESTO LETTERATURA ACCADEMICA RECENTE:
+{research_context}
+
+Considera questi insights accademici nella tua analisi macro,
+specialmente se confermano o contraddicono i segnali di mercato.
+"""
         try:
             response = self.client.messages.create(
                 model=self.model, max_tokens=500,
@@ -143,9 +154,13 @@ Rispondi SOLO con JSON valido, niente altro:
 
 def macro_agent_node(state: TradingState) -> TradingState:
     agent = MacroAgent()
+    research_context = state.get("historical_context", "")
+    research_papers_count = state.get("research_papers_count", 0)
     if agent.is_macro_relevant(state["articles"]):
         analysis = agent.analyze_causal_impact(
-            state["ticker"], state["articles"]
+            state["ticker"], state["articles"],
+            research_context=research_context,
+            research_papers_count=research_papers_count,
         )
         state["macro_analysis"] = analysis
         state["reasoning"].append(
@@ -153,6 +168,10 @@ def macro_agent_node(state: TradingState) -> TradingState:
             f"(magnitude={analysis['impact_magnitude']}, "
             f"direction={analysis['impact_direction']})"
         )
+        if research_context and research_papers_count > 0:
+            state["reasoning"].append(
+                f"MacroAgent: integrato insight da {research_papers_count} paper arXiv"
+            )
     else:
         state["macro_analysis"] = {
             "has_macro_impact": False,
