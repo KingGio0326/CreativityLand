@@ -161,6 +161,35 @@ def pattern_multiplier(
         return round(penalty, 3)
 
 
+def research_confidence_modifier(
+    research_context: str,
+    pipeline_signal: str,
+) -> float:
+    """Return a confidence multiplier based on how much
+    academic literature supports or contradicts the signal."""
+    if not research_context or len(research_context) < 50:
+        return 1.0
+
+    context_lower = research_context.lower()
+
+    confirms = any(word in context_lower for word in [
+        "conferma", "supporta", "concorda", "bullish",
+        "confirms", "supports", "agrees", "positive",
+    ])
+
+    contradicts = any(word in context_lower for word in [
+        "smentisce", "contraddice", "bearish", "negativo",
+        "contradicts", "opposes", "negative", "against",
+    ])
+
+    if confirms and not contradicts:
+        return 1.05
+    elif contradicts and not confirms:
+        return 0.95
+    else:
+        return 1.0
+
+
 def weighted_signal_node(state: TradingState) -> TradingState:
     result = weighted_vote(state)
 
@@ -174,6 +203,13 @@ def weighted_signal_node(state: TradingState) -> TradingState:
     )
     base_confidence = result["confidence"]
     final_confidence = min(base_confidence * mult, 1.0)
+
+    # Apply research context modifier
+    research_context = state.get("historical_context", "")
+    research_mod = research_confidence_modifier(
+        research_context, result["signal"]
+    )
+    final_confidence = min(final_confidence * research_mod, 1.0)
 
     state["proposed_signal"] = result["signal"]
     state["confidence"] = round(final_confidence, 3)
@@ -196,6 +232,15 @@ def weighted_signal_node(state: TradingState) -> TradingState:
             f"PatternMatching: SMENTISCE segnale "
             f"(similarity={pat_sim:.2f}, "
             f"penalita=-{(1 - mult) * 100:.0f}%)"
+        )
+
+    if research_mod > 1.0:
+        state["reasoning"].append(
+            "ResearchAgent: letteratura accademica CONFERMA il segnale (+5%)"
+        )
+    elif research_mod < 1.0:
+        state["reasoning"].append(
+            "ResearchAgent: letteratura accademica SMENTISCE il segnale (-5%)"
         )
 
     state["vote_breakdown"] = result
