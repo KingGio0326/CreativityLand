@@ -265,19 +265,6 @@ class PatternExtractor:
         spy_prices, spy_dates = self._load_spy_data()
         tlt_prices, tlt_dates = self._load_tlt_data()
 
-        # Controlla pattern gia esistenti
-        existing = (
-            self.supabase.table("price_patterns")
-            .select("id", count="exact")
-            .eq("ticker", ticker)
-            .execute()
-        )
-        existing_count = existing.count or 0
-
-        if existing_count > 500:
-            logger.info(f"{ticker}: gia {existing_count} pattern, skip")
-            return 0
-
         window = 30
         batch = []
         saved = 0
@@ -366,17 +353,21 @@ class PatternExtractor:
                 }
             )
 
-            # Batch insert ogni 500 righe
+            # Batch upsert ogni 500 righe
             if len(batch) >= 500:
-                self.supabase.table("price_patterns").upsert(batch).execute()
+                self.supabase.table("price_patterns").upsert(
+                    batch, on_conflict="ticker,start_date",
+                ).execute()
                 saved += len(batch)
                 batch = []
                 logger.info(f"{ticker}: salvati {saved} pattern...")
                 time.sleep(0.3)
 
-        # Insert rimanenti
+        # Upsert rimanenti
         if batch:
-            self.supabase.table("price_patterns").upsert(batch).execute()
+            self.supabase.table("price_patterns").upsert(
+                batch, on_conflict="ticker,start_date",
+            ).execute()
             saved += len(batch)
 
         logger.info(f"{ticker}: totale {saved} pattern salvati")

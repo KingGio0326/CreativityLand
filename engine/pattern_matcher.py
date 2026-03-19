@@ -113,28 +113,29 @@ class PatternMatcher:
         # Apply seasonal similarity boost
         now = datetime.now()
         for p in similar:
-            base_sim = p.get("similarity", 0)
-            boost = seasonal_similarity_boost(
+            base_sim = float(p.get("similarity", 0) or 0)
+            boost = float(seasonal_similarity_boost(
                 now, p.get("end_date", "")
-            )
+            ))
             p["seasonal_boost"] = boost
             p["similarity"] = round(base_sim * boost, 4)
 
         # Apply rate direction boost
         current_rate_dir = get_rate_direction(now)
         for p in similar:
+            sim = float(p.get("similarity", 0) or 0)
             pattern_rate_dir = p.get("rate_direction", "unknown")
             if (current_rate_dir != "unknown"
                     and pattern_rate_dir != "unknown"
                     and current_rate_dir == pattern_rate_dir):
-                p["similarity"] = round(p["similarity"] * 1.05, 4)
+                p["similarity"] = round(sim * 1.05, 4)
             elif (current_rate_dir != "unknown"
                     and pattern_rate_dir != "unknown"
                     and current_rate_dir != pattern_rate_dir):
-                p["similarity"] = round(p["similarity"] * 0.97, 4)
+                p["similarity"] = round(sim * 0.97, 4)
 
         # Re-sort by boosted similarity
-        similar.sort(key=lambda p: p.get("similarity", 0), reverse=True)
+        similar.sort(key=lambda p: float(p.get("similarity", 0) or 0), reverse=True)
 
         # Analyze outcomes of similar patterns
         outcomes_5d = [
