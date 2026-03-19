@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -181,6 +182,20 @@ export default function DashboardPage() {
           </div>
           <AgentChat ticker={selectedTicker} />
         </div>
+      </div>
+
+      {/* Guide link */}
+      <div className="rounded-xl border bg-card px-5 py-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">Non sai come leggere i segnali?</p>
+          <p className="text-xs text-muted-foreground">Scopri come funziona ogni agente e come interpretare i dati.</p>
+        </div>
+        <Link
+          href="/guide"
+          className="text-sm font-medium text-primary hover:underline whitespace-nowrap"
+        >
+          Scopri come funziona ogni agente &rarr;
+        </Link>
       </div>
 
       {/* Latest News */}

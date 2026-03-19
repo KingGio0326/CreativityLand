@@ -28,6 +28,7 @@ const navLinks = [
   { href: "/patterns", label: "Patterns" },
   { href: "/performance", label: "Performance" },
   { href: "/correlation", label: "Correlazioni" },
+  { href: "/guide", label: "Guida" },
 ];
 
 export default function RootLayout({
