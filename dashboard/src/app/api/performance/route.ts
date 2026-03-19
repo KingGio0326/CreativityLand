@@ -118,6 +118,19 @@ export async function GET(request: NextRequest) {
       },
     );
 
+    // 5. ML walk-forward validation
+    let mlValidation = null;
+    try {
+      const mlRes = await supabase
+        .from("ml_validation")
+        .select("*")
+        .eq("ticker", ticker)
+        .maybeSingle();
+      mlValidation = mlRes.data ?? null;
+    } catch {
+      // table may not exist yet
+    }
+
     const alpha =
       perf?.alpha != null
         ? (perf.alpha as number)
@@ -140,6 +153,7 @@ export async function GET(request: NextRequest) {
         worst_signal: worstSignal,
       },
       chart_data: chartData,
+      ml_validation: mlValidation,
     });
   } catch (err) {
     console.error("Performance API error:", err);

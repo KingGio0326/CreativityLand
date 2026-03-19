@@ -52,11 +52,24 @@ interface ChartPoint {
   spy_cumulative: number;
 }
 
+interface MLValidation {
+  ticker: string;
+  avg_accuracy: number;
+  std_accuracy: number;
+  min_accuracy: number;
+  max_accuracy: number;
+  n_splits: number;
+  fold_accuracies: number[];
+  is_reliable: boolean;
+  updated_at: string;
+}
+
 interface PerfData {
   ticker: string;
   evaluations: Evaluation[];
   stats: Stats;
   chart_data: ChartPoint[];
+  ml_validation: MLValidation | null;
 }
 
 /* ── helpers ──────────────────────────────────────────── */
@@ -335,7 +348,62 @@ export default function PerformancePage() {
             </div>
           </div>
 
-          {/* ── SECTION 4: Status message ─────────────── */}
+          {/* ── SECTION 4: ML Walk-Forward Validation ── */}
+          {data.ml_validation && (
+            <div className={`rounded-xl border p-5 ${
+              data.ml_validation.is_reliable
+                ? "bg-emerald-500/5 border-emerald-500/25"
+                : "bg-red-500/5 border-red-500/25"
+            }`}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">Affidabilit&agrave; ML (Walk-Forward)</p>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                  data.ml_validation.is_reliable
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                    : "bg-red-500/15 text-red-400 border-red-500/30"
+                }`}>
+                  {data.ml_validation.is_reliable ? "Affidabile" : "Non affidabile"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Accuracy media</p>
+                  <p className="text-lg font-bold font-mono">
+                    {(data.ml_validation.avg_accuracy * 100).toFixed(1)}%
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      &plusmn; {(data.ml_validation.std_accuracy * 100).toFixed(1)}%
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Range</p>
+                  <p className="text-lg font-bold font-mono">
+                    {(data.ml_validation.min_accuracy * 100).toFixed(1)}% - {(data.ml_validation.max_accuracy * 100).toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Fold accuracies</p>
+                  <div className="flex items-end gap-0.5 h-6 mt-1">
+                    {(data.ml_validation.fold_accuracies ?? []).map((acc, i) => (
+                      <div
+                        key={i}
+                        className={`w-3 rounded-sm ${acc > 0.52 ? "bg-emerald-500" : "bg-red-500"}`}
+                        style={{ height: `${Math.max(20, (acc - 0.4) * 200)}%` }}
+                        title={`Fold ${i + 1}: ${(acc * 100).toFixed(1)}%`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {data.ml_validation.updated_at && (
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Ultimo aggiornamento: {new Date(data.ml_validation.updated_at).toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── SECTION 5: Status message ─────────────── */}
           <div className={`rounded-xl border p-5 ${
             stats.total_signals >= 30
               ? "bg-emerald-500/5 border-emerald-500/25"
