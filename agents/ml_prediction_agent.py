@@ -1,15 +1,37 @@
+import logging
 import os
 import time
-import yfinance as yf
-import pandas as pd
-import numpy as np
-import ta
+from datetime import datetime
+
 import joblib
+import numpy as np
+import pandas as pd
+import ta
+import yfinance as yf
+from dotenv import load_dotenv
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import TimeSeriesSplit
+from supabase import create_client
+
 from agents import TradingState
 
+load_dotenv()
+logger = logging.getLogger("ml_prediction_agent")
+
 MODEL_DIR = "models/"
+
+_supabase = None
+
+
+def _get_supabase():
+    global _supabase
+    if _supabase is None:
+        _supabase = create_client(
+            os.getenv("SUPABASE_URL", ""),
+            os.getenv("SUPABASE_KEY", ""),
+        )
+    return _supabase
 
 
 def encode_rate_direction(direction: str) -> float:
@@ -100,6 +122,93 @@ class MLPredictionAgent:
         print(f"  Model {ticker}: accuracy={acc:.1%}")
         return acc
 
+    def walk_forward_validate(
+        self,
+        ticker: str,
+        n_splits: int = 5,
+        min_train_size: int = 252,
+        test_size: int = 63,
+    ) -> dict:
+        """
+        Walk-forward validation: divide dati in finestre temporali
+        sequenziali, allena su passato, testa su futuro.
+        """
+        try:
+            df = self.build_features(ticker)
+            if len(df) < min_train_size + test_size:
+                return {
+                    "avg_accuracy": 0.5, "std_accuracy": 0.0,
+                    "min_accuracy": 0.5, "max_accuracy": 0.5,
+                    "n_splits": 0, "fold_accuracies": [],
+                    "is_reliable": False,
+                    "error": "Dati insufficienti",
+                }
+
+            X = df.drop(columns=["target"]).values
+            y = df["target"].values
+
+            tscv = TimeSeriesSplit(
+                n_splits=n_splits,
+                test_size=test_size,
+            )
+
+            accuracies = []
+            for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
+                if len(train_idx) < min_train_size:
+                    continue
+
+                X_train, X_test = X[train_idx], X[test_idx]
+                y_train, y_test = y[train_idx], y[test_idx]
+
+                model_fold = GradientBoostingClassifier(
+                    n_estimators=100, max_depth=4,
+                    learning_rate=0.05, subsample=0.8,
+                    random_state=42,
+                )
+                model_fold.fit(X_train, y_train)
+
+                acc = accuracy_score(y_test, model_fold.predict(X_test))
+                accuracies.append(acc)
+
+                logger.info(
+                    "Walk-forward %s fold %d/%d: acc=%.3f "
+                    "(train=%d, test=%d)",
+                    ticker, fold + 1, n_splits,
+                    acc, len(train_idx), len(test_idx),
+                )
+
+            if not accuracies:
+                return {
+                    "avg_accuracy": 0.5, "std_accuracy": 0.0,
+                    "min_accuracy": 0.5, "max_accuracy": 0.5,
+                    "n_splits": 0, "fold_accuracies": [],
+                    "is_reliable": False,
+                    "error": "Nessun fold valido",
+                }
+
+            avg_acc = float(np.mean(accuracies))
+            std_acc = float(np.std(accuracies))
+
+            return {
+                "avg_accuracy": round(avg_acc, 4),
+                "std_accuracy": round(std_acc, 4),
+                "min_accuracy": round(float(min(accuracies)), 4),
+                "max_accuracy": round(float(max(accuracies)), 4),
+                "n_splits": len(accuracies),
+                "fold_accuracies": [round(a, 4) for a in accuracies],
+                "is_reliable": std_acc < 0.10 and avg_acc > 0.52,
+            }
+
+        except Exception as e:
+            logger.warning("Walk-forward error %s: %s", ticker, e)
+            return {
+                "avg_accuracy": 0.5, "std_accuracy": 0.0,
+                "min_accuracy": 0.5, "max_accuracy": 0.5,
+                "n_splits": 0, "fold_accuracies": [],
+                "is_reliable": False,
+                "error": str(e),
+            }
+
     def predict(self, ticker: str, rate_direction: str = "unknown") -> dict:
         path = f"{MODEL_DIR}{ticker.replace('-', '_')}_gb.pkl"
         retrain = (
@@ -139,6 +248,29 @@ class MLPredictionAgent:
                   else "SELL" if prob_up < 0.35
                   else "HOLD")
         confidence = min(abs(prob_up - 0.5) * 2, 1.0)
+
+        # Load walk-forward validation results
+        is_reliable = False
+        wf_avg_acc = 0.5
+        try:
+            val = (_get_supabase().table("ml_validation")
+                   .select("*")
+                   .eq("ticker", ticker)
+                   .maybe_single()
+                   .execute())
+            if val.data:
+                is_reliable = val.data.get("is_reliable", False)
+                wf_avg_acc = val.data.get("avg_accuracy", 0.5)
+        except Exception:
+            pass
+
+        reasoning_suffix = ""
+        if not is_reliable:
+            confidence *= 0.75
+            reasoning_suffix = " (modello non affidabile)"
+        else:
+            reasoning_suffix = f" (wf_acc={wf_avg_acc:.2f})"
+
         return {
             "signal": signal, "confidence": confidence,
             "prob_up": round(prob_up, 3),
@@ -146,17 +278,45 @@ class MLPredictionAgent:
             "top_features": [f"{k}={v:.3f}" for k, v in top5],
             "model_accuracy": round(acc, 3),
             "days_since_training": age_days,
+            "wf_reliable": is_reliable,
+            "wf_avg_accuracy": round(wf_avg_acc, 3),
             "reasoning": (
                 f"prob_up={prob_up:.1%}, "
                 f"acc={acc:.1%}, age={age_days}d"
-            )
+                + reasoning_suffix
+            ),
         }
 
     def retrain_all(self, tickers: list[str]) -> None:
+        sb = _get_supabase()
         for t in tickers:
             try:
                 acc = self.train(t)
                 print(f"  {t} retrained: acc={acc:.1%}")
+
+                # Walk-forward validation
+                wf = self.walk_forward_validate(t)
+                logger.info(
+                    "Walk-forward %s: avg_acc=%.3f ± %.3f | reliable=%s",
+                    t, wf["avg_accuracy"], wf["std_accuracy"],
+                    wf["is_reliable"],
+                )
+
+                try:
+                    sb.table("ml_validation").upsert({
+                        "ticker": t,
+                        "avg_accuracy": wf["avg_accuracy"],
+                        "std_accuracy": wf["std_accuracy"],
+                        "min_accuracy": wf.get("min_accuracy"),
+                        "max_accuracy": wf.get("max_accuracy"),
+                        "n_splits": wf["n_splits"],
+                        "fold_accuracies": wf.get("fold_accuracies", []),
+                        "is_reliable": wf["is_reliable"],
+                        "updated_at": datetime.now().isoformat(),
+                    }).execute()
+                except Exception as e:
+                    logger.warning("ML validation save error %s: %s", t, e)
+
             except Exception as e:
                 print(f"  {t} failed: {e}")
 
