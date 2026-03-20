@@ -65,7 +65,7 @@ export default function FloatingSidebar() {
               display: "flex",
               alignItems: "center",
               width: "100%",
-              height: 48,
+              height: 56,
               paddingLeft: 18,
               gap: 12,
               textDecoration: "none",
@@ -96,8 +96,8 @@ export default function FloatingSidebar() {
             {/* Icona */}
             <div
               style={{
-                width: 28,
-                height: 28,
+                width: 36,
+                height: 36,
                 flexShrink: 0,
                 display: "flex",
                 alignItems: "center",
@@ -115,8 +115,8 @@ export default function FloatingSidebar() {
               <Image
                 src={item.icon}
                 alt={item.label}
-                width={20}
-                height={20}
+                width={30}
+                height={30}
                 style={{
                   opacity: isActive ? 1 : 0.45,
                   filter: isActive

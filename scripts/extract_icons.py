@@ -27,7 +27,7 @@ cell_h = h // rows
 
 # Taglia solo la parte icona (72% altezza cella, senza la label testo sotto)
 icon_area_h = int(cell_h * 0.72)
-pad = int(cell_w * 0.1)
+pad = int(cell_w * 0.05)
 
 os.makedirs("dashboard/public/icons", exist_ok=True)
 
@@ -38,7 +38,7 @@ for name, col, row in icons:
     y2 = y1 + icon_area_h - pad
 
     crop = img.crop((x1, y1, x2, y2))
-    crop = crop.resize((48, 48), Image.LANCZOS)
+    crop = crop.resize((80, 80), Image.LANCZOS)
     out = f"dashboard/public/icons/{name}.png"
     crop.save(out, "PNG")
     print(f"OK: {out}")
