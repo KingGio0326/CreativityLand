@@ -492,14 +492,38 @@ export default function GuidePage() {
         </div>
       </div>
 
-      {/* Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16, padding: '0 24px 80px', maxWidth: 1200, margin: '0 auto', alignItems: 'start' }}>
+      {/* Masonry columns */}
+      <div style={{
+        columns: '340px',
+        columnGap: 16,
+        padding: '0 24px 80px',
+        maxWidth: 1200,
+        margin: '0 auto',
+      }}>
         {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center' as const, padding: '60px 24px', color: '#6b6b85', fontSize: 15, gridColumn: '1/-1' }}>
+          <div style={{
+            textAlign: 'center' as const,
+            padding: '60px 24px',
+            color: '#6b6b85',
+            fontSize: 15,
+            columnSpan: 'all' as const,
+          }}>
             Nessun agente trovato per &quot;{search}&quot;
           </div>
         ) : (
-          filtered.map(a => <AgentCard key={a.id} agent={a} />)
+          filtered.map(a => (
+            <div
+              key={a.id}
+              style={{
+                breakInside: 'avoid',
+                marginBottom: 16,
+                display: 'inline-block',
+                width: '100%',
+              }}
+            >
+              <AgentCard agent={a} />
+            </div>
+          ))
         )}
       </div>
     </div>
