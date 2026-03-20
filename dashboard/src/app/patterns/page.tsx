@@ -14,6 +14,8 @@ import {
   ComposedChart,
   Bar,
   Cell,
+  ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 
 const TICKERS = [
@@ -164,91 +166,198 @@ function normalizeTo100(values: number[]): (number | null)[] {
   return values.map((v) => Math.round(((v - min) / range) * 10000) / 100);
 }
 
-/* ── Candlestick chart ────────────────────────────────── */
-function toOHLC(prices: number[]) {
-  return prices.map((close, i) => {
-    const prev = prices[i - 1] ?? close;
+/* ── Candlestick chart with real wicks ────────────────── */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CandlestickChart({
+  data,
+  referenceIndex,
+  totalLength,
+}: {
+  data: { value: number }[];
+  referenceIndex?: number;
+  totalLength?: number;
+}) {
+  const ohlc = data.map((d, i) => {
+    const close = d.value;
+    const prev = i > 0 ? data[i - 1].value : close;
     const open = prev;
-    const high = Math.max(open, close) * (1 + Math.random() * 0.003);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.003);
+    const change = close - open;
+    const range = Math.abs(change) * 0.3 + Math.abs(close) * 0.002;
+    const high = Math.max(open, close) + range * (0.4 + Math.random() * 0.6);
+    const low = Math.min(open, close) - range * (0.4 + Math.random() * 0.6);
     return {
-      i: i + 1,
+      name: i + 1,
       open,
       high,
       low,
       close,
-      bodyLow: Math.min(open, close),
-      bodyHigh: Math.max(open, close),
-      bodyHeight: Math.abs(close - open),
       isUp: close >= open,
     };
   });
-}
 
-function CandlestickChart({
-  data,
-  yFormat,
-}: {
-  data: { name: number | string; value: number }[];
-  yFormat?: (v: number) => string;
-}) {
-  const prices = data.map((d) => d.value);
-  const ohlc = toOHLC(prices);
-
-  const chartData = ohlc.map((d, i) => ({
-    name: data[i]?.name ?? i + 1,
-    base: d.bodyLow,
-    body: d.bodyHigh - d.bodyLow || 0.01,
-    high: d.high,
-    low: d.low,
-    isUp: d.isUp,
-    close: d.close,
-  }));
+  const allPrices = ohlc.flatMap((d) => [d.high, d.low]);
+  const minPrice = Math.min(...allPrices);
+  const maxPrice = Math.max(...allPrices);
+  const padding = (maxPrice - minPrice) * 0.05;
 
   return (
-    <ComposedChart
-      data={chartData}
-      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-    >
-      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-      <XAxis
-        dataKey="name"
-        tick={{ fill: "#4a4a6a", fontSize: 10 }}
-        axisLine={false}
-        tickLine={false}
-        interval={4}
-      />
-      <YAxis
-        domain={["auto", "auto"]}
-        tick={{ fill: "#4a4a6a", fontSize: 10 }}
-        axisLine={false}
-        tickLine={false}
-        tickFormatter={yFormat ?? ((v) => (typeof v === "number" ? v.toFixed(1) : v))}
-      />
-      <Tooltip
-        contentStyle={{
-          backgroundColor: "#12122a",
-          border: "1px solid rgba(139,92,246,0.3)",
-          borderRadius: "8px",
-          color: "#f0f0ff",
-          fontSize: "12px",
-        }}
-        formatter={(value: number, name: string) => {
-          if (name === "base") return [null, null];
-          return [typeof value === "number" ? value.toFixed(2) : value, name];
-        }}
-      />
-      <Bar dataKey="base" stackId="candle" fill="transparent" />
-      <Bar dataKey="body" stackId="candle" radius={[2, 2, 0, 0]}>
-        {chartData.map((entry, index) => (
-          <Cell
-            key={index}
-            fill={entry.isUp ? "#10b981" : "#ef4444"}
-            opacity={0.85}
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart
+        data={ohlc}
+        margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
+      >
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="rgba(255,255,255,0.04)"
+          vertical={false}
+        />
+        <XAxis
+          dataKey="name"
+          tick={{ fill: "#4a4a6a", fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          interval={Math.floor(ohlc.length / 6)}
+        />
+        <YAxis
+          domain={[minPrice - padding, maxPrice + padding]}
+          tick={{ fill: "#4a4a6a", fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(v) => `${v.toFixed(1)}`}
+          width={55}
+        />
+        <Tooltip
+          content={({ active, payload }) => {
+            if (!active || !payload?.length) return null;
+            const d = payload[0]?.payload;
+            if (!d) return null;
+            return (
+              <div
+                style={{
+                  background: "#0e0e1a",
+                  border: "1px solid rgba(139,92,246,0.3)",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  fontSize: 12,
+                  lineHeight: 1.8,
+                }}
+              >
+                <div style={{ color: "#6b6b85", marginBottom: 4 }}>
+                  Giorno {d.name}
+                </div>
+                <div style={{ color: "#10b981" }}>
+                  O: {d.open?.toFixed(4)}
+                </div>
+                <div style={{ color: d.isUp ? "#10b981" : "#ef4444" }}>
+                  C: {d.close?.toFixed(4)}
+                </div>
+                <div style={{ color: "#a855f7" }}>
+                  H: {d.high?.toFixed(4)}
+                </div>
+                <div style={{ color: "#f59e0b" }}>
+                  L: {d.low?.toFixed(4)}
+                </div>
+              </div>
+            );
+          }}
+        />
+
+        {referenceIndex !== undefined && (
+          <ReferenceLine
+            x={referenceIndex}
+            stroke="#a855f7"
+            strokeDasharray="5 3"
+            strokeWidth={2}
+            label={{
+              value: "\u25C0 ORA",
+              position: "insideTopRight",
+              fill: "#a855f7",
+              fontSize: 11,
+              fontWeight: 700,
+            }}
           />
-        ))}
-      </Bar>
-    </ComposedChart>
+        )}
+        {referenceIndex !== undefined && totalLength !== undefined && (
+          <ReferenceArea
+            x1={referenceIndex}
+            x2={totalLength}
+            fill="rgba(124,58,237,0.06)"
+            stroke="rgba(124,58,237,0.1)"
+            strokeDasharray="4 3"
+          />
+        )}
+
+        <Bar
+          dataKey="close"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          shape={(props: any) => {
+            const { x, width, index } = props;
+            const d = ohlc[index];
+            if (!d || !width) return <g />;
+
+            const domainMin = minPrice - padding;
+            const domainMax = maxPrice + padding;
+            const domainRange = domainMax - domainMin;
+
+            // Get chart area from props.background
+            const chartAreaY = props.background?.y ?? 10;
+            const chartAreaH = props.background?.height ?? 260;
+
+            const yScale = (val: number) =>
+              chartAreaY +
+              (1 - (val - domainMin) / domainRange) * chartAreaH;
+
+            const highY = yScale(d.high);
+            const lowY = yScale(d.low);
+            const openY = yScale(d.open);
+            const closeY = yScale(d.close);
+            const bodyTopY = Math.min(openY, closeY);
+            const bodyBottomY = Math.max(openY, closeY);
+            const bodyHeight = Math.max(bodyBottomY - bodyTopY, 2);
+            const centerX = x + width / 2;
+            const candleW = Math.max(width * 0.6, 3);
+            const color = d.isUp ? "#10b981" : "#ef4444";
+            const wickColor = d.isUp ? "#22c55e" : "#f87171";
+
+            return (
+              <g key={index}>
+                <line
+                  x1={centerX}
+                  y1={highY}
+                  x2={centerX}
+                  y2={bodyTopY}
+                  stroke={wickColor}
+                  strokeWidth={1.5}
+                />
+                <rect
+                  x={centerX - candleW / 2}
+                  y={bodyTopY}
+                  width={candleW}
+                  height={bodyHeight}
+                  fill={color}
+                  stroke={color}
+                  strokeWidth={0.5}
+                  rx={1}
+                  opacity={0.9}
+                />
+                <line
+                  x1={centerX}
+                  y1={bodyBottomY}
+                  x2={centerX}
+                  y2={lowY}
+                  stroke={wickColor}
+                  strokeWidth={1.5}
+                />
+              </g>
+            );
+          }}
+        >
+          {ohlc.map((_, i) => (
+            <Cell key={i} fill="transparent" />
+          ))}
+        </Bar>
+      </ComposedChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -930,7 +1039,7 @@ export default function PatternsPage() {
           {/* ── SECTION 2: Dual charts ─────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Current pattern */}
-            <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5">
+            <div style={{ background: "rgba(7,7,15,0.8)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 16, padding: 20 }}>
               <div className="flex items-baseline justify-between mb-4">
                 <p className="text-sm font-semibold">Pattern Attuale</p>
                 <p className="text-xs text-[var(--text-muted)] font-mono">
@@ -947,40 +1056,43 @@ export default function PatternsPage() {
                   </span>
                 </p>
               </div>
-              <ResponsiveContainer width="100%" height={220}>
-                {chartType === "candle" ? (
+              {chartType === "candle" ? (
+                <div style={{ height: 280 }}>
                   <CandlestickChart
-                    data={currentChartData.map((d) => ({ name: d.date, value: d.price }))}
-                    yFormat={(v: number) => `$${v}`}
+                    data={currentChartData.map((d) => ({ value: d.price }))}
                   />
-                ) : chartType === "area" ? (
-                  <AreaChart data={currentChartData}>
-                    <defs>
-                      <linearGradient id="gradCurrent" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#4a4a6a" }} interval={4} />
-                    <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} domain={["auto", "auto"]} tickFormatter={(v: number) => `$${v}`} />
-                    <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Prezzo"]} />
-                    <Area type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} fill="url(#gradCurrent)" />
-                  </AreaChart>
-                ) : (
-                  <LineChart data={currentChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#4a4a6a" }} interval={4} />
-                    <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} domain={["auto", "auto"]} tickFormatter={(v: number) => `$${v}`} />
-                    <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Prezzo"]} />
-                    <Line type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                  </LineChart>
-                )}
-              </ResponsiveContainer>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  {chartType === "area" ? (
+                    <AreaChart data={currentChartData}>
+                      <defs>
+                        <linearGradient id="gradCurrent" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#4a4a6a" }} interval={4} />
+                      <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} domain={["auto", "auto"]} tickFormatter={(v: number) => `$${v}`} />
+                      <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Prezzo"]} />
+                      <Area type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} fill="url(#gradCurrent)" />
+                    </AreaChart>
+                  ) : (
+                    <LineChart data={currentChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#4a4a6a" }} interval={4} />
+                      <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} domain={["auto", "auto"]} tickFormatter={(v: number) => `$${v}`} />
+                      <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Prezzo"]} />
+                      <Line type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  )}
+                </ResponsiveContainer>
+              )}
             </div>
 
             {/* Best similar pattern */}
-            <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5">
+            <div style={{ background: "rgba(7,7,15,0.8)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 16, padding: 20 }}>
               <div className="flex items-baseline justify-between mb-4">
                 <p className="text-sm font-semibold">Pattern Storico Simile — {historicalLength} giorni</p>
                 {best && (
@@ -994,42 +1106,51 @@ export default function PatternsPage() {
               </div>
               {best ? (
                 <>
-                  <ResponsiveContainer width="100%" height={220}>
-                    {chartType === "candle" ? (
+                  {chartType === "candle" ? (
+                    <div style={{ height: 280 }}>
                       <CandlestickChart
-                        data={historicChartData.map((d) => ({ name: d.day, value: d.value }))}
-                        yFormat={(v: number) => `${(v * 100).toFixed(1)}%`}
+                        data={historicChartData.map((d) => ({ value: d.value }))}
+                        referenceIndex={currentLength}
+                        totalLength={historicalLength}
                       />
-                    ) : chartType === "area" ? (
-                      <AreaChart data={historicChartData}>
-                        <defs>
-                          <linearGradient id="gradHistoric" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#f97316" stopOpacity={0.3} />
-                            <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Giorno", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
-                        <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
-                        <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]} />
-                        <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} fill="url(#gradHistoric)" />
-                      </AreaChart>
-                    ) : (
-                      <LineChart data={historicChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Giorno", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
-                        <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
-                        <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]} />
-                        <Line type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    )}
-                  </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      {chartType === "area" ? (
+                        <AreaChart data={historicChartData}>
+                          <defs>
+                            <linearGradient id="gradHistoric" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#f97316" stopOpacity={0.3} />
+                              <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                          <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Giorno", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
+                          <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
+                          <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]} />
+                          <ReferenceLine x={currentLength} stroke="#a855f7" strokeDasharray="5 3" strokeWidth={2} label={{ value: "\u25C0 ORA", position: "insideTopRight", fill: "#a855f7", fontSize: 11, fontWeight: 700 }} />
+                          <ReferenceArea x1={currentLength} x2={historicalLength} fill="rgba(124,58,237,0.06)" stroke="rgba(124,58,237,0.1)" strokeDasharray="4 3" />
+                          <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} fill="url(#gradHistoric)" />
+                        </AreaChart>
+                      ) : (
+                        <LineChart data={historicChartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                          <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Giorno", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
+                          <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
+                          <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]} />
+                          <ReferenceLine x={currentLength} stroke="#a855f7" strokeDasharray="5 3" strokeWidth={2} label={{ value: "\u25C0 ORA", position: "insideTopRight", fill: "#a855f7", fontSize: 11, fontWeight: 700 }} />
+                          <ReferenceArea x1={currentLength} x2={historicalLength} fill="rgba(124,58,237,0.06)" stroke="rgba(124,58,237,0.1)" strokeDasharray="4 3" />
+                          <Line type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      )}
+                    </ResponsiveContainer>
+                  )}
                   <p className="text-[11px] text-[var(--text-muted)] text-center mt-2">
                     Periodo: {fmtDateFull(best.start_date)} — {fmtDateFull(best.end_date)}
                   </p>
                 </>
               ) : (
-                <div className="h-[220px] flex items-center justify-center text-sm text-[var(--text-muted)]">
+                <div className="h-[280px] flex items-center justify-center text-sm text-[var(--text-muted)]">
                   Nessun pattern storico trovato
                 </div>
               )}
