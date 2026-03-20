@@ -75,6 +75,9 @@ interface PatternData {
     confidence: number | null;
     combined_signal: string;
   };
+  historical_prices_extended?: number[];
+  historical_window?: number;
+  reference_index?: number;
 }
 
 /* ── regime badge helper ────────────────────────────────── */
@@ -875,12 +878,15 @@ export default function PatternsPage() {
     price: Math.round((currentPrices[i] ?? 0) * 100) / 100,
   }));
 
-  // Historical pattern 25% longer
+  // Historical pattern — use extended prices from API if available, fallback to pattern_vector
   const currentLength = currentPrices.length;
-  const historicalLength = Math.ceil(currentLength * 1.25);
-  const historicalSlice = bestPrices.slice(0, historicalLength);
+  const extendedPrices = parsePrices(data?.historical_prices_extended);
+  const historicalPrices = extendedPrices.length > bestPrices.length
+    ? extendedPrices
+    : bestPrices;
+  const historicalLength = historicalPrices.length;
 
-  const historicChartData = historicalSlice.map((p, i) => ({
+  const historicChartData = historicalPrices.map((p, i) => ({
     day: i + 1,
     value: Math.round(p * 10000) / 10000,
   }));

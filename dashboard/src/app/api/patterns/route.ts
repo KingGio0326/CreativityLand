@@ -236,6 +236,40 @@ function generateRecommendation(stats10d: ReturnType<typeof outcomeStats>) {
   };
 }
 
+/* ── Fetch extended historical prices for a pattern ───── */
+async function fetchExtendedPrices(
+  ticker: string,
+  startDate: string,
+  endDate: string,
+  extraDays: number,
+): Promise<number[]> {
+  try {
+    // Calculate extended end date (add extraDays + buffer for weekends/holidays)
+    const end = new Date(endDate);
+    end.setDate(end.getDate() + extraDays + 10); // buffer for non-trading days
+    const start = new Date(startDate);
+
+    const period1 = Math.floor(start.getTime() / 1000);
+    const period2 = Math.floor(end.getTime() / 1000);
+
+    const url =
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}` +
+      `?interval=1d&period1=${period1}&period2=${period2}`;
+
+    const res = await fetch(url, { next: { revalidate: 0 } });
+    if (!res.ok) return [];
+
+    const json = await res.json();
+    const closes: (number | null)[] =
+      json.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+
+    return closes.filter((v): v is number => v != null);
+  } catch (err) {
+    console.error("Extended prices fetch error:", err);
+    return [];
+  }
+}
+
 /* ── Combined signal logic ────────────────────────────── */
 function combineSignals(
   pipelineSignal: string | null,
@@ -357,7 +391,34 @@ export async function GET(request: NextRequest) {
 
     const bestMatch = similar[0] ?? null;
 
-    // 5. Pipeline signal
+    // 5. Fetch extended historical prices for best match (25% more days)
+    const currentWindow = prices.length; // typically 30
+    const historicalWindow = Math.ceil(currentWindow * 1.25);
+    const extraDays = historicalWindow - currentWindow; // ~8 extra trading days
+
+    let extendedPrices: number[] = [];
+    if (bestMatch) {
+      extendedPrices = await fetchExtendedPrices(
+        ticker,
+        bestMatch.start_date,
+        bestMatch.end_date,
+        extraDays,
+      );
+      // Normalize to returns relative to first price (same as pattern_vector)
+      if (extendedPrices.length > 0) {
+        const base = extendedPrices[0];
+        extendedPrices = extendedPrices.map((p) => (p - base) / base);
+      }
+      console.log(
+        "Extended prices for best match:",
+        extendedPrices.length,
+        "points (target:",
+        historicalWindow,
+        ")",
+      );
+    }
+
+    // 6. Pipeline signal
     const pipelineRow = signalRes.data?.[0] ?? null;
 
     const combinedSignal = combineSignals(
@@ -387,6 +448,12 @@ export async function GET(request: NextRequest) {
         market_regime: p.market_regime ?? "unknown",
         is_crisis: p.is_crisis ?? false,
       })),
+      historical_prices_extended:
+        extendedPrices.length >= historicalWindow
+          ? extendedPrices.slice(0, historicalWindow)
+          : extendedPrices,
+      historical_window: historicalWindow,
+      reference_index: currentWindow,
       analysis: {
         patterns_found: similar.length,
         best_similarity: bestMatch
@@ -410,6 +477,8 @@ export async function GET(request: NextRequest) {
         regime_detected: regimeData.regime,
         patterns_found: similar.length,
         spy_data_points: spyCloses.length,
+        extended_prices_count: extendedPrices.length,
+        historical_window: historicalWindow,
       },
     });
   } catch (err) {
