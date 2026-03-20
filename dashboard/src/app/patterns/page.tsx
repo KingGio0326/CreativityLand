@@ -4,12 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   ComposedChart,
+  Bar,
+  Cell,
 } from "recharts";
 
 const TICKERS = [
@@ -158,6 +162,94 @@ function normalizeTo100(values: number[]): (number | null)[] {
   const max = Math.max(...values);
   const range = max - min || 1;
   return values.map((v) => Math.round(((v - min) / range) * 10000) / 100);
+}
+
+/* ── Candlestick chart ────────────────────────────────── */
+function toOHLC(prices: number[]) {
+  return prices.map((close, i) => {
+    const prev = prices[i - 1] ?? close;
+    const open = prev;
+    const high = Math.max(open, close) * (1 + Math.random() * 0.003);
+    const low = Math.min(open, close) * (1 - Math.random() * 0.003);
+    return {
+      i: i + 1,
+      open,
+      high,
+      low,
+      close,
+      bodyLow: Math.min(open, close),
+      bodyHigh: Math.max(open, close),
+      bodyHeight: Math.abs(close - open),
+      isUp: close >= open,
+    };
+  });
+}
+
+function CandlestickChart({
+  data,
+  yFormat,
+}: {
+  data: { name: number | string; value: number }[];
+  yFormat?: (v: number) => string;
+}) {
+  const prices = data.map((d) => d.value);
+  const ohlc = toOHLC(prices);
+
+  const chartData = ohlc.map((d, i) => ({
+    name: data[i]?.name ?? i + 1,
+    base: d.bodyLow,
+    body: d.bodyHigh - d.bodyLow || 0.01,
+    high: d.high,
+    low: d.low,
+    isUp: d.isUp,
+    close: d.close,
+  }));
+
+  return (
+    <ComposedChart
+      data={chartData}
+      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+    >
+      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+      <XAxis
+        dataKey="name"
+        tick={{ fill: "#4a4a6a", fontSize: 10 }}
+        axisLine={false}
+        tickLine={false}
+        interval={4}
+      />
+      <YAxis
+        domain={["auto", "auto"]}
+        tick={{ fill: "#4a4a6a", fontSize: 10 }}
+        axisLine={false}
+        tickLine={false}
+        tickFormatter={yFormat ?? ((v) => (typeof v === "number" ? v.toFixed(1) : v))}
+      />
+      <Tooltip
+        contentStyle={{
+          backgroundColor: "#12122a",
+          border: "1px solid rgba(139,92,246,0.3)",
+          borderRadius: "8px",
+          color: "#f0f0ff",
+          fontSize: "12px",
+        }}
+        formatter={(value: number, name: string) => {
+          if (name === "base") return [null, null];
+          return [typeof value === "number" ? value.toFixed(2) : value, name];
+        }}
+      />
+      <Bar dataKey="base" stackId="candle" fill="transparent" />
+      <Bar dataKey="body" stackId="candle" radius={[2, 2, 0, 0]}>
+        {chartData.map((entry, index) => (
+          <Cell
+            key={index}
+            fill={entry.isUp ? "#10b981" : "#ef4444"}
+            opacity={0.85}
+          />
+        ))}
+      </Bar>
+    </ComposedChart>
+  );
 }
 
 /* ── portfolio types ───────────────────────────────────── */
@@ -632,6 +724,7 @@ export default function PatternsPage() {
   const [data, setData] = useState<PatternData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chartType, setChartType] = useState<"candle" | "line" | "area">("candle");
 
   const fetchData = useCallback(async (t: string) => {
     setLoading(true);
@@ -673,7 +766,12 @@ export default function PatternsPage() {
     price: Math.round((currentPrices[i] ?? 0) * 100) / 100,
   }));
 
-  const historicChartData = bestPrices.map((p, i) => ({
+  // Historical pattern 25% longer
+  const currentLength = currentPrices.length;
+  const historicalLength = Math.ceil(currentLength * 1.25);
+  const historicalSlice = bestPrices.slice(0, historicalLength);
+
+  const historicChartData = historicalSlice.map((p, i) => ({
     day: i + 1,
     value: Math.round(p * 10000) / 10000,
   }));
@@ -802,6 +900,33 @@ export default function PatternsPage() {
 
       {!loading && !error && data && (
         <>
+          {/* ── Chart type switcher ──────────────────── */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {(["candle", "line", "area"] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => setChartType(type)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 8,
+                  border: "1px solid",
+                  borderColor: chartType === type ? "#7c3aed" : "rgba(255,255,255,0.1)",
+                  background: chartType === type ? "rgba(124,58,237,0.2)" : "transparent",
+                  color: chartType === type ? "#a855f7" : "#6b6b85",
+                  fontFamily: "'Barlow Condensed', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase" as const,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {type === "candle" ? "Candele" : type === "line" ? "Linea" : "Area"}
+              </button>
+            ))}
+          </div>
+
           {/* ── SECTION 2: Dual charts ─────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Current pattern */}
@@ -823,43 +948,41 @@ export default function PatternsPage() {
                 </p>
               </div>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={currentChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 10, fill: "#4a4a6a" }}
-                    interval={4}
+                {chartType === "candle" ? (
+                  <CandlestickChart
+                    data={currentChartData.map((d) => ({ name: d.date, value: d.price }))}
+                    yFormat={(v: number) => `$${v}`}
                   />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: "#4a4a6a" }}
-                    domain={["auto", "auto"]}
-                    tickFormatter={(v: number) => `$${v}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#12122a",
-                      border: "1px solid rgba(139,92,246,0.3)",
-                      borderRadius: "8px",
-                      color: "#f0f0ff",
-                      fontSize: "12px",
-                    }}
-                    formatter={(v: number) => [`$${v}`, "Prezzo"]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="price"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
+                ) : chartType === "area" ? (
+                  <AreaChart data={currentChartData}>
+                    <defs>
+                      <linearGradient id="gradCurrent" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#4a4a6a" }} interval={4} />
+                    <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} domain={["auto", "auto"]} tickFormatter={(v: number) => `$${v}`} />
+                    <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Prezzo"]} />
+                    <Area type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} fill="url(#gradCurrent)" />
+                  </AreaChart>
+                ) : (
+                  <LineChart data={currentChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#4a4a6a" }} interval={4} />
+                    <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} domain={["auto", "auto"]} tickFormatter={(v: number) => `$${v}`} />
+                    <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Prezzo"]} />
+                    <Line type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  </LineChart>
+                )}
               </ResponsiveContainer>
             </div>
 
             {/* Best similar pattern */}
             <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5">
               <div className="flex items-baseline justify-between mb-4">
-                <p className="text-sm font-semibold">Pattern Storico Simile</p>
+                <p className="text-sm font-semibold">Pattern Storico Simile — {historicalLength} giorni</p>
                 {best && (
                   <p className="text-xs text-[var(--text-muted)] font-mono">
                     Similarity:{" "}
@@ -872,40 +995,34 @@ export default function PatternsPage() {
               {best ? (
                 <>
                   <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={historicChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                      <XAxis
-                        dataKey="day"
-                        tick={{ fontSize: 10, fill: "#4a4a6a" }}
-                        label={{
-                          value: "Giorno",
-                          position: "insideBottomRight",
-                          offset: -5,
-                          style: { fontSize: 10, fill: "#4a4a6a" },
-                        }}
+                    {chartType === "candle" ? (
+                      <CandlestickChart
+                        data={historicChartData.map((d) => ({ name: d.day, value: d.value }))}
+                        yFormat={(v: number) => `${(v * 100).toFixed(1)}%`}
                       />
-                      <YAxis
-                        tick={{ fontSize: 10, fill: "#4a4a6a" }}
-                        tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#12122a",
-                          border: "1px solid rgba(139,92,246,0.3)",
-                          borderRadius: "8px",
-                          color: "#f0f0ff",
-                          fontSize: "12px",
-                        }}
-                        formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#f97316"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
+                    ) : chartType === "area" ? (
+                      <AreaChart data={historicChartData}>
+                        <defs>
+                          <linearGradient id="gradHistoric" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#f97316" stopOpacity={0.3} />
+                            <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Giorno", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
+                        <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
+                        <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]} />
+                        <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} fill="url(#gradHistoric)" />
+                      </AreaChart>
+                    ) : (
+                      <LineChart data={historicChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Giorno", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
+                        <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
+                        <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]} />
+                        <Line type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    )}
                   </ResponsiveContainer>
                   <p className="text-[11px] text-[var(--text-muted)] text-center mt-2">
                     Periodo: {fmtDateFull(best.start_date)} — {fmtDateFull(best.end_date)}
