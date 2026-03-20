@@ -64,14 +64,18 @@ class ScoringEngine:
         - direction_bonus: +1.0 se direzione corretta, -1.0 se sbagliata
         - HOLD: bonus +0.5 se movimento < 2%, -0.5 altrimenti
         """
+        # HOLD signals are tracked but excluded from performance stats
+        if signal_type == "HOLD":
+            return 0.0
+
         conf = confidence / 100.0 if confidence > 1 else confidence
 
         if signal_type == "BUY":
             direction_bonus = 1.0 if actual_return > 0 else -1.0
         elif signal_type == "SELL":
             direction_bonus = 1.0 if actual_return < 0 else -1.0
-        else:  # HOLD
-            direction_bonus = 0.5 if abs(actual_return) < 2.0 else -0.5
+        else:
+            direction_bonus = 0.0
 
         score = (actual_return * conf) + direction_bonus
         return round(score, 4)
@@ -208,6 +212,9 @@ class ScoringEngine:
         })
 
         for ev in completed.data:
+            # Only BUY/SELL are actionable — exclude HOLD from stats
+            if ev.get("signal_type") == "HOLD":
+                continue
             key = f"pipeline_{ev['ticker']}"
             score = ev.get("score_168h", 0) or 0
             stats[key]["scores"].append(score)

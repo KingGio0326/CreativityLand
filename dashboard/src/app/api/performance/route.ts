@@ -30,7 +30,10 @@ export async function GET(request: NextRequest) {
       const returnKey = `return_${h}`;
 
       const evaluated = rawEvals.filter(
-        (e) => e[scoreKey] !== null && e[scoreKey] !== undefined,
+        (e) =>
+          e[scoreKey] !== null &&
+          e[scoreKey] !== undefined &&
+          e.signal_type !== "HOLD",
       );
 
       if (evaluated.length === 0) {

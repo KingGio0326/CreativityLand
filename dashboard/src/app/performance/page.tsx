@@ -272,7 +272,7 @@ export default function PerformancePage() {
       {data && (
         <div className="flex items-center gap-3 flex-wrap">
           <span className="px-3 py-1.5 rounded-lg text-xs font-mono border bg-card">
-            Segnali: <span className="font-bold">{currentStats.count}</span>
+            BUY/SELL: <span className="font-bold">{currentStats.count}</span>
           </span>
           <span className="px-3 py-1.5 rounded-lg text-xs font-mono border bg-card">
             Hit rate:{" "}
@@ -431,7 +431,7 @@ export default function PerformancePage() {
                               : "7 GIORNI"}
                       </span>
                       <div style={{ fontSize: 11, color: "#4a4a6a", marginTop: 2 }}>
-                        {hData?.count ?? 0} segnali
+                        {hData?.count ?? 0} BUY/SELL
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
@@ -755,7 +755,8 @@ export default function PerformancePage() {
                 fontSize: 14,
               }}
             >
-              Nessun segnale valutato a {HORIZON_LABELS[horizon]}.
+              Segnali valutabili (BUY/SELL): 0 &mdash; Gli HOLD non vengono conteggiati nelle performance.
+              Nessun segnale BUY/SELL valutato a {HORIZON_LABELS[horizon]}.
               {horizon === "6h" && " Disponibile ~6h dopo ogni run."}
               {horizon === "24h" && " Disponibile dal 20 marzo."}
               {horizon === "72h" && " Disponibile dal 22 marzo."}
@@ -767,10 +768,9 @@ export default function PerformancePage() {
               className={`rounded-xl border p-5 bg-amber-500/5 border-amber-500/25`}
             >
               <p className="text-sm text-amber-400">
-                Servono almeno 10 segnali completati per risultati
-                statisticamente significativi. Attualmente:{" "}
-                <span className="font-bold">{currentStats.count}</span> segnali
-                valutati a {HORIZON_LABELS[horizon]}.
+                Segnali valutabili (BUY/SELL): {currentStats.count} &mdash; Gli
+                HOLD non vengono conteggiati. Servono almeno 10 segnali per
+                risultati statisticamente significativi.
               </p>
             </div>
           )}
@@ -779,12 +779,12 @@ export default function PerformancePage() {
               className={`rounded-xl border p-5 bg-zinc-500/5 border-zinc-500/25`}
             >
               <p className="text-sm text-muted-foreground">
-                Risultati preliminari basati su{" "}
+                Segnali valutabili (BUY/SELL):{" "}
                 <span className="font-bold text-foreground">
                   {currentStats.count}
                 </span>{" "}
-                segnali a {HORIZON_LABELS[horizon]}. Servono almeno 30 per
-                un&apos;analisi affidabile.
+                a {HORIZON_LABELS[horizon]}. Gli HOLD non vengono conteggiati.
+                Servono almeno 30 per un&apos;analisi affidabile.
               </p>
             </div>
           )}
@@ -793,9 +793,10 @@ export default function PerformancePage() {
               className={`rounded-xl border p-5 bg-emerald-500/5 border-emerald-500/25`}
             >
               <p className="text-sm text-emerald-400">
-                Analisi statistica affidabile disponibile &mdash;{" "}
+                Analisi statistica affidabile &mdash;{" "}
                 <span className="font-bold">{currentStats.count}</span> segnali
-                valutati a {HORIZON_LABELS[horizon]}.
+                BUY/SELL valutati a {HORIZON_LABELS[horizon]}. Gli HOLD sono
+                esclusi.
               </p>
             </div>
           )}
