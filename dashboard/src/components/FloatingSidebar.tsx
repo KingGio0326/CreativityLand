@@ -39,20 +39,21 @@ function NavItem({
       style={{
         display: "flex",
         alignItems: "center",
-        height: 56,
-        paddingLeft: expanded ? 14 : 8,
-        gap: 12,
+        height: 52,
         textDecoration: "none",
         position: "relative",
+        borderRadius: 12,
+        transition: "background 0.15s ease",
         background: isActive
           ? "rgba(124,58,237,0.15)"
           : hovered
             ? "rgba(124,58,237,0.07)"
             : "transparent",
-        borderRadius: 12,
-        margin: "1px 6px",
-        width: "calc(100% - 12px)",
-        transition: "background 0.15s ease, padding-left 0.25s ease",
+        width: "100%",
+        justifyContent: expanded ? "flex-start" : "center",
+        paddingLeft: expanded ? 16 : 0,
+        paddingRight: expanded ? 12 : 0,
+        gap: expanded ? 12 : 0,
       }}
     >
       {/* Indicatore attivo */}
@@ -60,7 +61,7 @@ function NavItem({
         <div
           style={{
             position: "absolute",
-            left: -6,
+            left: 0,
             top: "50%",
             transform: "translateY(-50%)",
             width: 3,
@@ -157,8 +158,8 @@ export default function FloatingSidebar() {
           "0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(139,92,246,0.08), inset 0 1px 0 rgba(255,255,255,0.05)",
         display: "flex",
         flexDirection: "column" as const,
-        paddingTop: 10,
-        paddingBottom: 10,
+        paddingTop: 8,
+        paddingBottom: 8,
         overflow: "hidden",
       }}
     >
