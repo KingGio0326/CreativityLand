@@ -493,7 +493,7 @@ export default function GuidePage() {
       </div>
 
       {/* Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16, padding: '0 24px 80px', maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16, padding: '0 24px 80px', maxWidth: 1200, margin: '0 auto', alignItems: 'start' }}>
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center' as const, padding: '60px 24px', color: '#6b6b85', fontSize: 15, gridColumn: '1/-1' }}>
             Nessun agente trovato per &quot;{search}&quot;
