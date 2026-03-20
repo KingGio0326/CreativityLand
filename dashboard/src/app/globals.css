@@ -243,73 +243,52 @@ body {
 .typing-d3  { animation: typing-dot 1.2s 0.4s infinite; }
 .live-badge { animation: live-pulse 2s infinite; }
 
-/* ── Sidebar ──────────────────────────────────────────── */
+/* ── Barlow Condensed font class ──────────────────────── */
 
-.sidebar {
+.barlow {
+  font-family: 'Barlow Condensed', sans-serif;
+}
+
+/* ── Icon Sidebar ────────────────────────────────────── */
+
+.icon-sidebar {
   position: fixed;
-  top: 0;
   left: 0;
-  width: 220px;
+  top: 0;
   height: 100vh;
-  background: var(--bg-secondary);
-  border-right: 1px solid rgba(139,92,246,0.12);
+  transition: width 0.25s ease;
+  background: #0e0e1a;
+  border-right: 1px solid rgba(139,92,246,0.2);
+  z-index: 50;
   display: flex;
   flex-direction: column;
-  z-index: 50;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
-.sidebar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 200px;
-  background: var(--gradient-glow);
-  pointer-events: none;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  margin: 1px 8px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: all 0.15s ease;
-  border-left: 3px solid transparent;
-  text-decoration: none;
-}
-.sidebar-link:hover {
-  background: rgba(124,58,237,0.08);
-  color: var(--text-primary);
-}
-.sidebar-link-active {
-  background: rgba(124,58,237,0.15);
-  border-left-color: #7c3aed;
-  color: #a855f7;
-  font-weight: 600;
-}
-
-.main-content {
-  margin-left: 220px;
+.main-content-area {
   min-height: 100vh;
 }
 
+.live-pulse-dot {
+  animation: sidebar-pulse 2s infinite;
+}
+
+@keyframes sidebar-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 @media (max-width: 768px) {
-  .sidebar {
+  .icon-sidebar {
     transform: translateX(-100%);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, width 0.25s ease;
+    width: 220px !important;
   }
-  .sidebar.open {
+  .icon-sidebar.mobile-open {
     transform: translateX(0);
   }
-  .main-content {
-    margin-left: 0;
+  .main-content-area {
+    margin-left: 0 !important;
   }
 }
 
