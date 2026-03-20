@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -32,6 +34,15 @@ interface Evaluation {
   score_24h: number;
   score_72h: number;
   score_168h: number;
+}
+
+interface HorizonStats {
+  count: number;
+  hit_rate: number;
+  avg_score: string;
+  avg_return: string;
+  chart_data: { date: string; cumulative_score: number; signal: string; confidence: number; score: number; return: number }[];
+  signals: { date: string; signal: string; confidence: number; score: number; return: number }[];
 }
 
 interface Stats {
@@ -67,10 +78,20 @@ interface MLValidation {
 interface PerfData {
   ticker: string;
   evaluations: Evaluation[];
+  horizons: Record<string, HorizonStats>;
   stats: Stats;
   chart_data: ChartPoint[];
   ml_validation: MLValidation | null;
 }
+
+type Horizon = "6h" | "24h" | "72h" | "168h";
+
+const HORIZON_LABELS: Record<Horizon, string> = {
+  "6h": "6 ore",
+  "24h": "24 ore",
+  "72h": "3 giorni",
+  "168h": "7 giorni",
+};
 
 /* ── helpers ──────────────────────────────────────────── */
 function signalBadge(signal: string) {
@@ -106,6 +127,7 @@ export default function PerformancePage() {
   const [data, setData] = useState<PerfData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [horizon, setHorizon] = useState<Horizon>("168h");
 
   const fetchData = useCallback(async (t: string) => {
     setLoading(true);
@@ -142,6 +164,15 @@ export default function PerformancePage() {
   const evaluations = data?.evaluations ?? [];
   const chartData = data?.chart_data ?? [];
 
+  const currentStats = data?.horizons?.[horizon] ?? {
+    count: 0,
+    hit_rate: 0,
+    avg_score: "0",
+    avg_return: "0.00",
+    chart_data: [],
+    signals: [],
+  };
+
   return (
     <div className="space-y-6">
       {/* ── HEADER ──────────────────────────────────────── */}
@@ -164,28 +195,109 @@ export default function PerformancePage() {
         </div>
       </div>
 
+      {/* ── Horizon selector ─────────────────────────────── */}
+      {data && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span
+            style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontWeight: 700,
+              fontSize: 12,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: "#6b6b85",
+            }}
+          >
+            ORIZZONTE
+          </span>
+          <select
+            value={horizon}
+            onChange={(e) => setHorizon(e.target.value as Horizon)}
+            style={{
+              background: "#12121a",
+              border: "1px solid rgba(139,92,246,0.3)",
+              borderRadius: 10,
+              color: "#a855f7",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontWeight: 700,
+              fontSize: 14,
+              letterSpacing: "0.08em",
+              padding: "8px 16px",
+              cursor: "pointer",
+              outline: "none",
+              appearance: "none" as const,
+              paddingRight: 32,
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a855f7' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "right 10px center",
+            }}
+          >
+            <option value="6h">6 ore</option>
+            <option value="24h">24 ore</option>
+            <option value="72h">72 ore (3 giorni)</option>
+            <option value="168h">168 ore (7 giorni)</option>
+          </select>
+
+          {(["6h", "24h", "72h", "168h"] as const).map((h) => (
+            <div
+              key={h}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                background:
+                  (data?.horizons?.[h]?.count ?? 0) > 0
+                    ? "rgba(16,185,129,0.12)"
+                    : "rgba(255,255,255,0.04)",
+                border: `1px solid ${
+                  (data?.horizons?.[h]?.count ?? 0) > 0
+                    ? "rgba(16,185,129,0.3)"
+                    : "rgba(255,255,255,0.08)"
+                }`,
+                fontSize: 11,
+                fontWeight: 700,
+                color:
+                  (data?.horizons?.[h]?.count ?? 0) > 0 ? "#10b981" : "#4a4a6a",
+                fontFamily: "'Barlow Condensed', sans-serif",
+                letterSpacing: "0.06em",
+              }}
+            >
+              {h}: {data?.horizons?.[h]?.count ?? 0}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Header badges */}
       {data && (
         <div className="flex items-center gap-3 flex-wrap">
           <span className="px-3 py-1.5 rounded-lg text-xs font-mono border bg-card">
-            Segnali: <span className="font-bold">{stats.total_signals}</span>
+            Segnali: <span className="font-bold">{currentStats.count}</span>
           </span>
           <span className="px-3 py-1.5 rounded-lg text-xs font-mono border bg-card">
             Hit rate:{" "}
-            <span className={`font-bold ${stats.hit_rate >= 50 ? "text-emerald-400" : "text-red-400"}`}>
-              {stats.hit_rate}%
+            <span
+              className={`font-bold ${currentStats.hit_rate >= 50 ? "text-emerald-400" : "text-red-400"}`}
+            >
+              {currentStats.hit_rate}%
             </span>
           </span>
           <span className="px-3 py-1.5 rounded-lg text-xs font-mono border bg-card">
             Score:{" "}
-            <span className={`font-bold ${stats.cumulative_score >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-              {stats.cumulative_score >= 0 ? "+" : ""}{stats.cumulative_score}
+            <span
+              className={`font-bold ${parseFloat(currentStats.avg_score) >= 0 ? "text-emerald-400" : "text-red-400"}`}
+            >
+              {parseFloat(currentStats.avg_score) >= 0 ? "+" : ""}
+              {currentStats.avg_score}
             </span>
           </span>
           <span className="px-3 py-1.5 rounded-lg text-xs font-mono border bg-card">
             Alpha:{" "}
-            <span className={`font-bold ${stats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-              {stats.alpha >= 0 ? "+" : ""}{stats.alpha}%
+            <span
+              className={`font-bold ${stats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+            >
+              {stats.alpha >= 0 ? "+" : ""}
+              {stats.alpha}%
             </span>
           </span>
         </div>
@@ -208,20 +320,223 @@ export default function PerformancePage() {
 
       {!loading && !error && data && (
         <>
-          {/* ── SECTION 1: Cumulative Score Chart ──────── */}
+          {/* ── SECTION 1: Stats Cards ──────────────────── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="rounded-xl border bg-card p-5 space-y-1">
+              <p className="text-[11px] text-muted-foreground">Hit Rate</p>
+              <p
+                className={`text-2xl font-bold font-mono ${currentStats.hit_rate >= 50 ? "text-emerald-400" : "text-red-400"}`}
+              >
+                {currentStats.hit_rate}%
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                a {HORIZON_LABELS[horizon]}
+              </p>
+            </div>
+            <div className="rounded-xl border bg-card p-5 space-y-1">
+              <p className="text-[11px] text-muted-foreground">Avg Score</p>
+              <p
+                className={`text-2xl font-bold font-mono ${parseFloat(currentStats.avg_score) >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
+                {parseFloat(currentStats.avg_score) >= 0 ? "+" : ""}
+                {currentStats.avg_score}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                a {HORIZON_LABELS[horizon]}
+              </p>
+            </div>
+            <div className="rounded-xl border bg-card p-5 space-y-1">
+              <p className="text-[11px] text-muted-foreground">Avg Return</p>
+              <p
+                className={`text-2xl font-bold font-mono ${parseFloat(currentStats.avg_return) >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
+                {parseFloat(currentStats.avg_return) >= 0 ? "+" : ""}
+                {currentStats.avg_return}%
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                a {HORIZON_LABELS[horizon]}
+              </p>
+            </div>
+            <div className="rounded-xl border bg-card p-5 space-y-1">
+              <p className="text-[11px] text-muted-foreground">Alpha</p>
+              <p
+                className={`text-2xl font-bold font-mono ${stats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
+                {stats.alpha >= 0 ? "+" : ""}
+                {stats.alpha}%
+              </p>
+              <p className="text-[10px] text-muted-foreground">vs SPY</p>
+            </div>
+          </div>
+
+          {/* ── SECTION 2: Mini charts grid (4 horizons) ── */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 16,
+            }}
+          >
+            {(["6h", "24h", "72h", "168h"] as const).map((h) => {
+              const hData = data?.horizons?.[h];
+              const hChartData = hData?.chart_data ?? [];
+              const hasData = hChartData.length > 0;
+              const isSelected = h === horizon;
+
+              return (
+                <div
+                  key={h}
+                  onClick={() => setHorizon(h)}
+                  style={{
+                    background: isSelected ? "#16163a" : "#12121a",
+                    border: `1px solid ${
+                      isSelected
+                        ? "rgba(124,58,237,0.4)"
+                        : "rgba(255,255,255,0.07)"
+                    }`,
+                    borderRadius: 16,
+                    padding: 16,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    boxShadow: isSelected
+                      ? "0 0 20px rgba(124,58,237,0.15)"
+                      : "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div>
+                      <span
+                        style={{
+                          fontFamily: "'Barlow Condensed', sans-serif",
+                          fontWeight: 700,
+                          fontSize: 13,
+                          letterSpacing: "0.1em",
+                          textTransform: "uppercase",
+                          color: isSelected ? "#a855f7" : "#6b6b85",
+                        }}
+                      >
+                        {h === "6h"
+                          ? "6 ORE"
+                          : h === "24h"
+                            ? "24 ORE"
+                            : h === "72h"
+                              ? "72 ORE"
+                              : "7 GIORNI"}
+                      </span>
+                      <div style={{ fontSize: 11, color: "#4a4a6a", marginTop: 2 }}>
+                        {hData?.count ?? 0} segnali
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div
+                        style={{
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color:
+                            (hData?.hit_rate ?? 0) >= 50
+                              ? "#10b981"
+                              : "#ef4444",
+                        }}
+                      >
+                        {hData?.hit_rate ?? 0}%
+                      </div>
+                      <div style={{ fontSize: 10, color: "#4a4a6a" }}>
+                        hit rate
+                      </div>
+                    </div>
+                  </div>
+
+                  {hasData ? (
+                    <ResponsiveContainer width="100%" height={80}>
+                      <AreaChart
+                        data={hChartData}
+                        margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient
+                            id={`grad_${h}`}
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor={isSelected ? "#7c3aed" : "#4a4a6a"}
+                              stopOpacity={0.3}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor={isSelected ? "#7c3aed" : "#4a4a6a"}
+                              stopOpacity={0}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <Area
+                          type="monotone"
+                          dataKey="cumulative_score"
+                          stroke={isSelected ? "#a855f7" : "#4a4a6a"}
+                          strokeWidth={isSelected ? 2 : 1}
+                          fill={`url(#grad_${h})`}
+                          dot={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div
+                      style={{
+                        height: 80,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#4a4a6a",
+                        fontSize: 12,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      In attesa di dati...
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── SECTION 3: Cumulative Score Chart ──────── */}
           {chartData.length > 0 && (
             <div className="rounded-xl border bg-card p-5">
-              <p className="text-sm font-semibold mb-4">Score Cumulativo vs SPY</p>
+              <p className="text-sm font-semibold mb-4">
+                Score Cumulativo vs SPY
+              </p>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                  />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                    interval={Math.max(0, Math.floor(chartData.length / 8))}
+                    tick={{
+                      fontSize: 10,
+                      fill: "hsl(var(--muted-foreground))",
+                    }}
+                    interval={Math.max(
+                      0,
+                      Math.floor(chartData.length / 8),
+                    )}
                   />
                   <YAxis
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{
+                      fontSize: 10,
+                      fill: "hsl(var(--muted-foreground))",
+                    }}
                   />
                   <Tooltip
                     contentStyle={{
@@ -254,24 +569,42 @@ export default function PerformancePage() {
             </div>
           )}
 
-          {/* ── SECTION 2: Evaluations Table ──────────── */}
+          {/* ── SECTION 4: Evaluations Table ──────────── */}
           {evaluations.length > 0 && (
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="px-5 py-3 border-b">
-                <p className="text-sm font-semibold">Ultimi Segnali Valutati</p>
+                <p className="text-sm font-semibold">
+                  Ultimi Segnali Valutati
+                </p>
               </div>
               <div className="overflow-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b bg-muted/30">
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Data</th>
-                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">Segnale</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Conf.</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">+6h</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">+24h</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">+72h</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">+7gg</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Score</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                        Data
+                      </th>
+                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">
+                        Segnale
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        Conf.
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        +6h
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        +24h
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        +72h
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        +7gg
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        Score
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -284,27 +617,49 @@ export default function PerformancePage() {
                           {fmtDate(ev.entry_date)}
                         </td>
                         <td className="px-4 py-2.5 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${signalBadge(ev.signal_type)}`}>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${signalBadge(ev.signal_type)}`}
+                          >
                             {ev.signal_type}
                           </span>
                         </td>
                         <td className="px-4 py-2.5 text-right font-mono">
-                          {Math.round((ev.confidence > 1 ? ev.confidence : ev.confidence * 100))}%
+                          {Math.round(
+                            ev.confidence > 1
+                              ? ev.confidence
+                              : ev.confidence * 100,
+                          )}
+                          %
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-mono ${returnColor(ev.return_6h)}`}>
-                          {ev.return_6h >= 0 ? "+" : ""}{ev.return_6h}%
+                        <td
+                          className={`px-4 py-2.5 text-right font-mono ${returnColor(ev.return_6h)}`}
+                        >
+                          {ev.return_6h >= 0 ? "+" : ""}
+                          {ev.return_6h}%
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-mono ${returnColor(ev.return_24h)}`}>
-                          {ev.return_24h >= 0 ? "+" : ""}{ev.return_24h}%
+                        <td
+                          className={`px-4 py-2.5 text-right font-mono ${returnColor(ev.return_24h)}`}
+                        >
+                          {ev.return_24h >= 0 ? "+" : ""}
+                          {ev.return_24h}%
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-mono ${returnColor(ev.return_72h)}`}>
-                          {ev.return_72h >= 0 ? "+" : ""}{ev.return_72h}%
+                        <td
+                          className={`px-4 py-2.5 text-right font-mono ${returnColor(ev.return_72h)}`}
+                        >
+                          {ev.return_72h >= 0 ? "+" : ""}
+                          {ev.return_72h}%
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-mono font-medium ${returnColor(ev.return_168h)}`}>
-                          {ev.return_168h >= 0 ? "+" : ""}{ev.return_168h}%
+                        <td
+                          className={`px-4 py-2.5 text-right font-mono font-medium ${returnColor(ev.return_168h)}`}
+                        >
+                          {ev.return_168h >= 0 ? "+" : ""}
+                          {ev.return_168h}%
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-mono font-bold ${returnColor(ev.score_168h)}`}>
-                          {ev.score_168h >= 0 ? "+" : ""}{ev.score_168h}
+                        <td
+                          className={`px-4 py-2.5 text-right font-mono font-bold ${returnColor(ev.score_168h)}`}
+                        >
+                          {ev.score_168h >= 0 ? "+" : ""}
+                          {ev.score_168h}
                         </td>
                       </tr>
                     ))}
@@ -314,121 +669,136 @@ export default function PerformancePage() {
             </div>
           )}
 
-          {/* ── SECTION 3: Stats Cards ────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-xl border bg-card p-5 space-y-1">
-              <p className="text-[11px] text-muted-foreground">Hit Rate</p>
-              <p className={`text-2xl font-bold font-mono ${stats.hit_rate >= 50 ? "text-emerald-400" : "text-red-400"}`}>
-                {stats.hit_rate}%
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                {stats.positive_signals}/{stats.total_signals} corretti
-              </p>
-            </div>
-            <div className="rounded-xl border bg-card p-5 space-y-1">
-              <p className="text-[11px] text-muted-foreground">Avg Score</p>
-              <p className={`text-2xl font-bold font-mono ${stats.avg_score >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                {stats.avg_score >= 0 ? "+" : ""}{stats.avg_score}
-              </p>
-              <p className="text-[10px] text-muted-foreground">per segnale</p>
-            </div>
-            <div className="rounded-xl border bg-card p-5 space-y-1">
-              <p className="text-[11px] text-muted-foreground">Avg Return</p>
-              <p className={`text-2xl font-bold font-mono ${stats.avg_return_168h >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                {stats.avg_return_168h >= 0 ? "+" : ""}{stats.avg_return_168h}%
-              </p>
-              <p className="text-[10px] text-muted-foreground">a 7 giorni</p>
-            </div>
-            <div className="rounded-xl border bg-card p-5 space-y-1">
-              <p className="text-[11px] text-muted-foreground">Alpha</p>
-              <p className={`text-2xl font-bold font-mono ${stats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                {stats.alpha >= 0 ? "+" : ""}{stats.alpha}%
-              </p>
-              <p className="text-[10px] text-muted-foreground">vs SPY</p>
-            </div>
-          </div>
-
-          {/* ── SECTION 4: ML Walk-Forward Validation ── */}
+          {/* ── SECTION 5: ML Walk-Forward Validation ── */}
           {data.ml_validation && (
-            <div className={`rounded-xl border p-5 ${
-              data.ml_validation.is_reliable
-                ? "bg-emerald-500/5 border-emerald-500/25"
-                : "bg-red-500/5 border-red-500/25"
-            }`}>
+            <div
+              className={`rounded-xl border p-5 ${
+                data.ml_validation.is_reliable
+                  ? "bg-emerald-500/5 border-emerald-500/25"
+                  : "bg-red-500/5 border-red-500/25"
+              }`}
+            >
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold">Affidabilit&agrave; ML (Walk-Forward)</p>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                  data.ml_validation.is_reliable
-                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                    : "bg-red-500/15 text-red-400 border-red-500/30"
-                }`}>
-                  {data.ml_validation.is_reliable ? "Affidabile" : "Non affidabile"}
+                <p className="text-sm font-semibold">
+                  Affidabilit&agrave; ML (Walk-Forward)
+                </p>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                    data.ml_validation.is_reliable
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      : "bg-red-500/15 text-red-400 border-red-500/30"
+                  }`}
+                >
+                  {data.ml_validation.is_reliable
+                    ? "Affidabile"
+                    : "Non affidabile"}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-[10px] text-muted-foreground">Accuracy media</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Accuracy media
+                  </p>
                   <p className="text-lg font-bold font-mono">
                     {(data.ml_validation.avg_accuracy * 100).toFixed(1)}%
                     <span className="text-xs font-normal text-muted-foreground ml-1">
-                      &plusmn; {(data.ml_validation.std_accuracy * 100).toFixed(1)}%
+                      &plusmn;{" "}
+                      {(data.ml_validation.std_accuracy * 100).toFixed(1)}%
                     </span>
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground">Range</p>
                   <p className="text-lg font-bold font-mono">
-                    {(data.ml_validation.min_accuracy * 100).toFixed(1)}% - {(data.ml_validation.max_accuracy * 100).toFixed(1)}%
+                    {(data.ml_validation.min_accuracy * 100).toFixed(1)}% -{" "}
+                    {(data.ml_validation.max_accuracy * 100).toFixed(1)}%
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground">Fold accuracies</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Fold accuracies
+                  </p>
                   <div className="flex items-end gap-0.5 h-6 mt-1">
-                    {(data.ml_validation.fold_accuracies ?? []).map((acc, i) => (
-                      <div
-                        key={i}
-                        className={`w-3 rounded-sm ${acc > 0.52 ? "bg-emerald-500" : "bg-red-500"}`}
-                        style={{ height: `${Math.max(20, (acc - 0.4) * 200)}%` }}
-                        title={`Fold ${i + 1}: ${(acc * 100).toFixed(1)}%`}
-                      />
-                    ))}
+                    {(data.ml_validation.fold_accuracies ?? []).map(
+                      (acc, i) => (
+                        <div
+                          key={i}
+                          className={`w-3 rounded-sm ${acc > 0.52 ? "bg-emerald-500" : "bg-red-500"}`}
+                          style={{
+                            height: `${Math.max(20, (acc - 0.4) * 200)}%`,
+                          }}
+                          title={`Fold ${i + 1}: ${(acc * 100).toFixed(1)}%`}
+                        />
+                      ),
+                    )}
                   </div>
                 </div>
               </div>
               {data.ml_validation.updated_at && (
                 <p className="text-[10px] text-muted-foreground mt-2">
-                  Ultimo aggiornamento: {new Date(data.ml_validation.updated_at).toLocaleString()}
+                  Ultimo aggiornamento:{" "}
+                  {new Date(data.ml_validation.updated_at).toLocaleString()}
                 </p>
               )}
             </div>
           )}
 
-          {/* ── SECTION 5: Status message ─────────────── */}
-          <div className={`rounded-xl border p-5 ${
-            stats.total_signals >= 30
-              ? "bg-emerald-500/5 border-emerald-500/25"
-              : stats.total_signals >= 10
-                ? "bg-zinc-500/5 border-zinc-500/25"
-                : "bg-amber-500/5 border-amber-500/25"
-          }`}>
-            {stats.total_signals < 10 && (
+          {/* ── SECTION 6: Status message ─────────────── */}
+          {currentStats.count === 0 && (
+            <div
+              style={{
+                background: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.2)",
+                borderRadius: 12,
+                padding: "16px 20px",
+                color: "#f59e0b",
+                fontSize: 14,
+              }}
+            >
+              Nessun segnale valutato a {HORIZON_LABELS[horizon]}.
+              {horizon === "6h" && " Disponibile ~6h dopo ogni run."}
+              {horizon === "24h" && " Disponibile dal 20 marzo."}
+              {horizon === "72h" && " Disponibile dal 22 marzo."}
+              {horizon === "168h" && " Disponibile dal 26 marzo."}
+            </div>
+          )}
+          {currentStats.count > 0 && currentStats.count < 10 && (
+            <div
+              className={`rounded-xl border p-5 bg-amber-500/5 border-amber-500/25`}
+            >
               <p className="text-sm text-amber-400">
-                Servono almeno 10 segnali completati per risultati statisticamente significativi.
-                Attualmente: <span className="font-bold">{stats.total_signals}</span> segnali valutati.
+                Servono almeno 10 segnali completati per risultati
+                statisticamente significativi. Attualmente:{" "}
+                <span className="font-bold">{currentStats.count}</span> segnali
+                valutati a {HORIZON_LABELS[horizon]}.
               </p>
-            )}
-            {stats.total_signals >= 10 && stats.total_signals < 30 && (
+            </div>
+          )}
+          {currentStats.count >= 10 && currentStats.count < 30 && (
+            <div
+              className={`rounded-xl border p-5 bg-zinc-500/5 border-zinc-500/25`}
+            >
               <p className="text-sm text-muted-foreground">
-                Risultati preliminari basati su <span className="font-bold text-foreground">{stats.total_signals}</span> segnali.
-                Servono almeno 30 segnali per un&apos;analisi affidabile.
+                Risultati preliminari basati su{" "}
+                <span className="font-bold text-foreground">
+                  {currentStats.count}
+                </span>{" "}
+                segnali a {HORIZON_LABELS[horizon]}. Servono almeno 30 per
+                un&apos;analisi affidabile.
               </p>
-            )}
-            {stats.total_signals >= 30 && (
+            </div>
+          )}
+          {currentStats.count >= 30 && (
+            <div
+              className={`rounded-xl border p-5 bg-emerald-500/5 border-emerald-500/25`}
+            >
               <p className="text-sm text-emerald-400">
-                Analisi statistica affidabile disponibile — <span className="font-bold">{stats.total_signals}</span> segnali valutati.
+                Analisi statistica affidabile disponibile &mdash;{" "}
+                <span className="font-bold">{currentStats.count}</span> segnali
+                valutati a {HORIZON_LABELS[horizon]}.
               </p>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
 
@@ -436,7 +806,8 @@ export default function PerformancePage() {
       {!loading && !error && !data && (
         <div className="rounded-xl border bg-card p-8 text-center">
           <p className="text-muted-foreground text-sm">
-            Nessun dato per <span className="font-mono font-medium">{ticker}</span>
+            Nessun dato per{" "}
+            <span className="font-mono font-medium">{ticker}</span>
           </p>
         </div>
       )}
