@@ -310,20 +310,34 @@ const FILTERS = [
 
 function AgentCard({ agent }: { agent: typeof agents[0] }) {
   const [open, setOpen] = useState(false)
+  const [hovered, setHovered] = useState(false)
   const signalColor: Record<string, string> = { buy: '#22d3a0', sell: '#f25c5c', hold: '#f5c842' }
   const signalBg: Record<string, string> = { buy: 'rgba(34,211,160,0.1)', sell: 'rgba(242,92,92,0.1)', hold: 'rgba(245,200,66,0.1)' }
 
   return (
     <div
       onClick={() => setOpen(!open)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        background: '#12121a',
-        border: `1px solid ${open ? 'rgba(124,106,247,0.3)' : 'rgba(255,255,255,0.07)'}`,
+        background: open ? '#16163a' : hovered ? '#14142e' : '#12121a',
+        border: `1px solid ${
+          open
+            ? 'rgba(124,58,237,0.35)'
+            : hovered
+            ? 'rgba(124,58,237,0.2)'
+            : 'rgba(255,255,255,0.07)'
+        }`,
         borderRadius: 20,
         overflow: 'hidden',
         cursor: 'pointer',
-        transition: 'all 0.2s',
-        boxShadow: open ? '0 0 0 1px rgba(124,106,247,0.15), 0 20px 60px rgba(0,0,0,0.4)' : 'none',
+        transform: !open && hovered ? 'translateY(-2px)' : 'none',
+        boxShadow: open
+          ? '0 0 0 1px rgba(124,58,237,0.2), 0 20px 50px rgba(0,0,0,0.5)'
+          : hovered
+          ? '0 8px 24px rgba(0,0,0,0.35)'
+          : 'none',
+        transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
       }}
     >
       {/* Header */}
@@ -343,11 +357,25 @@ function AgentCard({ agent }: { agent: typeof agents[0] }) {
           padding: '4px 10px', fontSize: 13, fontWeight: 700, color: agent.color,
           flexShrink: 0,
         }}>{agent.weight}</div>
-        <div style={{ fontSize: 16, color: '#6b6b85', transition: 'transform 0.3s', transform: open ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>&#9662;</div>
+        <div style={{
+          fontSize: 16,
+          color: open ? '#a855f7' : '#6b6b85',
+          transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1), color 0.2s ease',
+          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+          flexShrink: 0,
+        }}>&#9662;</div>
       </div>
 
-      {/* Body */}
-      {open && (
+      {/* Body — always in DOM, animated via max-height + opacity */}
+      <div style={{
+        maxHeight: open ? 2000 : 0,
+        opacity: open ? 1 : 0,
+        overflow: 'hidden',
+        transition: open
+          ? 'max-height 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease 0.05s'
+          : 'max-height 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease',
+        transform: open ? 'translateY(0)' : 'translateY(-6px)',
+      }}>
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '20px' }} onClick={e => e.stopPropagation()}>
 
           {/* Analogy */}
@@ -373,14 +401,29 @@ function AgentCard({ agent }: { agent: typeof agents[0] }) {
             ))}
           </div>
 
-          {/* Meters */}
-          {agent.meters.map(m => (
+          {/* Meters — animated width with staggered delay */}
+          {agent.meters.map((m, index) => (
             <div key={m.label} style={{ margin: '14px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6, color: '#6b6b85' }}>
-                <span>{m.label}</span><span style={{ color: agent.color }}>{m.val}%</span>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                fontSize: 12, marginBottom: 6, color: '#6b6b85'
+              }}>
+                <span>{m.label}</span>
+                <span style={{ color: agent.color }}>{m.val}%</span>
               </div>
-              <div style={{ height: 6, background: '#1a1a26', borderRadius: 100, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${m.val}%`, background: agent.color, borderRadius: 100 }} />
+              <div style={{
+                height: 6, background: '#1a1a26',
+                borderRadius: 100, overflow: 'hidden'
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: open ? `${m.val}%` : '0%',
+                  background: agent.color,
+                  borderRadius: 100,
+                  transition: open
+                    ? `width 0.7s cubic-bezier(0.4,0,0.2,1) ${index * 0.12 + 0.2}s`
+                    : 'width 0.15s ease',
+                }} />
               </div>
             </div>
           ))}
@@ -428,7 +471,7 @@ function AgentCard({ agent }: { agent: typeof agents[0] }) {
           </div>
 
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -492,38 +535,26 @@ export default function GuidePage() {
         </div>
       </div>
 
-      {/* Masonry columns */}
-      <div style={{
-        columns: '340px',
-        columnGap: 16,
-        padding: '0 24px 80px',
-        maxWidth: 1200,
-        margin: '0 auto',
-      }}>
+      {/* Grid */}
+      <div
+        className="guide-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: 16,
+          padding: '0 24px 80px',
+          maxWidth: 1200,
+          margin: '0 auto',
+          alignItems: 'start',
+          gridAutoRows: 'min-content',
+        }}
+      >
         {filtered.length === 0 ? (
-          <div style={{
-            textAlign: 'center' as const,
-            padding: '60px 24px',
-            color: '#6b6b85',
-            fontSize: 15,
-            columnSpan: 'all' as const,
-          }}>
+          <div style={{ textAlign: 'center' as const, padding: '60px 24px', color: '#6b6b85', fontSize: 15, gridColumn: '1/-1' }}>
             Nessun agente trovato per &quot;{search}&quot;
           </div>
         ) : (
-          filtered.map(a => (
-            <div
-              key={a.id}
-              style={{
-                breakInside: 'avoid',
-                marginBottom: 16,
-                display: 'inline-block',
-                width: '100%',
-              }}
-            >
-              <AgentCard agent={a} />
-            </div>
-          ))
+          filtered.map(a => <AgentCard key={a.id} agent={a} />)
         )}
       </div>
     </div>
