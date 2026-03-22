@@ -114,6 +114,44 @@ jobs:
           se.update_agent_performance()
           print('Performance aggiornata.')
           "
+      - name: Notify Telegram
+        run: |
+          python -c "
+          import os, json
+          from bot_telegram.telegram_notifier import notify, format_run_message
+          from supabase import create_client
+          from datetime import datetime, timedelta
+
+          supabase = create_client(
+              os.getenv('SUPABASE_URL'),
+              os.getenv('SUPABASE_KEY')
+          )
+
+          # Recupera ultimi segnali generati in questo run
+          cutoff = (datetime.now() - timedelta(hours=1)).isoformat()
+          result = supabase.table('signals') \
+              .select('*') \
+              .gte('created_at', cutoff) \
+              .order('ticker') \
+              .execute()
+
+          signals = result.data or []
+
+          # Recupera contatore run (numero righe signals totali / 8)
+          total = supabase.table('signals').select('id', count='exact').execute()
+          run_number = (total.count or 0) // 8
+
+          msg = format_run_message(
+              run_number=run_number,
+              signals=signals,
+              articles_count=int(os.getenv('ARTICLES_COUNT', 0)),
+              sentiment_count=int(os.getenv('SENTIMENT_COUNT', 0)),
+              new_signals=len(signals),
+              duration_minutes=0,
+          )
+          notify(msg)
+          print('Notifica Telegram inviata')
+          "
       - name: Update correlation matrix
         run: |
           python -c "
@@ -178,6 +216,18 @@ jobs:
           print('Riepilogo walk-forward:')
           print(json.dumps(results, indent=2))
           "
+      - name: Notify Telegram Error
+        if: failure()
+        run: |
+          python -c "
+          import os
+          from bot_telegram.telegram_notifier import notify, format_error_message
+          msg = format_error_message(
+              error='Step fallito -- controlla i log',
+              step='GitHub Actions run-bot'
+          )
+          notify(msg)
+          "
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -189,6 +239,8 @@ jobs:
       ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
       ALPHA_VANTAGE_KEY: ${{ secrets.ALPHA_VANTAGE_KEY }}
       FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       REDDIT_USER_AGENT: "trading-bot/1.0"
       INPUT_TICKERS: ${{ inputs.tickers || 'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD' }}
 
