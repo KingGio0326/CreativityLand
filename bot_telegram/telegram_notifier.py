@@ -4,21 +4,33 @@ from telegram import Bot
 from datetime import datetime
 
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 
 async def send_message(text: str, parse_mode: str = 'HTML') -> None:
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+    if not TELEGRAM_TOKEN:
         print("Telegram non configurato, skip notifica")
         return
+
+    chat_ids_raw = os.getenv('TELEGRAM_CHAT_IDS', '') or os.getenv(
+        'TELEGRAM_CHAT_ID', ''
+    )
+    chat_ids = [
+        x.strip() for x in chat_ids_raw.split(',') if x.strip().isdigit()
+    ]
+
+    if not chat_ids:
+        print("Telegram: nessun CHAT_ID configurato, skip notifica")
+        return
+
     try:
         bot = Bot(token=TELEGRAM_TOKEN)
-        await bot.send_message(
-            chat_id=TELEGRAM_CHAT_ID,
-            text=text,
-            parse_mode=parse_mode,
-        )
-        print("Telegram: messaggio inviato")
+        for chat_id in chat_ids:
+            await bot.send_message(
+                chat_id=int(chat_id),
+                text=text,
+                parse_mode=parse_mode,
+            )
+        print(f"Telegram: messaggio inviato a {len(chat_ids)} utenti")
     except Exception as e:
         print(f"Telegram error: {e}")
 

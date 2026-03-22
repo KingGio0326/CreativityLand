@@ -9,14 +9,20 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-ALLOWED_CHAT_ID = int(os.getenv('TELEGRAM_CHAT_ID', '0'))
+ALLOWED_CHAT_IDS = set(
+    int(x.strip())
+    for x in (
+        os.getenv('TELEGRAM_CHAT_IDS', '') or os.getenv('TELEGRAM_CHAT_ID', '')
+    ).split(',')
+    if x.strip().isdigit()
+)
 
 supabase = create_client(SUPABASE_URL or '', SUPABASE_KEY or '')
 
 
 def check_auth(update: Update) -> bool:
-    """Accetta solo messaggi dal tuo chat ID."""
-    return update.effective_chat.id == ALLOWED_CHAT_ID
+    """Accetta solo messaggi dai chat ID autorizzati."""
+    return update.effective_chat.id in ALLOWED_CHAT_IDS
 
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):

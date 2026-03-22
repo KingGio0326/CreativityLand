@@ -294,6 +294,7 @@ jobs:
       FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
       REDDIT_USER_AGENT: "trading-bot/1.0"
       INPUT_TICKERS: ${{ inputs.tickers || 'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD' }}
 
