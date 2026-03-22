@@ -216,6 +216,59 @@ jobs:
           print('Riepilogo walk-forward:')
           print(json.dumps(results, indent=2))
           "
+      - name: Weekly Telegram Report
+        if: github.event.schedule == '0 2 * * 0'
+        run: |
+          python -c "
+          import os
+          from supabase import create_client
+          from bot_telegram.telegram_notifier import (
+              notify, format_weekly_report
+          )
+
+          supabase = create_client(
+              os.getenv('SUPABASE_URL'),
+              os.getenv('SUPABASE_KEY')
+          )
+
+          tickers = ['AAPL','TSLA','NVDA','BTC-USD','ETH-USD','MSFT','XOM','GLD']
+          ticker_stats = {}
+          total_signals = 0
+          best_ticker = 'N/A'
+          best_hit_rate = 0
+
+          for ticker in tickers:
+              result = supabase.table('signal_evaluations') \
+                  .select('score_168h, score_72h, score_24h, signal_type') \
+                  .eq('ticker', ticker) \
+                  .neq('signal_type', 'HOLD') \
+                  .execute()
+
+              evals = result.data or []
+              scores = [
+                  e['score_168h'] or e['score_72h'] or e['score_24h']
+                  for e in evals
+                  if (e['score_168h'] or e['score_72h'] or e['score_24h']) is not None
+              ]
+
+              if scores:
+                  correct = sum(1 for s in scores if s > 0)
+                  hit_rate = round(correct / len(scores) * 100, 1)
+                  ticker_stats[ticker] = {'hit_rate': hit_rate, 'count': len(scores)}
+                  total_signals += len(scores)
+                  if hit_rate > best_hit_rate:
+                      best_hit_rate = hit_rate
+                      best_ticker = ticker
+
+          msg = format_weekly_report(
+              ticker_stats=ticker_stats,
+              total_signals=total_signals,
+              best_ticker=best_ticker,
+              best_hit_rate=best_hit_rate,
+          )
+          notify(msg)
+          print('Report settimanale inviato su Telegram')
+          "
       - name: Notify Telegram Error
         if: failure()
         run: |
