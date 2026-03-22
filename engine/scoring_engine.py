@@ -138,6 +138,16 @@ class ScoringEngine:
             .execute()
         )
 
+        print(f"[DEBUG] Segnali pending trovati: {len(pending.data or [])}")
+        for sig in pending.data or []:
+            print(
+                f"  {sig['ticker']} {sig['signal_type']} "
+                f"entry_date={sig['entry_date']} entry_price={sig.get('entry_price')} "
+                f"score_6h={sig.get('score_6h')} price_6h={sig.get('price_6h')} "
+                f"score_24h={sig.get('score_24h')} price_24h={sig.get('price_24h')} "
+                f"score_72h={sig.get('score_72h')} score_168h={sig.get('score_168h')}"
+            )
+
         updated = 0
         for ev in pending.data or []:
             entry_date = datetime.fromisoformat(
@@ -145,11 +155,19 @@ class ScoringEngine:
             ).replace(tzinfo=None)
             entry_price = ev.get("entry_price")
             if not entry_price:
+                print(f"  [SKIP] {ev['ticker']} id={ev['id']} — no entry_price")
                 continue
 
             now = datetime.now()
             diff = now - entry_date
+            diff_hours = diff.total_seconds() / 3600
             updates: dict = {}
+
+            print(
+                f"  [EVAL] {ev['ticker']} {ev['signal_type']} "
+                f"entry={entry_date.isoformat()} age={diff_hours:.1f}h "
+                f"entry_price={entry_price}"
+            )
 
             horizons = {
                 "6h": 6 / 24,
@@ -160,10 +178,16 @@ class ScoringEngine:
 
             all_done = True
             for label, days in horizons.items():
+                hours_needed = days * 24
                 if diff.total_seconds() / 86400 >= days:
                     if ev.get(f"price_{label}") is None:
                         target = entry_date + timedelta(days=days)
                         price = self.get_price_at(ev["ticker"], target)
+                        print(
+                            f"    {label}: age={diff_hours:.1f}h >= {hours_needed}h "
+                            f"target={target.isoformat()} "
+                            f"price={'FOUND ' + str(price) if price else 'NOT FOUND'}"
+                        )
                         if price:
                             ret = (price - entry_price) / entry_price * 100
                             score = self.calculate_score(
@@ -174,12 +198,23 @@ class ScoringEngine:
                             updates[f"price_{label}"] = price
                             updates[f"return_{label}"] = round(ret, 4)
                             updates[f"score_{label}"] = score
+                            print(f"      => ret={ret:.4f}% score={score}")
+                    else:
+                        print(
+                            f"    {label}: already done "
+                            f"price={ev.get(f'price_{label}')} "
+                            f"score={ev.get(f'score_{label}')}"
+                        )
                 else:
+                    print(
+                        f"    {label}: NOT READY age={diff_hours:.1f}h < {hours_needed}h"
+                    )
                     all_done = False
 
             if updates:
                 if all_done:
                     updates["fully_evaluated"] = True
+                print(f"    => UPDATING {list(updates.keys())}")
                 (
                     self.supabase.table("signal_evaluations")
                     .update(updates)
