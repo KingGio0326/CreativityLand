@@ -121,6 +121,126 @@ function fmtDate(d: string) {
   });
 }
 
+/* ── StatCard ─────────────────────────────────────────── */
+function StatCard({
+  title,
+  value,
+  subtitle,
+  color,
+  explanation,
+  formula,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  color: string;
+  explanation: string;
+  formula: string;
+}) {
+  const [showInfo, setShowInfo] = useState(false);
+
+  return (
+    <div
+      style={{
+        background: "#12121a",
+        border: "1px solid",
+        borderRadius: 16,
+        padding: 20,
+        position: "relative",
+        transition: "border-color 0.2s",
+        borderColor: showInfo
+          ? "rgba(124,58,237,0.3)"
+          : "rgba(255,255,255,0.07)",
+      }}
+    >
+      <button
+        onClick={() => setShowInfo(!showInfo)}
+        style={{
+          position: "absolute",
+          top: 14,
+          right: 14,
+          width: 22,
+          height: 22,
+          borderRadius: "50%",
+          border: "1px solid rgba(255,255,255,0.15)",
+          background: showInfo
+            ? "rgba(124,58,237,0.3)"
+            : "rgba(255,255,255,0.05)",
+          color: showInfo ? "#a855f7" : "#6b6b85",
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.2s",
+          lineHeight: 1,
+        }}
+      >
+        i
+      </button>
+
+      <div style={{ fontSize: 12, color: "#6b6b85", marginBottom: 8 }}>
+        {title}
+      </div>
+      <div
+        style={{
+          fontSize: 36,
+          fontWeight: 700,
+          color,
+          marginBottom: 4,
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </div>
+      <div style={{ fontSize: 12, color: "#4a4a6a" }}>{subtitle}</div>
+
+      <div
+        style={{
+          maxHeight: showInfo ? 300 : 0,
+          overflow: "hidden",
+          transition: "max-height 0.35s cubic-bezier(0.4,0,0.2,1)",
+        }}
+      >
+        <div
+          style={{
+            marginTop: 16,
+            paddingTop: 14,
+            borderTop: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <div
+            style={{
+              background: "#07070f",
+              borderRadius: 8,
+              padding: "8px 12px",
+              fontFamily: "monospace",
+              fontSize: 12,
+              color: "#a855f7",
+              marginBottom: 10,
+              border: "1px solid rgba(124,58,237,0.2)",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {formula}
+          </div>
+          <p
+            style={{
+              fontSize: 12,
+              color: "#8b8ba8",
+              lineHeight: 1.7,
+              margin: 0,
+            }}
+          >
+            {explanation}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── page ─────────────────────────────────────────────── */
 export default function PerformancePage() {
   const [ticker, setTicker] = useState("AAPL");
@@ -321,52 +441,49 @@ export default function PerformancePage() {
       {!loading && !error && data && (
         <>
           {/* ── SECTION 1: Stats Cards ──────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-xl border bg-card p-5 space-y-1">
-              <p className="text-[11px] text-muted-foreground">Hit Rate</p>
-              <p
-                className={`text-2xl font-bold font-mono ${currentStats.hit_rate >= 50 ? "text-emerald-400" : "text-red-400"}`}
-              >
-                {currentStats.hit_rate}%
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                a {HORIZON_LABELS[horizon]}
-              </p>
-            </div>
-            <div className="rounded-xl border bg-card p-5 space-y-1">
-              <p className="text-[11px] text-muted-foreground">Avg Score</p>
-              <p
-                className={`text-2xl font-bold font-mono ${parseFloat(currentStats.avg_score) >= 0 ? "text-emerald-400" : "text-red-400"}`}
-              >
-                {parseFloat(currentStats.avg_score) >= 0 ? "+" : ""}
-                {currentStats.avg_score}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                a {HORIZON_LABELS[horizon]}
-              </p>
-            </div>
-            <div className="rounded-xl border bg-card p-5 space-y-1">
-              <p className="text-[11px] text-muted-foreground">Avg Return</p>
-              <p
-                className={`text-2xl font-bold font-mono ${parseFloat(currentStats.avg_return) >= 0 ? "text-emerald-400" : "text-red-400"}`}
-              >
-                {parseFloat(currentStats.avg_return) >= 0 ? "+" : ""}
-                {currentStats.avg_return}%
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                a {HORIZON_LABELS[horizon]}
-              </p>
-            </div>
-            <div className="rounded-xl border bg-card p-5 space-y-1">
-              <p className="text-[11px] text-muted-foreground">Alpha</p>
-              <p
-                className={`text-2xl font-bold font-mono ${stats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
-              >
-                {stats.alpha >= 0 ? "+" : ""}
-                {stats.alpha}%
-              </p>
-              <p className="text-[10px] text-muted-foreground">vs SPY</p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4" style={{ alignItems: "start" }}>
+            <StatCard
+              title="Hit Rate"
+              value={`${currentStats.hit_rate ?? 0}%`}
+              subtitle={`${currentStats.count ?? 0} segnali BUY/SELL`}
+              color={
+                (currentStats.hit_rate ?? 0) >= 50 ? "#10b981" : "#ef4444"
+              }
+              formula="hit_rate = segnali_corretti / totale_segnali × 100"
+              explanation="Percentuale di segnali BUY/SELL che hanno indovinato la direzione del prezzo. Un segnale SELL è 'corretto' se il prezzo è sceso nell'orizzonte considerato. Gli HOLD sono esclusi perché non sono trade azionabili. Sopra il 50% significa che il bot batte il caso."
+            />
+            <StatCard
+              title="Avg Score"
+              value={`${parseFloat(currentStats.avg_score) >= 0 ? "+" : ""}${currentStats.avg_score ?? 0}`}
+              subtitle={`a ${HORIZON_LABELS[horizon]}`}
+              color={
+                parseFloat(currentStats.avg_score) >= 0
+                  ? "#10b981"
+                  : "#ef4444"
+              }
+              formula="score = (return × confidence) + direction_bonus"
+              explanation="Misura la qualità del segnale pesata per la confidence. Il direction_bonus vale +1 se la direzione era giusta, -1 se era sbagliata. Un segnale SELL con 60% confidence che porta a -2% di prezzo = (0.02 × 0.6) + 1 = +1.012. Score positivo = segnale utile, negativo = dannoso."
+            />
+            <StatCard
+              title="Avg Return"
+              value={`${parseFloat(currentStats.avg_return) >= 0 ? "+" : ""}${currentStats.avg_return ?? 0}%`}
+              subtitle={`a ${HORIZON_LABELS[horizon]}`}
+              color={
+                parseFloat(currentStats.avg_return) >= 0
+                  ? "#10b981"
+                  : "#ef4444"
+              }
+              formula="return = (prezzo_futuro - prezzo_entrata) / prezzo_entrata × 100"
+              explanation="Variazione percentuale media del prezzo nell'orizzonte temporale selezionato. Per un segnale SELL, un return negativo è positivo (il prezzo è sceso come previsto). Non tiene conto delle commissioni o dello slippage — è il movimento grezzo del mercato."
+            />
+            <StatCard
+              title="Alpha"
+              value={`${stats.alpha >= 0 ? "+" : ""}${stats.alpha ?? 0}%`}
+              subtitle="vs SPY"
+              color={stats.alpha >= 0 ? "#10b981" : "#ef4444"}
+              formula="alpha = return_segnale - return_SPY (stesso periodo)"
+              explanation="Confronta il return del segnale con quello dell'indice S&P 500 (SPY) nello stesso periodo. Alpha positivo = il bot ha fatto meglio del mercato. Alpha negativo = meglio comprare un ETF passivo. È la metrica più importante per valutare se il sistema aggiunge valore reale rispetto al semplice buy&hold."
+            />
           </div>
 
           {/* ── SECTION 2: Mini charts grid (4 horizons) ── */}
