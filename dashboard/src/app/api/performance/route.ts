@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
         count: evaluated.length,
         hit_rate: Math.round(hitRate * 100),
         avg_score: (Math.round(avgScore * 100) / 100).toString(),
-        avg_return: (avgReturn * 100).toFixed(2),
+        avg_return: avgReturn.toFixed(2),
         chart_data: chartData,
         signals: evaluated.map((e: Record<string, unknown>) => ({
           date: (e.entry_date as string)?.slice(0, 10),
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
 
     const perf = (perfRes.data ?? [])[0] as Record<string, unknown> | undefined;
 
-    const avgReturn168 = h168.count > 0 ? parseFloat(h168.avg_return) / 100 : 0;
+    const avgReturn168 = h168.count > 0 ? parseFloat(h168.avg_return) : 0;
     const alpha =
       perf?.alpha != null
         ? (perf.alpha as number)
@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
           h168.chart_data.length > 0
             ? h168.chart_data[h168.chart_data.length - 1].cumulative_score
             : 0,
-        avg_return_168h: Math.round(avgReturn168 * 10000) / 100,
+        avg_return_168h: Math.round(avgReturn168 * 100) / 100,
         positive_signals: positiveSignals,
         alpha: Math.round((alpha as number) * 100) / 100,
         best_signal: null,
