@@ -250,23 +250,16 @@ def format_performance_text(horizon: str) -> str:
 
 def format_patterns_text(ticker: str) -> str:
     try:
-        result = get_supabase().rpc('match_patterns', {
-            'query_ticker': ticker,
-            'match_count': 3,
-        }).execute()
+        result = (
+            get_supabase().table('price_patterns')
+            .select('start_date, outcome_5d, outcome_10d, outcome_20d')
+            .eq('ticker', ticker)
+            .order('start_date', desc=True)
+            .limit(3)
+            .execute()
+        )
 
         patterns = result.data or []
-
-        if not patterns:
-            result = (
-                get_supabase().table('price_patterns')
-                .select('start_date, outcome_5d, outcome_10d')
-                .eq('ticker', ticker)
-                .order('start_date', desc=True)
-                .limit(3)
-                .execute()
-            )
-            patterns = result.data or []
 
         if not patterns:
             return f"\u274c Nessun pattern trovato per {ticker}"
@@ -274,22 +267,18 @@ def format_patterns_text(ticker: str) -> str:
         lines = []
         for i, p in enumerate(patterns, 1):
             date = str(p.get('start_date', ''))[:10]
-            out5 = p.get('outcome_5d') or 0
-            out10 = p.get('outcome_10d') or 0
-            sim = p.get('similarity') or p.get('score') or 0
-            e5 = '\U0001f7e2' if float(out5) > 0 else '\U0001f534'
-            e10 = '\U0001f7e2' if float(out10) > 0 else '\U0001f534'
-            sim_text = (
-                f"Sim: <b>{float(sim):.1%}</b> -- " if sim else ''
-            )
+            out5 = float(p.get('outcome_5d') or 0)
+            out10 = float(p.get('outcome_10d') or 0)
+            e5 = '\U0001f7e2' if out5 > 0 else '\U0001f534'
+            e10 = '\U0001f7e2' if out10 > 0 else '\U0001f534'
             lines.append(
-                f"#{i} {sim_text}{date}\n"
-                f"   {e5} 5gg: {float(out5):+.1f}% | "
-                f"{e10} 10gg: {float(out10):+.1f}%"
+                f"#{i} {date}\n"
+                f"   {e5} 5gg: {out5:+.1f}% | "
+                f"{e10} 10gg: {out10:+.1f}%"
             )
 
         return (
-            f"\U0001f50d <b>Top 3 Pattern -- {ticker}:</b>\n\n"
+            f"\U0001f50d <b>Ultimi 3 Pattern -- {ticker}:</b>\n\n"
             + '\n\n'.join(lines)
         )
 
