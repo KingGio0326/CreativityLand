@@ -28,4 +28,4 @@ python-dateutil>=2.8
 googlenewsdecoder>=0.1.7
 dtaidistance>=2.3.10
 scipy>=1.12
-python-telegram-bot==20.7
+python-telegram-bot>=21.0

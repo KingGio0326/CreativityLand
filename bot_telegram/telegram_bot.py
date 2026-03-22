@@ -1,8 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 import os
 from datetime import datetime, timedelta
 
-from supabase import create_client
+from supabase import create_client, Client
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -17,7 +20,14 @@ ALLOWED_CHAT_IDS = set(
     if x.strip().isdigit()
 )
 
-supabase = create_client(SUPABASE_URL or '', SUPABASE_KEY or '')
+_supabase: Client | None = None
+
+
+def get_supabase() -> Client:
+    global _supabase
+    if _supabase is None:
+        _supabase = create_client(SUPABASE_URL or '', SUPABASE_KEY or '')
+    return _supabase
 
 
 def check_auth(update: Update) -> bool:
@@ -47,7 +57,7 @@ async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     cutoff = (datetime.now() - timedelta(hours=7)).isoformat()
     result = (
-        supabase.table('signals')
+        get_supabase().table('signals')
         .select('*')
         .gte('created_at', cutoff)
         .order('created_at', desc=True)
@@ -110,7 +120,7 @@ async def cmd_signal(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ticker = args[0].upper()
 
     result = (
-        supabase.table('signals')
+        get_supabase().table('signals')
         .select('*')
         .eq('ticker', ticker)
         .order('created_at', desc=True)
@@ -179,7 +189,7 @@ async def cmd_performance(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     for ticker in tickers:
         result = (
-            supabase.table('signal_evaluations')
+            get_supabase().table('signal_evaluations')
             .select('score_168h, score_72h, score_24h, signal_type')
             .eq('ticker', ticker)
             .neq('signal_type', 'HOLD')
@@ -227,7 +237,7 @@ async def cmd_patterns(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ticker = args[0].upper() if args else 'AAPL'
 
     result = (
-        supabase.table('price_patterns')
+        get_supabase().table('price_patterns')
         .select('start_date, similarity, outcome_5d, outcome_10d')
         .eq('ticker', ticker)
         .order('similarity', desc=True)
