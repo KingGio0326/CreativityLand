@@ -1,9 +1,9 @@
 import os
 import json
-import anthropic
 from supabase import create_client
 from dotenv import load_dotenv
 from agents import TradingState
+from engine.llm_client import call_llm
 
 load_dotenv()
 
@@ -19,11 +19,7 @@ MACRO_KEYWORDS = [
 
 class MacroAgent:
     def __init__(self):
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        self.enabled = bool(api_key)
-        if self.enabled:
-            self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = "claude-haiku-4-5-20251001"
+        self.enabled = bool(os.getenv("OPENROUTER_API_KEY"))
         self.supabase = create_client(
             os.getenv("SUPABASE_URL", ""),
             os.getenv("SUPABASE_KEY", ""),
@@ -64,7 +60,7 @@ class MacroAgent:
                 "has_macro_impact": False,
                 "impact_direction": "neutral",
                 "impact_magnitude": "low",
-                "causal_chain": "ANTHROPIC_API_KEY non configurata",
+                "causal_chain": "OPENROUTER_API_KEY non configurata",
                 "confidence": 0.0,
                 "relevant_events": [],
                 "time_horizon": "short_term",
@@ -116,11 +112,13 @@ Considera questi insights accademici nella tua analisi macro,
 specialmente se confermano o contraddicono i segnali di mercato.
 """
         try:
-            response = self.client.messages.create(
-                model=self.model, max_tokens=500,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            text = response.content[0].text.strip()
+            text = call_llm(
+                prompt=prompt,
+                system="Sei un analista finanziario esperto.",
+                model="google/gemini-flash-2.0",
+                max_tokens=500,
+                temperature=0.2,
+            ).strip()
             text = text.replace("```json", "").replace("```", "").strip()
             # Find JSON object in response
             start = text.find("{")

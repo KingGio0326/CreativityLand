@@ -1,9 +1,8 @@
 import logging
 import os
 
-import anthropic
-
 from engine.arxiv_search import search_for_context
+from engine.llm_client import call_llm
 
 logger = logging.getLogger("research_agent")
 
@@ -11,8 +10,7 @@ logger = logging.getLogger("research_agent")
 class ResearchAgent:
 
     def __init__(self):
-        api_key = os.getenv("ANTHROPIC_API_KEY", "")
-        self.client = anthropic.Anthropic(api_key=api_key) if api_key else None
+        self.enabled = bool(os.getenv("OPENROUTER_API_KEY"))
 
     def analyze(self, state: dict) -> dict:
         ticker = state.get("ticker", "")
@@ -64,17 +62,18 @@ class ResearchAgent:
 
         research_context = ""
         try:
-            if not self.client:
-                raise ValueError("ANTHROPIC_API_KEY non configurata")
-            message = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",
+            if not self.enabled:
+                raise ValueError("OPENROUTER_API_KEY non configurata")
+            research_context = call_llm(
+                prompt=prompt,
+                system="Sei un analista quantitativo. Sintetizza questi paper arXiv in insight concreti per il trading.",
+                model="google/gemini-flash-2.0",
                 max_tokens=300,
-                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
             )
-            research_context = message.content[0].text
         except Exception as e:
-            logger.error("ResearchAgent Claude API error: %s", e)
-            research_context = f"Errore Claude API: {e}"
+            logger.error("ResearchAgent LLM error: %s", e)
+            research_context = f"Errore LLM: {e}"
 
         logger.info("ResearchAgent: analizzati %d paper arXiv", len(papers))
 
