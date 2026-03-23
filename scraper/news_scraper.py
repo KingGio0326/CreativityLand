@@ -67,11 +67,9 @@ def classify_geopolitical_relevance(
     return "none", 1.0
 
 RSS_SOURCES_STOCKS = {
-    "google_news": "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en",
     "cnbc": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
     "motley_fool": "https://www.fool.com/feeds/index.aspx?id=headlines&ticker={ticker}",
     "zacks": "https://www.zacks.com/stock/news/{ticker}?icid=quote-stock_overview-zacks_news-quote_news_feed-rss",
-    "reuters": "https://news.google.com/rss/search?q={ticker}+site:reuters.com&hl=en-US&gl=US&ceid=US:en",
     "ap_news": "https://news.google.com/rss/search?q={ticker}+site:apnews.com&hl=en-US&gl=US&ceid=US:en",
 }
 
@@ -79,7 +77,6 @@ RSS_SOURCES_CRYPTO = {
     "coindesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "cointelegraph": "https://cointelegraph.com/rss",
     "the_block": "https://www.theblock.co/rss.xml",
-    "google_news": "https://news.google.com/rss/search?q={ticker_clean}+crypto&hl=en-US&gl=US&ceid=US:en",
     "decrypt": "https://decrypt.co/feed",
     "beincrypto": "https://beincrypto.com/feed/",
 }
@@ -311,11 +308,6 @@ class NewsScraper:
 
                 rss_summary = entry.get("summary", "")
 
-                # For Google News, force fulltext and ignore RSS summary
-                if source_name == "Google News":
-                    use_fulltext = True
-                    rss_summary = ""
-
                 # Full text extraction with graceful fallback
                 if use_fulltext and entry.get("link"):
                     try:
@@ -345,14 +337,7 @@ class NewsScraper:
             self.logger.warning("%s failed for %s: %s", source_name, ticker, e)
             return []
 
-    # ── SOURCE 2: Google News with redirect resolution ──
-
-    async def fetch_google_news(self, ticker: str, days_back: int) -> list[dict]:
-        query = clean_ticker_crypto(ticker) if is_crypto(ticker) else f"{ticker} stock"
-        url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
-        return await self.fetch_rss_with_fulltext(url, ticker, "Google News", use_fulltext=True)
-
-    # ── SOURCE 3: NewsAPI with full-text ──
+    # ── SOURCE 2: NewsAPI with full-text ──
 
     async def fetch_newsapi(self, ticker: str, days_back: int) -> list[dict]:
         api_key = os.getenv("NEWS_API_KEY")
@@ -484,7 +469,6 @@ class NewsScraper:
     async def fetch_by_ticker(self, ticker: str, days_back: int = 2) -> list[dict]:
         # Common tasks
         tasks = [
-            self.fetch_google_news(ticker, days_back),
             self.fetch_newsapi(ticker, days_back),
             self.fetch_alpha_vantage(ticker),
         ]
@@ -531,10 +515,6 @@ class NewsScraper:
                 self.fetch_rss_with_fulltext(
                     RSS_SOURCES_STOCKS["zacks"].format(ticker=ticker),
                     ticker, "Zacks", use_fulltext=True,
-                ),
-                self.fetch_rss_with_fulltext(
-                    RSS_SOURCES_STOCKS["reuters"].format(ticker=ticker),
-                    ticker, "Reuters", use_fulltext=True,
                 ),
                 self.fetch_rss_with_fulltext(
                     RSS_SOURCES_STOCKS["ap_news"].format(ticker=ticker),
