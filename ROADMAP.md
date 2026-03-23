@@ -24,7 +24,9 @@ Ultimo aggiornamento: 2026-03-23.
 - [x] Fix double multiplication return values in API
 - [x] Lazy Supabase init nel bot Telegram (`get_supabase()`)
 - [x] Pulizia articoli con contenuto vuoto/corto da Supabase (352 rimossi)
-- [x] Rimozione fonti broken (Seeking Alpha, MarketWatch, Benzinga, Investopedia, TheStreet, Google News diretto, Reuters)
+- [x] Rimozione fonti broken (Seeking Alpha, MarketWatch, Benzinga, Investopedia, TheStreet, Google News diretto, Reuters, Zacks)
+- [x] Fix detect_ticker() per feed generici (CNBC, Motley Fool, AP News) — 59 falsi positivi eliminati
+- [x] Verifica output scraper ottimizzato (Step 1 completato 2026-03-23)
 
 ---
 
@@ -40,37 +42,31 @@ Ultimo aggiornamento: 2026-03-23.
 
 ## PROSSIMI STEP (priorita)
 
-### 1. Verificare output scraper ottimizzato
-- Testare Zacks RSS (aggiunto ma non verificato)
-- Monitorare qualita contenuto delle nuove fonti su 2-3 run
-- Confermare che `detect_ticker()` non produce falsi positivi
-- **Effort**: ~1 prompt
-
-### 2. Regime Detection automatico
+### 1. Regime Detection automatico
 - Classificare il mercato corrente (bull/bear/neutral/crisis) automaticamente
 - Usare VIX, SPY trend 30d, spread obbligazionari
 - Integrare nel grafo come nodo pre-weighted per aggiustare pesi dinamicamente
 - **Effort**: ~4 prompt
 
-### 3. PatternMatching performance separata
+### 2. PatternMatching performance separata
 - Tracciare hit rate del pattern matching indipendentemente dalla pipeline
 - Confrontare segnale pattern vs outcome reale
 - Visualizzare nella pagina `/performance`
 - **Effort**: ~2 prompt
 
-### 4. Score composito unificato gauge
+### 3. Score composito unificato gauge
 - Creare un singolo "health score" che combina hit rate, avg score, alpha, consensus
 - Visualizzare come gauge/meter nella homepage dashboard
 - Utile per capire a colpo d'occhio se il sistema sta performando
 - **Effort**: ~2 prompt
 
-### 5. Discovery automatico nuovi ticker
+### 4. Discovery automatico nuovi ticker
 - Analizzare trending topics dalle fonti scraper
 - Suggerire ticker non monitorati che stanno generando buzz
 - Notificare via Telegram quando un ticker sconosciuto ha 5+ articoli
 - **Effort**: ~3 prompt
 
-### 6. Versione locale/VPS
+### 5. Versione locale/VPS
 - Quando il sistema mostra edge positivo consistente (hit rate >55% su 168h)
 - Migrare da GitHub Actions a cron locale o VPS
 - Aggiungere paper trading via Alpaca API
