@@ -69,9 +69,12 @@ def classify_geopolitical_relevance(
 RSS_SOURCES_STOCKS = {
     "cnbc": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
     "motley_fool": "https://www.fool.com/feeds/index.aspx?id=headlines&ticker={ticker}",
-    "zacks": "https://www.zacks.com/stock/news/{ticker}?icid=quote-stock_overview-zacks_news-quote_news_feed-rss",
     "ap_news": "https://news.google.com/rss/search?q={ticker}+site:apnews.com&hl=en-US&gl=US&ceid=US:en",
 }
+
+# Sources that return articles on any topic (not ticker-filtered).
+# Articles from these feeds MUST pass detect_ticker() to be kept.
+GENERAL_SOURCES = {"CNBC", "Motley Fool", "AP News"}
 
 RSS_SOURCES_CRYPTO = {
     "coindesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
@@ -513,10 +516,6 @@ class NewsScraper:
                     ticker, "Motley Fool", use_fulltext=True,
                 ),
                 self.fetch_rss_with_fulltext(
-                    RSS_SOURCES_STOCKS["zacks"].format(ticker=ticker),
-                    ticker, "Zacks", use_fulltext=True,
-                ),
-                self.fetch_rss_with_fulltext(
                     RSS_SOURCES_STOCKS["ap_news"].format(ticker=ticker),
                     ticker, "AP News", use_fulltext=True,
                 ),
@@ -531,18 +530,21 @@ class NewsScraper:
             elif isinstance(r, Exception):
                 self.logger.warning("Source error: %s", r)
 
-        # Filter: only keep articles relevant to monitored tickers
+        # Filter: only keep articles relevant to this ticker
         filtered = []
         for a in all_articles:
-            # Articles already tagged with this ticker pass through
-            if a.get("ticker") == ticker:
-                filtered.append(a)
+            source = a.get("source", "")
+            # General feeds return mixed content — must verify relevance
+            if source in GENERAL_SOURCES:
+                detected = detect_ticker(
+                    a.get("title", ""), a.get("content", ""),
+                )
+                if detected == ticker:
+                    a["ticker"] = ticker
+                    filtered.append(a)
                 continue
-            # For general feeds, detect ticker from content
-            detected = detect_ticker(a.get("title", ""), a.get("content", ""))
-            if detected == ticker:
-                a["ticker"] = ticker
-                filtered.append(a)
+            # Ticker-specific sources (NewsAPI, Finnhub, Alpha Vantage, etc.)
+            filtered.append(a)
 
         # Deduplicate by URL
         seen: set[str] = set()
