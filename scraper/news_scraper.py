@@ -26,6 +26,8 @@ GEOPOLITICAL_KEYWORDS: dict[str, list[str]] = {
         "embargo petrolifero", "military escalation", "escalation militare",
         "coup", "colpo di stato", "blockade", "blocco navale",
         "martial law", "legge marziale",
+        "attack", "attacco", "drone strike", "airstrike",
+        "cyberattack", "cybersecurity breach", "regime change",
     ],
     "medium": [
         "sanctions", "sanzioni", "tariff", "dazi", "trade war",
@@ -33,12 +35,15 @@ GEOPOLITICAL_KEYWORDS: dict[str, list[str]] = {
         "diplomatic crisis", "crisi diplomatica", "arms deal",
         "military deployment", "dispiegamento militare",
         "export ban", "divieto di esportazione",
+        "supply chain disruption", "chip ban", "semiconductor ban",
+        "energy crisis", "crisi energetica", "debt ceiling",
     ],
     "low": [
         "geopolitical", "geopolitico", "tension", "tensione",
         "diplomat", "diplomazia", "summit", "vertice",
         "bilateral", "bilaterale", "treaty", "trattato",
         "UN resolution", "risoluzione ONU", "peacekeeping",
+        "election", "elezioni", "referendum", "protest", "protesta",
     ],
 }
 
@@ -65,8 +70,13 @@ RSS_SOURCES_STOCKS = {
     "google_news": "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en",
     "cnbc": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
     "benzinga": "https://www.benzinga.com/stock/{ticker_lower}/feed",
-    "seeking_alpha": "https://seekingalpha.com/api/sa/combined/{ticker}.xml",
-    "marketwatch": "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/",
+    # Seeking Alpha and MarketWatch removed: return 403/401 consistently
+    "motley_fool": "https://www.fool.com/feeds/index.aspx?id=headlines&ticker={ticker}",
+    "investopedia": "https://www.investopedia.com/feedbuilder/feed/getfeed?feedName=rss_headline",
+    "thestreet": "https://www.thestreet.com/.rss/full/",
+    "zacks": "https://www.zacks.com/stock/news/{ticker}?icid=quote-stock_overview-zacks_news-quote_news_feed-rss",
+    "reuters": "https://news.google.com/rss/search?q={ticker}+site:reuters.com&hl=en-US&gl=US&ceid=US:en",
+    "ap_news": "https://news.google.com/rss/search?q={ticker}+site:apnews.com&hl=en-US&gl=US&ceid=US:en",
 }
 
 RSS_SOURCES_CRYPTO = {
@@ -74,7 +84,38 @@ RSS_SOURCES_CRYPTO = {
     "cointelegraph": "https://cointelegraph.com/rss",
     "the_block": "https://www.theblock.co/rss.xml",
     "google_news": "https://news.google.com/rss/search?q={ticker_clean}+crypto&hl=en-US&gl=US&ceid=US:en",
+    "decrypt": "https://decrypt.co/feed",
+    "beincrypto": "https://beincrypto.com/feed/",
 }
+
+# ── Monitored tickers ────────────────────────────────────────
+MONITORED_TICKERS = [
+    "AAPL", "TSLA", "NVDA", "MSFT", "XOM", "GLD", "BTC-USD", "ETH-USD",
+]
+
+# ── Ticker detection for general-purpose feeds ────────────────
+TICKER_KEYWORDS: dict[str, list[str]] = {
+    "AAPL": ["apple", "aapl", "iphone", "ipad", "tim cook", "cupertino"],
+    "TSLA": ["tesla", "tsla", "elon musk", "cybertruck", "model 3", "model y"],
+    "NVDA": ["nvidia", "nvda", "geforce", "rtx", "jensen huang", "cuda"],
+    "MSFT": ["microsoft", "msft", "azure", "windows", "satya nadella", "copilot"],
+    "XOM": ["exxon", "xom", "exxonmobil", "oil major"],
+    "GLD": ["gold", "gld", "precious metal", "gold etf", "oro"],
+    "BTC-USD": ["bitcoin", "btc", "crypto", "satoshi"],
+    "ETH-USD": ["ethereum", "eth", "ether", "vitalik"],
+}
+
+
+def detect_ticker(title: str, content: str) -> str | None:
+    """Detect which monitored ticker an article is about.
+
+    Returns the first matching ticker or None.
+    """
+    combined = f"{title} {content}".lower()
+    for ticker, keywords in TICKER_KEYWORDS.items():
+        if any(kw in combined for kw in keywords):
+            return ticker
+    return None
 
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -147,6 +188,30 @@ def extract_clean_text(url: str, html: str) -> str:
     except Exception:
         pass
 
+    return ""
+
+
+async def extract_content_safe(url: str, rss_summary: str = "") -> str:
+    """Try full-text extraction with graceful fallback to RSS summary.
+
+    Priority: trafilatura full-text > RSS summary > empty string.
+    """
+    if not url:
+        return clean_html_text(rss_summary) if rss_summary else ""
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=12,
+            headers={"User-Agent": "Mozilla/5.0"},
+        ) as client:
+            page = await client.get(url)
+        full = extract_clean_text(url, page.text)
+        if full and len(full) > 100:
+            return full
+    except Exception:
+        pass
+    # Fallback to RSS summary
+    if rss_summary:
+        return clean_html_text(rss_summary)
     return ""
 
 
@@ -248,28 +313,24 @@ class NewsScraper:
                     if keyword not in combined:
                         continue
 
-                content = entry.get("summary", "")
+                rss_summary = entry.get("summary", "")
 
                 # For Google News, force fulltext and ignore RSS summary
                 if source_name == "Google News":
                     use_fulltext = True
-                    content = ""
+                    rss_summary = ""
 
-                # Full text extraction via trafilatura
+                # Full text extraction with graceful fallback
                 if use_fulltext and entry.get("link"):
                     try:
                         real_url = await self.resolve_redirect(entry.link)
-                        async with httpx.AsyncClient(
-                            follow_redirects=True, timeout=12,
-                            headers={"User-Agent": "Mozilla/5.0"},
-                        ) as client:
-                            page = await client.get(real_url)
-                        full = extract_clean_text(real_url, page.text)
-                        if full:
-                            content = full
+                        content = await extract_content_safe(real_url, rss_summary)
                         await asyncio.sleep(0.3)
                     except Exception as e:
                         self.logger.debug("Full text fallback for %s: %s", entry.link, e)
+                        content = clean_html_text(rss_summary)
+                else:
+                    content = clean_html_text(rss_summary)
 
                 articles.append({
                     "title": title,
@@ -431,10 +492,6 @@ class NewsScraper:
         tasks = [
             self.fetch_google_news(ticker, days_back),
             self.fetch_newsapi(ticker, days_back),
-            self.fetch_rss_with_fulltext(
-                RSS_SOURCES_STOCKS["seeking_alpha"].format(ticker=ticker),
-                ticker, "Seeking Alpha", use_fulltext=False,
-            ),
             self.fetch_alpha_vantage(ticker),
         ]
 
@@ -458,6 +515,14 @@ class NewsScraper:
                     RSS_SOURCES_CRYPTO["the_block"],
                     ticker, "The Block", use_fulltext=False,
                 ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_CRYPTO["decrypt"],
+                    ticker, "Decrypt", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_CRYPTO["beincrypto"],
+                    ticker, "BeInCrypto", use_fulltext=True,
+                ),
             ]
         else:
             tasks += [
@@ -470,8 +535,24 @@ class NewsScraper:
                     ticker, "Benzinga", use_fulltext=True,
                 ),
                 self.fetch_rss_with_fulltext(
-                    RSS_SOURCES_STOCKS["marketwatch"],
-                    ticker, "MarketWatch", use_fulltext=True,
+                    RSS_SOURCES_STOCKS["motley_fool"].format(ticker=ticker),
+                    ticker, "Motley Fool", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_STOCKS["investopedia"],
+                    ticker, "Investopedia", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_STOCKS["thestreet"],
+                    ticker, "TheStreet", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_STOCKS["reuters"].format(ticker=ticker),
+                    ticker, "Reuters", use_fulltext=True,
+                ),
+                self.fetch_rss_with_fulltext(
+                    RSS_SOURCES_STOCKS["ap_news"].format(ticker=ticker),
+                    ticker, "AP News", use_fulltext=True,
                 ),
             ]
 
@@ -484,19 +565,32 @@ class NewsScraper:
             elif isinstance(r, Exception):
                 self.logger.warning("Source error: %s", r)
 
+        # Filter: only keep articles relevant to monitored tickers
+        filtered = []
+        for a in all_articles:
+            # Articles already tagged with this ticker pass through
+            if a.get("ticker") == ticker:
+                filtered.append(a)
+                continue
+            # For general feeds, detect ticker from content
+            detected = detect_ticker(a.get("title", ""), a.get("content", ""))
+            if detected == ticker:
+                a["ticker"] = ticker
+                filtered.append(a)
+
         # Deduplicate by URL
         seen: set[str] = set()
         unique = []
-        for a in all_articles:
+        for a in filtered:
             url = a.get("url", "")
             if url and url not in seen and len(a.get("title", "")) > 10:
                 seen.add(url)
                 unique.append(a)
 
         self.logger.info(
-            "%s: %d unique articles (from %d total, %d dupes removed)",
-            ticker, len(unique), len(all_articles),
-            len(all_articles) - len(unique),
+            "%s: %d unique articles (from %d total, %d filtered, %d dupes removed)",
+            ticker, len(unique), len(all_articles), len(filtered),
+            len(filtered) - len(unique),
         )
         return unique
 
@@ -571,9 +665,18 @@ if __name__ == "__main__":
         print(f"Scraping {len(tickers)} ticker...")
         results = await scraper.run_all(tickers=tickers, days_back=2)
 
+        # Summary logging
+        total_found = sum(r["found"] for r in results.values())
+        total_saved = sum(r["saved"] for r in results.values())
+        print("\n=== SCRAPING SUMMARY ===")
         for ticker, r in results.items():
-            print(f"{ticker}: trovati={r['found']}, salvati={r['saved']}")
-
-        print("Scraping completato.")
+            status = "OK" if r["found"] > 0 else "EMPTY"
+            print(f"  {ticker}: found={r['found']}, saved={r['saved']} [{status}]")
+        print(f"  TOTALE: {total_found} trovati, {total_saved} salvati")
+        print(f"  Ticker analizzati: {len(tickers)}")
+        empty = [t for t, r in results.items() if r["found"] == 0]
+        if empty:
+            print(f"  ATTENZIONE: nessun articolo per: {', '.join(empty)}")
+        print("========================\n")
 
     asyncio.run(main())
