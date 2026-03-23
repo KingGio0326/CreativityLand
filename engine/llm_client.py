@@ -26,7 +26,7 @@ def get_llm_client() -> OpenAI:
         )
 
 
-DEFAULT_MODEL = "google/gemini-flash-2.0"
+DEFAULT_MODEL = "google/gemini-2.0-flash-001"
 FALLBACK_MODEL = "meta-llama/llama-3.3-70b-instruct"
 
 

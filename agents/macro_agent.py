@@ -115,7 +115,7 @@ specialmente se confermano o contraddicono i segnali di mercato.
             text = call_llm(
                 prompt=prompt,
                 system="Sei un analista finanziario esperto.",
-                model="google/gemini-flash-2.0",
+                model="google/gemini-2.0-flash-001",
                 max_tokens=500,
                 temperature=0.2,
             ).strip()

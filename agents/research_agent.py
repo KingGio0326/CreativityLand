@@ -67,7 +67,7 @@ class ResearchAgent:
             research_context = call_llm(
                 prompt=prompt,
                 system="Sei un analista quantitativo. Sintetizza questi paper arXiv in insight concreti per il trading.",
-                model="google/gemini-flash-2.0",
+                model="google/gemini-2.0-flash-001",
                 max_tokens=300,
                 temperature=0.2,
             )
