@@ -69,11 +69,7 @@ def classify_geopolitical_relevance(
 RSS_SOURCES_STOCKS = {
     "google_news": "https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en",
     "cnbc": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
-    "benzinga": "https://www.benzinga.com/stock/{ticker_lower}/feed",
-    # Seeking Alpha and MarketWatch removed: return 403/401 consistently
     "motley_fool": "https://www.fool.com/feeds/index.aspx?id=headlines&ticker={ticker}",
-    "investopedia": "https://www.investopedia.com/feedbuilder/feed/getfeed?feedName=rss_headline",
-    "thestreet": "https://www.thestreet.com/.rss/full/",
     "zacks": "https://www.zacks.com/stock/news/{ticker}?icid=quote-stock_overview-zacks_news-quote_news_feed-rss",
     "reuters": "https://news.google.com/rss/search?q={ticker}+site:reuters.com&hl=en-US&gl=US&ceid=US:en",
     "ap_news": "https://news.google.com/rss/search?q={ticker}+site:apnews.com&hl=en-US&gl=US&ceid=US:en",
@@ -486,8 +482,6 @@ class NewsScraper:
     # ── MAIN FETCH ──
 
     async def fetch_by_ticker(self, ticker: str, days_back: int = 2) -> list[dict]:
-        ticker_lower = ticker.lower().replace("-usd", "")
-
         # Common tasks
         tasks = [
             self.fetch_google_news(ticker, days_back),
@@ -531,20 +525,12 @@ class NewsScraper:
                     ticker, "CNBC", use_fulltext=True,
                 ),
                 self.fetch_rss_with_fulltext(
-                    RSS_SOURCES_STOCKS["benzinga"].format(ticker_lower=ticker_lower),
-                    ticker, "Benzinga", use_fulltext=True,
-                ),
-                self.fetch_rss_with_fulltext(
                     RSS_SOURCES_STOCKS["motley_fool"].format(ticker=ticker),
                     ticker, "Motley Fool", use_fulltext=True,
                 ),
                 self.fetch_rss_with_fulltext(
-                    RSS_SOURCES_STOCKS["investopedia"],
-                    ticker, "Investopedia", use_fulltext=True,
-                ),
-                self.fetch_rss_with_fulltext(
-                    RSS_SOURCES_STOCKS["thestreet"],
-                    ticker, "TheStreet", use_fulltext=True,
+                    RSS_SOURCES_STOCKS["zacks"].format(ticker=ticker),
+                    ticker, "Zacks", use_fulltext=True,
                 ),
                 self.fetch_rss_with_fulltext(
                     RSS_SOURCES_STOCKS["reuters"].format(ticker=ticker),
