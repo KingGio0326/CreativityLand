@@ -127,8 +127,8 @@ class TradingOrchestrator:
             if "analysis" in pr:
                 rec = pr["analysis"].get("recommendation", {})
                 pattern_signal = rec.get("signal", "HOLD")
-                pattern_found = pr["analysis"].get("patterns_found", 0)
-                pattern_similarity = pr["analysis"].get("best_similarity", 0)
+                pattern_found = pr["analysis"].get("patterns_found") or 0
+                pattern_similarity = pr["analysis"].get("best_similarity") or 0.0
                 pattern_regime_info = {
                     "regime_filter": pr["analysis"].get("regime_filter"),
                     "regime_filtered_count": pr["analysis"].get("regime_filtered_count", 0),

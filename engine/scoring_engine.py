@@ -238,9 +238,9 @@ class ScoringEngine:
             "signal_id": signal_id,
             "ticker": ticker,
             "pattern_prediction": pattern_data.get("prediction", "neutral"),
-            "pattern_boost": pattern_data.get("boost", 0.0),
+            "pattern_boost": pattern_data.get("boost") or 0.0,
             "patterns_matched": matched,
-            "best_similarity": pattern_data.get("best_similarity", 0.0),
+            "best_similarity": pattern_data.get("best_similarity") or 0.0,
             "regime_at_signal": pattern_data.get("regime_at_signal"),
             "regime_filtered": pattern_data.get("regime_filtered", False),
         }).execute()
