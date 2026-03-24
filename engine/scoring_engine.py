@@ -226,6 +226,87 @@ class ScoringEngine:
         logger.info("Valutazioni aggiornate: %d", updated)
         return updated
 
+    def save_pattern_evaluation(
+        self, signal_id: str, ticker: str, pattern_data: dict,
+    ) -> None:
+        """Save a pattern evaluation record for independent tracking."""
+        matched = pattern_data.get("patterns_matched", 0)
+        if matched == 0:
+            return
+
+        self.supabase.table("pattern_evaluations").insert({
+            "signal_id": signal_id,
+            "ticker": ticker,
+            "pattern_prediction": pattern_data.get("prediction", "neutral"),
+            "pattern_boost": pattern_data.get("boost", 0.0),
+            "patterns_matched": matched,
+            "best_similarity": pattern_data.get("best_similarity", 0.0),
+            "regime_at_signal": pattern_data.get("regime_at_signal"),
+            "regime_filtered": pattern_data.get("regime_filtered", False),
+        }).execute()
+        logger.info(
+            "Pattern eval saved: %s %s (matched=%d, boost=%+.3f)",
+            ticker, pattern_data.get("prediction"),
+            matched, pattern_data.get("boost", 0),
+        )
+
+    def evaluate_pattern_performance(self) -> int:
+        """Evaluate pattern predictions against actual 168h returns."""
+        cutoff = (datetime.now() - timedelta(hours=168)).isoformat()
+        pending = (
+            self.supabase.table("pattern_evaluations")
+            .select("*")
+            .eq("evaluated", False)
+            .lte("signal_date", cutoff)
+            .execute()
+        )
+
+        updated = 0
+        for ev in pending.data or []:
+            signal_date = datetime.fromisoformat(
+                str(ev["signal_date"]).replace("Z", "")
+            ).replace(tzinfo=None)
+
+            entry_price = self.get_price_at(ev["ticker"], signal_date)
+            if not entry_price:
+                continue
+
+            target_date = signal_date + timedelta(hours=168)
+            exit_price = self.get_price_at(ev["ticker"], target_date)
+            if not exit_price:
+                continue
+
+            actual_return = (exit_price - entry_price) / entry_price * 100
+            boost = ev.get("pattern_boost", 0.0)
+            prediction = ev.get("pattern_prediction", "neutral")
+
+            # Correct if: bullish prediction + positive return,
+            #              bearish prediction + negative return,
+            #              neutral prediction is always "correct" (no claim)
+            if prediction == "neutral":
+                correct = True
+            elif prediction == "bullish":
+                correct = actual_return > 0
+            else:  # bearish
+                correct = actual_return < 0
+
+            self.supabase.table("pattern_evaluations").update({
+                "actual_return_168h": round(actual_return, 4),
+                "pattern_correct": correct,
+                "evaluated": True,
+            }).eq("id", ev["id"]).execute()
+
+            logger.info(
+                "Pattern eval: %s %s pred=%s boost=%+.3f "
+                "return=%.2f%% correct=%s",
+                ev["ticker"], ev["id"], prediction,
+                boost, actual_return, correct,
+            )
+            updated += 1
+
+        logger.info("Pattern evaluations updated: %d", updated)
+        return updated
+
     def update_agent_performance(self):
         """
         Ricalcola le statistiche aggregate per ogni agente

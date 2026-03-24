@@ -1,6 +1,6 @@
 from agents import TradingState
 
-WEIGHTS = {
+BASE_WEIGHTS = {
     "sentiment":      0.22,
     "fundamental":    0.18,
     "momentum":       0.12,
@@ -14,6 +14,27 @@ WEIGHTS = {
     "seasonal":       0.04,
     "institutional":  0.04,
 }
+
+REGIME_MODIFIERS = {
+    "crisis": {
+        "sentiment": 1.5, "macro": 2.0, "momentum": 0.5,
+        "ml_prediction": 0.5, "mean_reversion": 0.5,
+    },
+    "bear": {
+        "sentiment": 1.3, "macro": 1.5, "mean_reversion": 1.5,
+        "momentum": 0.7,
+    },
+    "bull": {
+        "momentum": 1.3, "ml_prediction": 1.2, "fundamental": 1.2,
+    },
+    "neutral": {},
+}
+
+
+def get_regime_weights(regime: str) -> dict[str, float]:
+    """Apply regime modifiers to base weights."""
+    mods = REGIME_MODIFIERS.get(regime, {})
+    return {k: v * mods.get(k, 1.0) for k, v in BASE_WEIGHTS.items()}
 
 
 def signal_to_num(signal: str) -> float:
@@ -82,6 +103,9 @@ def _institutional_as_source(state: TradingState) -> dict:
 
 
 def weighted_vote(state: TradingState) -> dict:
+    regime = state.get("market_regime", "neutral")
+    weights = get_regime_weights(regime)
+
     sources = {
         "sentiment":      state.get("sentiment_summary", {}),
         "fundamental":    state.get("fundamental_analysis", {}),
@@ -115,7 +139,7 @@ def weighted_vote(state: TradingState) -> dict:
 
         sig = data.get("signal", "HOLD")
         conf = data.get("confidence", 0.5)
-        w = WEIGHTS[name]
+        w = weights[name]
 
         vote_breakdown[name] = {
             "signal": sig, "confidence": conf
@@ -129,7 +153,8 @@ def weighted_vote(state: TradingState) -> dict:
             "score": 0.0, "consensus_level": "weak",
             "agents_agree": 0, "agents_total": 0,
             "dominant_factor": "none",
-            "vote_breakdown": {}
+            "vote_breakdown": {},
+            "regime": regime,
         }
 
     final_score = weighted_sum / total_weight
@@ -168,7 +193,7 @@ def weighted_vote(state: TradingState) -> dict:
     # Dominant factor
     dominant = max(
         vote_breakdown.items(),
-        key=lambda x: WEIGHTS.get(x[0], 0) * x[1]["confidence"],
+        key=lambda x: weights.get(x[0], 0) * x[1]["confidence"],
         default=("none", {})
     )[0] if vote_breakdown else "none"
 
@@ -180,7 +205,8 @@ def weighted_vote(state: TradingState) -> dict:
         "agents_agree": agreeing,
         "agents_total": total_voting,
         "dominant_factor": dominant,
-        "vote_breakdown": vote_breakdown
+        "vote_breakdown": vote_breakdown,
+        "regime": regime,
     }
 
 
@@ -255,13 +281,42 @@ def weighted_signal_node(state: TradingState) -> TradingState:
 
     state["proposed_signal"] = result["signal"]
     state["confidence"] = round(final_confidence, 3)
+    state["pattern_boost"] = round(mult - 1.0, 3)
+
+    regime = result.get("regime", "neutral")
+    mods = REGIME_MODIFIERS.get(regime, {})
+    regime_info = f"regime={regime.upper()}"
+    if mods:
+        mod_parts = [f"{k} {v:.1f}x" for k, v in mods.items()]
+        regime_info += f" [{', '.join(mod_parts)}]"
+
     state["reasoning"].append(
         f"WeightedVote: {result['signal']} "
         f"({final_confidence:.0%}) | "
         f"consensus={result['consensus_level']} "
         f"({result['agents_agree']}/{result['agents_total']}) | "
-        f"dominant={result['dominant_factor']}"
+        f"dominant={result['dominant_factor']} | "
+        f"{regime_info}"
     )
+
+    # Log pattern regime filter info
+    pri = state.get("pattern_regime_info", {})
+    regime_f = pri.get("regime_filter")
+    if regime_f and regime_f != "neutral":
+        filtered_n = pri.get("regime_filtered_count", 0)
+        total_n = pri.get("total_unfiltered_count", 0)
+        fallback = pri.get("used_fallback", False)
+        if fallback:
+            state["reasoning"].append(
+                f"PatternMatching: {filtered_n} matches "
+                f"(regime filter: {regime_f}) vs {total_n} total "
+                f"-- FALLBACK a tutti i regimi (troppo restrittivo)"
+            )
+        else:
+            state["reasoning"].append(
+                f"PatternMatching: {filtered_n} matches "
+                f"(regime filter: {regime_f}) vs {total_n} total"
+            )
 
     if mult > 1.0:
         state["reasoning"].append(

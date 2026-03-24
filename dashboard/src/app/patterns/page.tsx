@@ -6,6 +6,7 @@ import {
   Line,
   AreaChart,
   Area,
+  BarChart,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -87,6 +88,9 @@ function regimeStyle(regime: string) {
       return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
     case "bear":
       return "bg-red-500/15 text-red-400 border-red-500/30";
+    case "crisis":
+      return "bg-red-500/20 text-red-300 border-red-400/40";
+    case "neutral":
     case "sideways":
       return "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
     case "volatile_bull":
@@ -102,6 +106,10 @@ function regimeLabel(regime: string) {
       return "Bull Market";
     case "bear":
       return "Bear Market";
+    case "crisis":
+      return "Crisis";
+    case "neutral":
+      return "Neutral";
     case "sideways":
       return "Sideways";
     case "volatile_bull":
@@ -830,6 +838,279 @@ function PortfolioPanel() {
   );
 }
 
+/* ── Pattern Performance types ─────────────────────────── */
+interface PatPerfData {
+  has_data: boolean;
+  total: number;
+  hit_rate: number;
+  avg_boost: number;
+  by_regime: Record<string, { hit_rate: number; total: number }>;
+  by_prediction: Record<string, { hit_rate: number; total: number }>;
+  recent: {
+    id: number;
+    ticker: string;
+    date: string;
+    prediction: string;
+    boost: number;
+    patterns_matched: number;
+    best_similarity: number;
+    regime: string;
+    regime_filtered: boolean;
+    actual_return: number;
+    correct: boolean;
+  }[];
+}
+
+function hrColor(hr: number) {
+  if (hr >= 60) return "text-emerald-400";
+  if (hr >= 40) return "text-amber-400";
+  return "text-red-400";
+}
+function hrBg(hr: number) {
+  if (hr >= 60) return "bg-emerald-500";
+  if (hr >= 40) return "bg-amber-500";
+  return "bg-red-500";
+}
+function predIcon(p: string) {
+  if (p === "bullish") return "\u2191";
+  if (p === "bearish") return "\u2193";
+  return "\u2194";
+}
+function predColor(p: string) {
+  if (p === "bullish") return "text-emerald-400";
+  if (p === "bearish") return "text-red-400";
+  return "text-zinc-400";
+}
+
+/* ── Pattern Performance Section component ──────────────── */
+function PatternPerformanceSection({ perfData }: { perfData: PatPerfData | null }) {
+  if (!perfData) return null;
+
+  if (!perfData.has_data) {
+    return (
+      <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.12)] p-6">
+        <h2 className="text-lg font-bold tracking-tight mb-3">Pattern Matching Performance</h2>
+        <div className="flex items-center gap-3 py-6 justify-center">
+          <span className="text-2xl">&#9203;</span>
+          <div>
+            <p className="text-sm text-[var(--text-muted)]">
+              Pattern evaluation in corso &mdash; i primi risultati saranno disponibili dal ~30 marzo
+            </p>
+            <p className="text-xs text-[var(--text-muted)] mt-1 opacity-60">
+              I pattern vengono valutati dopo 168h (7 giorni) dal segnale
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const regimeOrder = ["bull", "bear", "neutral", "crisis"];
+  const regimeEntries = regimeOrder
+    .filter((k) => perfData.by_regime[k])
+    .map((k) => ({ regime: k, ...perfData.by_regime[k] }));
+
+  // also include any regimes not in the standard order
+  for (const [k, v] of Object.entries(perfData.by_regime)) {
+    if (!regimeOrder.includes(k)) {
+      regimeEntries.push({ regime: k, ...v });
+    }
+  }
+
+  const predEntries = Object.entries(perfData.by_prediction).map(([k, v]) => ({
+    prediction: k,
+    ...v,
+  }));
+
+  const regimeChartData = regimeEntries.map((e) => ({
+    name: e.regime.charAt(0).toUpperCase() + e.regime.slice(1),
+    hit_rate: e.hit_rate,
+    count: e.total,
+  }));
+
+  return (
+    <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.12)] p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold tracking-tight">Pattern Matching Performance</h2>
+        <span className="text-xs text-[var(--text-muted)] font-mono">
+          {perfData.total} valutazioni
+        </span>
+      </div>
+
+      {/* ── Stats row ──────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Hit Rate */}
+        <div className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(139,92,246,0.1)] p-4 text-center">
+          <p className="text-xs text-[var(--text-muted)] barlow uppercase tracking-wider mb-1">Hit Rate</p>
+          <p className={`text-3xl font-bold font-mono ${hrColor(perfData.hit_rate)}`}>
+            {perfData.hit_rate}%
+          </p>
+          <div className="mt-2 h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
+            <div
+              className={`h-full rounded-full ${hrBg(perfData.hit_rate)}`}
+              style={{ width: `${perfData.hit_rate}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Avg Boost */}
+        <div className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(139,92,246,0.1)] p-4 text-center">
+          <p className="text-xs text-[var(--text-muted)] barlow uppercase tracking-wider mb-1">Avg Boost</p>
+          <p className="text-3xl font-bold font-mono text-[#a855f7]">
+            {perfData.avg_boost.toFixed(1)}%
+          </p>
+          <p className="text-[10px] text-[var(--text-muted)] mt-1">confidenza</p>
+        </div>
+
+        {/* Prediction breakdown */}
+        {predEntries
+          .filter((e) => e.prediction !== "neutral")
+          .map((e) => (
+            <div
+              key={e.prediction}
+              className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(139,92,246,0.1)] p-4 text-center"
+            >
+              <p className="text-xs text-[var(--text-muted)] barlow uppercase tracking-wider mb-1">
+                {e.prediction === "bullish" ? "Bullish Acc." : "Bearish Acc."}
+              </p>
+              <p className={`text-3xl font-bold font-mono ${hrColor(e.hit_rate)}`}>
+                {e.hit_rate}%
+              </p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                {e.total} segnali
+              </p>
+            </div>
+          ))}
+      </div>
+
+      {/* ── Regime chart ──────────────────────────────── */}
+      {regimeChartData.length > 0 && (
+        <div>
+          <p className="text-xs text-[var(--text-muted)] barlow uppercase tracking-wider mb-3">
+            Hit Rate per Regime
+          </p>
+          <div className="h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={regimeChartData} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: "#8884d8", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fill: "#4a4a6a", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={30}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "#12122a",
+                    border: "1px solid rgba(139,92,246,0.3)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  formatter={(value: number, _name: string, props: { payload: { count: number } }) => [
+                    `${value}% (${props.payload.count} pattern)`,
+                    "Hit Rate",
+                  ]}
+                />
+                <ReferenceLine y={50} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
+                <Bar dataKey="hit_rate" radius={[6, 6, 0, 0]}>
+                  {regimeChartData.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={
+                        entry.hit_rate >= 60
+                          ? "#10b981"
+                          : entry.hit_rate >= 40
+                            ? "#f59e0b"
+                            : "#ef4444"
+                      }
+                      fillOpacity={0.7}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* ── Recent evaluations table ──────────────────── */}
+      {perfData.recent.length > 0 && (
+        <div>
+          <p className="text-xs text-[var(--text-muted)] barlow uppercase tracking-wider mb-3">
+            Ultime Valutazioni
+          </p>
+          <div className="overflow-x-auto rounded-xl border border-[rgba(139,92,246,0.1)]">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[rgba(139,92,246,0.1)] text-[var(--text-muted)]">
+                  <th className="px-3 py-2 text-left font-medium">Ticker</th>
+                  <th className="px-3 py-2 text-left font-medium">Data</th>
+                  <th className="px-3 py-2 text-center font-medium">Pred.</th>
+                  <th className="px-3 py-2 text-right font-medium">Boost</th>
+                  <th className="px-3 py-2 text-center font-medium">Regime</th>
+                  <th className="px-3 py-2 text-right font-medium">Return 7d</th>
+                  <th className="px-3 py-2 text-center font-medium">Esito</th>
+                </tr>
+              </thead>
+              <tbody>
+                {perfData.recent.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-b border-[rgba(139,92,246,0.06)] hover:bg-[rgba(139,92,246,0.04)] transition-colors"
+                  >
+                    <td className="px-3 py-2 font-mono font-medium">{r.ticker}</td>
+                    <td className="px-3 py-2 text-[var(--text-muted)]">
+                      {new Date(r.date).toLocaleDateString("it-IT", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
+                    </td>
+                    <td className={`px-3 py-2 text-center font-bold ${predColor(r.prediction)}`}>
+                      {predIcon(r.prediction)} {r.prediction}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      {r.boost > 0 ? (
+                        <span className="text-emerald-400">+{(r.boost * 100).toFixed(0)}%</span>
+                      ) : r.boost < 0 ? (
+                        <span className="text-red-400">{(r.boost * 100).toFixed(0)}%</span>
+                      ) : (
+                        <span className="text-zinc-500">0%</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${regimeStyle(r.regime)}`}
+                      >
+                        {r.regime}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      <span className={r.actual_return >= 0 ? "text-emerald-400" : "text-red-400"}>
+                        {r.actual_return >= 0 ? "+" : ""}
+                        {r.actual_return.toFixed(2)}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center text-base">
+                      {r.correct ? "\u2705" : "\u274c"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── page ──────────────────────────────────────────────── */
 export default function PatternsPage() {
   const [ticker, setTicker] = useState("AAPL");
@@ -837,6 +1118,7 @@ export default function PatternsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chartType, setChartType] = useState<"candle" | "line" | "area">("candle");
+  const [perfData, setPerfData] = useState<PatPerfData | null>(null);
 
   const fetchData = useCallback(async (t: string) => {
     setLoading(true);
@@ -858,6 +1140,14 @@ export default function PatternsPage() {
   useEffect(() => {
     fetchData(ticker);
   }, [ticker, fetchData]);
+
+  // Fetch pattern performance (once, not per ticker)
+  useEffect(() => {
+    fetch("/api/patterns-performance")
+      .then((r) => r.json())
+      .then((d) => setPerfData(d))
+      .catch(() => setPerfData(null));
+  }, []);
 
   const best = data?.similar?.[0] ?? null;
   const rec = data?.analysis?.recommendation;
@@ -1429,6 +1719,9 @@ export default function PatternsPage() {
               </p>
             </div>
           )}
+
+          {/* ── SECTION 5b: Pattern Performance ────────── */}
+          <PatternPerformanceSection perfData={perfData} />
 
           {/* ── SECTION 6: Trading Panel + Portfolio ──── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

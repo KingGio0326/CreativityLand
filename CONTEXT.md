@@ -77,7 +77,8 @@ progetto_stef/
 │
 ├── engine/
 │   ├── llm_client.py              # Client OpenRouter unificato
-│   ├── scoring_engine.py          # Valutazione segnali multi-orizzonte
+│   ├── regime_detector.py         # RegimeDetector: VIX/SPY/TLT → bull/bear/neutral/crisis
+│   ├── scoring_engine.py          # Valutazione segnali + pattern performance
 │   ├── signals.py                 # Salvataggio segnali su Supabase
 │   ├── pattern_matcher.py         # pgvector cosine similarity
 │   ├── pattern_extractor.py       # Estrazione pattern storici
@@ -109,7 +110,8 @@ progetto_stef/
 │       │   ├── backtest/page.tsx  # Risultati backtest
 │       │   ├── search/page.tsx    # Ricerca semantica
 │       │   └── api/               # API routes
-│       │       └── performance/route.ts
+│       │       ├── performance/route.ts
+│       │       └── patterns-performance/route.ts  # Pattern matching stats
 │       ├── components/
 │       │   ├── FloatingSidebar.tsx # Sidebar navigazione (collapsible)
 │       │   ├── AgentCard.tsx      # Card singolo agente
@@ -132,13 +134,15 @@ progetto_stef/
 
 ## 3. Agenti e Pesi
 
-### Pipeline LangGraph (ordine di esecuzione)
+### Pipeline LangGraph (ordine di esecuzione — 20 nodi)
 
 ```
-scraper → social → sentiment → research → fundamental → technical → options
+regime → scraper → social → sentiment → research → fundamental → technical → options
 → momentum → mean_reversion → ml → risk → liquidity → macro → intermarket
 → seasonal → institutional → weighted → critic (conditional retry)
 ```
+
+`regime` è il primo nodo: classifica il mercato come bull/bear/neutral/crisis usando VIX, SPY 30d trend + SMA50/200, TLT flight-to-safety. Il risultato viene propagato nel `TradingState` e usato dal `WeightedSignalAgent` per aggiustare i pesi.
 
 ### Pesi nel WeightedSignalAgent
 
@@ -166,6 +170,16 @@ WEIGHTS = {
 - Altrimenti → HOLD
 - Consensus: strong ≥70%, moderate ≥50%, weak <50% → forza HOLD
 - Modificatori post-voto: pattern matching (±15%), research context (±5%)
+
+### Modificatori pesi per regime
+I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima del voto:
+
+| Regime | Modificatori |
+|--------|-------------|
+| **crisis** | sentiment 1.5x, macro 2.0x, mean_reversion 2.0x, momentum 0.5x |
+| **bear** | sentiment 1.3x, macro 1.5x, mean_reversion 1.5x, momentum 0.7x |
+| **bull** | momentum 1.3x, ml_prediction 1.2x, fundamental 1.2x |
+| **neutral** | nessun modificatore (pesi base) |
 
 ---
 
@@ -244,6 +258,36 @@ WEIGHTS = {
 | month, quarter | float8 | Stagionalità |
 | rate_direction | text | up/down/flat |
 | is_crisis | boolean | |
+
+### `market_regime`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | bigint | PK |
+| regime | text | bull/bear/neutral/crisis |
+| confidence | float8 | 0.0-1.0 |
+| vix_level | float8 | Valore VIX corrente |
+| spy_trend_30d | float8 | % variazione SPY 30gg |
+| tlt_trend_30d | float8 | % variazione TLT 30gg (flight-to-safety) |
+| spy_sma50 | float8 | SPY SMA 50 giorni |
+| spy_sma200 | float8 | SPY SMA 200 giorni |
+| detected_at | timestamptz | Cache 6h — viene ricalcolato se > 6h |
+
+### `pattern_evaluations`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | bigint | PK |
+| signal_id | uuid | FK → signals.id |
+| ticker | text | |
+| signal_date | timestamptz | Data del segnale |
+| pattern_prediction | text | bullish/bearish/neutral |
+| pattern_boost | float8 | +0.15, -0.15, o 0.0 |
+| patterns_matched | int | Quanti pattern trovati |
+| best_similarity | float8 | Miglior cosine similarity |
+| regime_at_signal | text | Regime di mercato al momento |
+| regime_filtered | boolean | Se il filtro regime era attivo |
+| actual_return_168h | float8 | Return reale a 7 giorni (compilato dopo) |
+| pattern_correct | boolean | Se la predizione era corretta |
+| evaluated | boolean | Default false, true dopo 168h |
 
 ### `correlation_cache`
 | Colonna | Tipo |
@@ -327,11 +371,13 @@ schedule:
 | 1. Scrape news | `python -m scraper.news_scraper` | Multi-source RSS + API |
 | 2. Process Sentiment | `SentimentAnalyzer().process_unanalyzed()` | FinBERT batch |
 | 3. Process Embeddings | `EmbeddingEngine().process_unembedded()` | MiniLM 384-dim |
-| 4. Run multi-agent | `TradingOrchestrator().decide(ticker)` | 8 ticker × 17 agenti |
+| 4. Run multi-agent | `TradingOrchestrator().decide(ticker)` | 8 ticker × 20 nodi (regime → ... → critic) |
+| 4b. Save pattern evals | `save_pattern_evaluation()` | Solo se patterns_matched > 0 |
 | 5. Evaluate signals | `ScoringEngine().evaluate_pending()` | 6h/24h/72h/168h |
 | 6. Register new signals | Inserisce in `signal_evaluations` | |
 | 7. Update performance | `ScoringEngine().update_agent_performance()` | Aggregate stats |
-| 8. Notify Telegram | `format_run_message()` + `notify()` | Push a tutti i chat ID |
+| 7b. Evaluate patterns | `ScoringEngine().evaluate_pattern_performance()` | Pattern evals con 168h+ di età |
+| 8. Notify Telegram | `format_run_message()` + `notify()` | Include regime header + modifier note |
 | 9. Update correlation | `build_correlation_matrix()` | Cache in Supabase |
 
 ### Solo domenica (aggiuntivi)
@@ -362,12 +408,12 @@ Step finale `Notify Telegram Error` con `if: failure()` per notificare errori.
 | Ticker monitorati | AAPL, TSLA, NVDA, BTC-USD, ETH-USD, MSFT, XOM, GLD |
 
 ### Fonti Scraper Attive
-**Stocks:** CNBC, Motley Fool, Zacks, AP News (via Google RSS), NewsAPI, Finnhub, Alpha Vantage
+**Stocks:** CNBC, Motley Fool, AP News (via Google RSS), NewsAPI, Finnhub, Alpha Vantage
 **Crypto:** CoinDesk, CoinTelegraph, The Block, Decrypt, BeInCrypto, NewsAPI, Alpha Vantage
 
 ### Fonti Rimosse
 - Seeking Alpha (403), MarketWatch (401), Benzinga (404 redirect)
-- Investopedia (402 paywall), TheStreet (404)
+- Investopedia (402 paywall), TheStreet (404), Zacks (404)
 - Google News diretto (44% articoli vuoti), Reuters (401, contenuto ~137 chars)
 
 ---
@@ -376,22 +422,20 @@ Step finale `Notify Telegram Error` con `if: failure()` per notificare errori.
 
 1. **score_168h sempre 0**: Nessun segnale ha ancora 7 giorni di età. I primi score reali a 168h saranno disponibili dal ~25 marzo 2026. Non è un bug, è il sistema che si sta "scaldando".
 
-2. **Zacks RSS non testato**: Aggiunto come fonte ma non ancora verificato se ritorna articoli validi con contenuto sufficiente.
+2. **CNBC contenuto variabile**: Alcuni articoli CNBC vengono scartati da trafilatura (`discarding data`). Il fallback RSS summary funziona ma il contenuto è più corto.
 
-3. **CNBC contenuto variabile**: Alcuni articoli CNBC vengono scartati da trafilatura (`discarding data`). Il fallback RSS summary funziona ma il contenuto è più corto.
+3. **Encoding cp1252**: Su Windows, print() con emoji Unicode può fallire. I file usano escape sequences (`\U0001f7e2`) per evitare il problema. Se si aggiungono nuovi print con emoji dirette, usare escape sequences.
 
-4. **Encoding cp1252**: Su Windows, print() con emoji Unicode può fallire. I file usano escape sequences (`\U0001f7e2`) per evitare il problema. Se si aggiungono nuovi print con emoji dirette, usare escape sequences.
-
-5. **`total_weight` nei pesi**: La somma dei WEIGHTS è 1.06 (non 1.0). Funziona perché il codice normalizza dividendo per `total_weight`, ma potrebbe confondere chi legge i pesi come percentuali.
+4. **`total_weight` nei pesi**: La somma dei WEIGHTS è 1.06 (non 1.0). Funziona perché il codice normalizza dividendo per `total_weight`, ma potrebbe confondere chi legge i pesi come percentuali.
 
 ---
 
 ## 9. Roadmap (Priorità)
 
 1. **Attendere score_168h** (~25 marzo) → verificare che le performance stats e hit rate siano corrette sulla dashboard e nel report settimanale
-2. **Verificare Zacks RSS** → testare se ritorna articoli con contenuto valido, rimuovere se no
-3. **Migliorare pattern matching** → la query diretta su `price_patterns` potrebbe beneficiare di filtri per `market_regime` e `rate_direction` correnti
-4. **Alpha calculation** → Implementare il calcolo dell'alpha (vs SPY) nella `agent_performance` table (colonne `spy_return_same_period` e `alpha` esistono ma sono sempre NULL)
+2. **Score composito unificato** → Gauge/meter in homepage che combina hit rate, avg score, alpha, consensus
+3. **Discovery automatico nuovi ticker** → Trending topics dallo scraper → suggerimenti via Telegram
+4. **Alpha calculation** → Implementare il calcolo dell'alpha (vs SPY) nella `agent_performance` table
 5. **Backtest integration** → La tabella `backtest_results` esiste ma non è popolata dal workflow
 6. **Dashboard mobile** → La FloatingSidebar non è ottimizzata per mobile
 7. **Rate limiting scraper** → Aggiungere retry con backoff per le fonti che occasionalmente falliscono
@@ -403,6 +447,17 @@ Step finale `Notify Telegram Error` con `if: failure()` per notificare errori.
 
 ### Perché score_168h come orizzonte principale
 I segnali di trading hanno bisogno di tempo per materializzarsi. 6h e 24h catturano noise, 72h è intermedio, **168h (7 giorni) è l'orizzonte più affidabile** per valutare se un segnale BUY/SELL era corretto. Il `fully_evaluated` diventa true solo quando tutti e 4 gli orizzonti sono calcolati.
+
+### Perché Regime Detection come primo nodo
+Il mercato si comporta in modo fondamentalmente diverso in regimi diversi. Un segnale momentum forte in un bull market è affidabile; lo stesso segnale in un bear market potrebbe essere un dead cat bounce. Il `RegimeDetector` classifica il mercato usando 3 indicatori complementari:
+- **VIX** (paura): >35 = crisis, >25 = bear component, <18 = bull component
+- **SPY 30d trend + SMA50/200 cross**: trend direzionale e golden/death cross
+- **TLT 30d trend**: flight-to-safety — se TLT sale mentre SPY scende → bear/crisis confermato
+
+Il regime viene calcolato **prima** di tutti gli agenti e cached per 6h in Supabase. I pesi del `WeightedSignalAgent` vengono poi moltiplicati per fattori regime-specifici (es. in bear: sentiment 1.3x, macro 1.5x, momentum 0.7x), spostando il sistema verso agenti più difensivi quando il mercato è in stress.
+
+### Perché Pattern Evaluation indipendente
+Il pattern matching influenza la confidence finale (±15%), ma la pipeline ne oscura l'effetto individuale. La tabella `pattern_evaluations` traccia separatamente se le predizioni del pattern matching (bullish/bearish) erano corrette dopo 168h, permettendo di validare se il sistema di cosine similarity su pgvector aggiunge valore predittivo reale. I dati sono visibili nella sezione "Pattern Matching Performance" della dashboard `/patterns`.
 
 ### Perché OpenRouter invece di Anthropic diretto
 OpenRouter permette di usare **qualsiasi modello** (Gemini Flash 2.0, Llama, Claude) con un singolo client OpenAI-compatibile. Il default è `google/gemini-2.0-flash-001` (veloce, economico), con fallback su `meta-llama/llama-3.3-70b-instruct`. Switching model = cambiare una stringa.

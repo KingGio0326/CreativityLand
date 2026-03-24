@@ -59,7 +59,9 @@ jobs:
 
           bot = TradingOrchestrator()
           from engine.signals import SignalEngine
-          se = SignalEngine()
+          from engine.scoring_engine import ScoringEngine
+          sig_engine = SignalEngine()
+          score_engine = ScoringEngine()
 
           print(f'Analisi di {len(tickers)} ticker...')
           for ticker in tickers:
@@ -71,7 +73,12 @@ jobs:
                       'confidence': result['confidence'],
                       'reasoning': json.dumps(result['reasoning']),
                   }
-                  se.save_signal(signal_dict)
+                  signal_id = sig_engine.save_signal(signal_dict)
+                  pat_data = result.get('pattern_data', {})
+                  if signal_id and pat_data.get('patterns_matched', 0) > 0:
+                      score_engine.save_pattern_evaluation(
+                          signal_id, ticker, pat_data,
+                      )
                   print(f'{ticker}: {result[\"signal\"]} '
                         f'({result[\"confidence\"]:.0%}) '
                         f'consensus={result[\"consensus_level\"]}')
@@ -113,6 +120,10 @@ jobs:
           # 3. Aggiorna performance aggregate
           se.update_agent_performance()
           print('Performance aggiornata.')
+
+          # 4. Valuta pattern matching performance
+          pat_updated = se.evaluate_pattern_performance()
+          print(f'Pattern evaluations aggiornate: {pat_updated}')
           "
       - name: Notify Telegram
         run: |
@@ -141,6 +152,19 @@ jobs:
           total = supabase.table('signals').select('id', count='exact').execute()
           run_number = (total.count or 0) // 8
 
+          # Recupera ultimo regime
+          regime_data = None
+          try:
+              rr = supabase.table('market_regime') \
+                  .select('*') \
+                  .order('detected_at', desc=True) \
+                  .limit(1) \
+                  .execute()
+              if rr.data:
+                  regime_data = rr.data[0]
+          except Exception as e:
+              print(f'Regime fetch failed: {e}')
+
           msg = format_run_message(
               run_number=run_number,
               signals=signals,
@@ -148,6 +172,7 @@ jobs:
               sentiment_count=int(os.getenv('SENTIMENT_COUNT', 0)),
               new_signals=len(signals),
               duration_minutes=0,
+              regime_data=regime_data,
           )
           notify(msg)
           print('Notifica Telegram inviata')
@@ -260,11 +285,42 @@ jobs:
                       best_hit_rate = hit_rate
                       best_ticker = ticker
 
+          # Regime stats ultimi 7 giorni
+          regime_stats = []
+          vix_min = None
+          vix_max = None
+          try:
+              from datetime import datetime, timedelta
+              cutoff_7d = (datetime.now() - timedelta(days=7)).isoformat()
+              rr = supabase.table('market_regime') \
+                  .select('regime, vix_level') \
+                  .gte('detected_at', cutoff_7d) \
+                  .execute()
+              if rr.data:
+                  from collections import Counter
+                  counts = Counter(r['regime'] for r in rr.data)
+                  regime_stats = [
+                      {'regime': k, 'cnt': v}
+                      for k, v in counts.most_common()
+                  ]
+                  vix_values = [
+                      r['vix_level'] for r in rr.data
+                      if r.get('vix_level') is not None
+                  ]
+                  if vix_values:
+                      vix_min = min(vix_values)
+                      vix_max = max(vix_values)
+          except Exception as e:
+              print(f'Regime stats failed: {e}')
+
           msg = format_weekly_report(
               ticker_stats=ticker_stats,
               total_signals=total_signals,
               best_ticker=best_ticker,
               best_hit_rate=best_hit_rate,
+              regime_stats=regime_stats,
+              vix_min=vix_min,
+              vix_max=vix_max,
           )
           notify(msg)
           print('Report settimanale inviato su Telegram')

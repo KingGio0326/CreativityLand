@@ -24,4 +24,8 @@ class TradingState(TypedDict):
     pattern_signal: str
     pattern_patterns_found: int
     pattern_best_similarity: float
+    pattern_regime_info: dict
+    pattern_boost: float
     rate_direction: str
+    market_regime: str
+    regime_confidence: float

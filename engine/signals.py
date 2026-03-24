@@ -103,8 +103,8 @@ class SignalEngine:
         """Generate signals for multiple tickers."""
         return [self.generate_signal(t) for t in tickers]
 
-    def save_signal(self, signal: dict) -> None:
-        """Save a signal to Supabase."""
+    def save_signal(self, signal: dict) -> str | None:
+        """Save a signal to Supabase. Returns the signal UUID."""
         row = {
             "ticker": signal["ticker"],
             "signal": signal["signal"],
@@ -113,8 +113,10 @@ class SignalEngine:
             "articles_used": [],
             "created_at": signal.get("created_at", datetime.now(timezone.utc).isoformat()),
         }
-        self.supabase.table("signals").insert(row).execute()
-        logger.info("Saved signal for %s to Supabase", signal["ticker"])
+        result = self.supabase.table("signals").insert(row).execute()
+        signal_id = result.data[0]["id"] if result.data else None
+        logger.info("Saved signal for %s to Supabase (id=%s)", signal["ticker"], signal_id)
+        return signal_id
 
 
 if __name__ == "__main__":

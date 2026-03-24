@@ -15,6 +15,16 @@ from engine.pattern_extractor import PatternExtractor, get_seasonal_features, ge
 load_dotenv()
 logger = logging.getLogger("pattern_matcher")
 
+# Maps detector regime → allowed stored regimes + crisis_only flag
+# Stored regimes: bull, bear, sideways, volatile_bull, unknown
+# Detector regimes: bull, bear, neutral, crisis
+REGIME_GROUPS: dict[str, dict] = {
+    "crisis": {"regimes": None, "crisis_only": True},          # any regime, but only crisis periods
+    "bear":   {"regimes": ["bear", "sideways"], "crisis_only": False},
+    "bull":   {"regimes": ["bull", "volatile_bull"], "crisis_only": False},
+    "neutral": {"regimes": None, "crisis_only": False},        # all patterns
+}
+
 
 def sanitize_vector(v: list) -> list:
     """Replace NaN and Inf with 0.0 to avoid JSON serialization errors."""
@@ -66,42 +76,95 @@ class PatternMatcher:
         )
         self.extractor = PatternExtractor()
 
-    def find_similar_patterns(self, ticker: str, top_k: int = 10) -> dict:
-        """Find historical patterns similar to the current one."""
+    def find_similar_patterns(
+        self, ticker: str, top_k: int = 10, regime_filter: str | None = None,
+    ) -> dict:
+        """Find historical patterns similar to the current one.
+
+        Args:
+            ticker: Ticker symbol.
+            top_k: Max number of similar patterns to return.
+            regime_filter: Detector regime (bull/bear/neutral/crisis).
+                If provided, only patterns from matching market conditions
+                are returned. Falls back to unfiltered if too few matches.
+        """
         current = self.extractor.get_current_pattern(ticker)
         if not current:
             return {"error": "Dati non disponibili"}
 
         vector = sanitize_vector(current["normalized"])
-        current_regime = current.get("market_regime", None)
 
-        # Prima cerca nel regime corrente
-        result = self.supabase.rpc(
-            "match_patterns",
-            {
-                "query_vector": vector,
-                "match_ticker": ticker,
-                "match_count": top_k,
-                "filter_regime": current_regime,
-                "include_crises": True,
-            },
-        ).execute()
+        # Build regime filter params
+        group = REGIME_GROUPS.get(regime_filter or "neutral", REGIME_GROUPS["neutral"])
+        filter_regimes = group["regimes"]
+        crisis_only = group["crisis_only"]
 
-        similar = result.data or []
+        # Search with regime filter
+        filtered_count = 0
+        used_fallback = False
 
-        # Se trova meno di 5 risultati, allarga a tutti i regimi
-        if len(similar) < 5:
+        if regime_filter and regime_filter != "neutral":
             result = self.supabase.rpc(
                 "match_patterns",
                 {
                     "query_vector": vector,
                     "match_ticker": ticker,
                     "match_count": top_k,
-                    "filter_regime": None,
-                    "include_crises": True,
+                    "filter_regimes": filter_regimes,
+                    "crisis_only": crisis_only,
                 },
             ).execute()
             similar = result.data or []
+            filtered_count = len(similar)
+
+            # Fallback: if too few matches, search without filter
+            if filtered_count < 5:
+                logger.warning(
+                    "Regime filter '%s' too restrictive for %s: %d matches, "
+                    "falling back to all regimes",
+                    regime_filter, ticker, filtered_count,
+                )
+                result = self.supabase.rpc(
+                    "match_patterns",
+                    {
+                        "query_vector": vector,
+                        "match_ticker": ticker,
+                        "match_count": top_k,
+                        "filter_regimes": None,
+                        "crisis_only": False,
+                    },
+                ).execute()
+                similar = result.data or []
+                used_fallback = True
+        else:
+            # No regime filter — search all
+            result = self.supabase.rpc(
+                "match_patterns",
+                {
+                    "query_vector": vector,
+                    "match_ticker": ticker,
+                    "match_count": top_k,
+                    "filter_regimes": None,
+                    "crisis_only": False,
+                },
+            ).execute()
+            similar = result.data or []
+
+        # Count total (unfiltered) for comparison logging
+        total_unfiltered = len(similar)
+        if regime_filter and regime_filter != "neutral" and not used_fallback:
+            # Get unfiltered count for comparison
+            unfiltered_result = self.supabase.rpc(
+                "match_patterns",
+                {
+                    "query_vector": vector,
+                    "match_ticker": ticker,
+                    "match_count": top_k,
+                    "filter_regimes": None,
+                    "crisis_only": False,
+                },
+            ).execute()
+            total_unfiltered = len(unfiltered_result.data or [])
 
         if not similar:
             return {
@@ -184,6 +247,10 @@ class PatternMatcher:
             "recommendation": self._generate_recommendation(
                 stats(outcomes_10d)
             ),
+            "regime_filter": regime_filter,
+            "regime_filtered_count": filtered_count,
+            "total_unfiltered_count": total_unfiltered,
+            "used_fallback": used_fallback,
         }
 
         return {
