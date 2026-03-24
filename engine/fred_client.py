@@ -172,8 +172,8 @@ def get_liquidity_context() -> dict:
 
 
 if __name__ == "__main__":
-    import json
+    from engine.utils import safe_json_dumps
 
     logging.basicConfig(level=logging.INFO)
     ctx = get_liquidity_context()
-    print(json.dumps(ctx, indent=2))
+    print(safe_json_dumps(ctx, indent=2))

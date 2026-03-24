@@ -1,9 +1,9 @@
 import os
-import json
 from supabase import create_client
 from dotenv import load_dotenv
 from agents import TradingState
 from engine.llm_client import call_llm
+from engine.utils import safe_json_dumps
 
 load_dotenv()
 
@@ -71,7 +71,7 @@ class MacroAgent:
 Analizza questi articoli e determina l'impatto sul ticker {ticker}.
 
 Articoli:
-{json.dumps([{
+{safe_json_dumps([{
     "title": a["title"],
     "content": a.get("content", "")[:300],
 } for a in top], indent=2, ensure_ascii=False)}
@@ -92,7 +92,7 @@ Rispondi SOLO con JSON valido, niente altro:
             prompt += f"""
 
 ARTICOLI GEOPOLITICI AD ALTA RILEVANZA (peso maggiore):
-{json.dumps([{
+{safe_json_dumps([{
     "title": a["title"],
     "geo_relevance": a.get("geo_relevance", "unknown"),
     "geo_weight": a.get("geo_weight", 1.0),

@@ -3,6 +3,7 @@ import logging
 from langgraph.graph import StateGraph, END
 from agents import TradingState
 from engine.regime_detector import detect_regime
+from engine.utils import sanitize_for_json
 from agents.scraper_agent import scraper_agent
 from agents.social_sentiment_agent import social_agent_node
 from agents.sentiment_agent import sentiment_agent
@@ -169,7 +170,7 @@ class TradingOrchestrator:
         else:
             pat_prediction = "neutral"
 
-        return {
+        return sanitize_for_json({
             "ticker": ticker,
             "signal": result["final_signal"] or "HOLD",
             "confidence": result["confidence"],
@@ -196,4 +197,4 @@ class TradingOrchestrator:
                     and pattern_regime_info["regime_filter"] != "neutral"
                 ),
             },
-        }
+        })

@@ -50,8 +50,9 @@ jobs:
       - name: Run multi-agent system
         run: |
           python -c "
-          import os, json
+          import os
           from agents.orchestrator import TradingOrchestrator
+          from engine.utils import safe_json_dumps
 
           tickers_input = os.getenv('INPUT_TICKERS',
               'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD')
@@ -71,7 +72,7 @@ jobs:
                       'ticker': ticker,
                       'signal': result['signal'],
                       'confidence': result['confidence'],
-                      'reasoning': json.dumps(result['reasoning']),
+                      'reasoning': safe_json_dumps(result['reasoning']),
                   }
                   signal_id = sig_engine.save_signal(signal_dict)
                   pat_data = result.get('pattern_data', {})
@@ -181,8 +182,9 @@ jobs:
         run: |
           python -c "
           from engine.correlation_engine import build_correlation_matrix
+          from engine.utils import safe_json_dumps
           from supabase import create_client
-          import os, json
+          import os
 
           result = build_correlation_matrix()
           if result:
@@ -191,11 +193,11 @@ jobs:
                   os.getenv('SUPABASE_KEY')
               )
               supabase.table('correlation_cache').insert({
-                  'matrix': json.dumps(result['matrix']),
-                  'high_correlations': json.dumps(
+                  'matrix': safe_json_dumps(result['matrix']),
+                  'high_correlations': safe_json_dumps(
                       result['high_correlations']
                   ),
-                  'low_correlations': json.dumps(
+                  'low_correlations': safe_json_dumps(
                       result['low_correlations']
                   ),
                   'computed_at': result['computed_at'],
@@ -211,7 +213,7 @@ jobs:
         run: |
           python -c "
           from agents.ml_prediction_agent import MLPredictionAgent
-          import json
+          from engine.utils import safe_json_dumps
 
           agent = MLPredictionAgent()
           tickers = ['AAPL','TSLA','NVDA','BTC-USD','ETH-USD','MSFT','XOM','GLD']
@@ -239,7 +241,7 @@ jobs:
 
           print()
           print('Riepilogo walk-forward:')
-          print(json.dumps(results, indent=2))
+          print(safe_json_dumps(results, indent=2))
           "
       - name: Weekly Telegram Report
         if: github.event.schedule == '0 2 * * 0'

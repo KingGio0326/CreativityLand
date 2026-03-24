@@ -1,6 +1,5 @@
 """Find historically similar price patterns using pgvector cosine similarity."""
 
-import json
 import logging
 import math
 import os
@@ -315,8 +314,9 @@ class PatternMatcher:
 
 
 if __name__ == "__main__":
+    from engine.utils import safe_json_dumps
     logging.basicConfig(level=logging.INFO)
     matcher = PatternMatcher()
     result = matcher.find_similar_patterns("AAPL")
-    print(json.dumps(result["analysis"], indent=2))
+    print(safe_json_dumps(result["analysis"], indent=2))
     print("Raccomandazione:", result["analysis"]["recommendation"])
