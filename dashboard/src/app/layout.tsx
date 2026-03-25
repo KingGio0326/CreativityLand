@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="it">
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&display=swap"
@@ -36,7 +36,7 @@ export default function RootLayout({
         style={{ background: "#07070f", margin: 0 }}
       >
         <FloatingSidebar />
-        <main style={{ marginLeft: 96, minHeight: "100vh", padding: "24px 32px" }}>
+        <main className="main-content">
           {children}
         </main>
       </body>

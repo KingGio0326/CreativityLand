@@ -159,7 +159,7 @@ export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
           disabled={isRunning}
           className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${
             isRunning
-              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              ? "bg-muted text-muted-foreground cursor-not-allowed"
               : "bg-primary text-primary-foreground hover:bg-primary/90"
           }`}
         >

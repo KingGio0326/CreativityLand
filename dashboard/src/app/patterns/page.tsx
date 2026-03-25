@@ -18,11 +18,7 @@ import {
   ReferenceLine,
   ReferenceArea,
 } from "recharts";
-
-const TICKERS = [
-  "AAPL", "TSLA", "NVDA", "BTC-USD",
-  "ETH-USD", "MSFT", "XOM", "GLD",
-];
+import { TICKERS } from "@/lib/constants";
 
 /* ── types ─────────────────────────────────────────────── */
 interface OutcomeStats {

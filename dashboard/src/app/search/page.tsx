@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TICKERS } from "@/lib/constants";
 
 interface SearchResult {
   id: string;
@@ -15,8 +16,6 @@ interface SearchResult {
   sentiment_label: string;
   similarity?: number;
 }
-
-const TICKERS = ["", "AAPL", "TSLA", "NVDA", "BTC-USD", "SPY"];
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -55,15 +54,17 @@ export default function SearchPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           placeholder="Search articles by meaning..."
+          aria-label="Cerca articoli per significato"
           className="flex-1 border rounded-md px-4 py-2 text-sm bg-background"
         />
         <select
           value={ticker}
           onChange={(e) => setTicker(e.target.value)}
           className="border rounded-md px-3 py-2 text-sm bg-background"
+          aria-label="Filtra per ticker"
         >
           <option value="">All tickers</option>
-          {TICKERS.filter(Boolean).map((t) => (
+          {TICKERS.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>

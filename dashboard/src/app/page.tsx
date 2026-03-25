@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import AgentChat from "@/components/AgentChat";
+import { TICKERS } from "@/lib/constants";
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -28,8 +29,6 @@ interface Signal {
 }
 
 /* ── Constants ─────────────────────────────────────────── */
-
-const TICKERS = ["AAPL", "TSLA", "NVDA", "BTC-USD", "ETH-USD", "MSFT", "XOM", "GLD"];
 
 const QUICK_LINKS = [
   {
@@ -259,7 +258,14 @@ export default function DashboardPage() {
                       return (
                         <tr
                           key={ticker}
+                          tabIndex={0}
                           onClick={() => setSelectedTicker(ticker)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setSelectedTicker(ticker)
+                            }
+                          }}
                           className={`cursor-pointer transition-colors ${
                             isSelected
                               ? "bg-[rgba(124,58,237,0.1)]"

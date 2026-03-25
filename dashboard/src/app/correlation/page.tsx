@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TICKERS } from "@/lib/constants";
 
 /* ── types ─────────────────────────────────────────────── */
 
@@ -19,11 +20,6 @@ interface CorrelationData {
 }
 
 /* ── helpers ───────────────────────────────────────────── */
-
-const TICKERS = [
-  "AAPL", "TSLA", "NVDA", "BTC-USD",
-  "ETH-USD", "MSFT", "XOM", "GLD",
-];
 
 function corrColor(v: number): string {
   if (Number.isNaN(v)) return "bg-neutral-800 text-neutral-400";

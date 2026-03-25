@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TICKERS } from "@/lib/constants";
 
 interface Article {
   id: string;
@@ -24,7 +25,6 @@ interface Article {
   published_at: string;
 }
 
-const TICKERS = ["", "AAPL", "TSLA", "NVDA", "BTC-USD", "ETH-USD", "MSFT", "XOM", "GLD", "SPY"];
 const SENTIMENTS = ["", "positive", "negative", "neutral"];
 
 const sentimentColor = (s: string) =>
@@ -77,9 +77,10 @@ export default function ArticlesPage() {
           value={ticker}
           onChange={(e) => { setTicker(e.target.value); setPage(1); }}
           className="border rounded-md px-3 py-1.5 text-sm bg-background"
+          aria-label="Filtra per ticker"
         >
           <option value="">All tickers</option>
-          {TICKERS.filter(Boolean).map((t) => (
+          {[...TICKERS, "SPY"].map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
@@ -87,6 +88,7 @@ export default function ArticlesPage() {
           value={sentiment}
           onChange={(e) => { setSentiment(e.target.value); setPage(1); }}
           className="border rounded-md px-3 py-1.5 text-sm bg-background"
+          aria-label="Filtra per sentiment"
         >
           <option value="">All sentiments</option>
           {SENTIMENTS.filter(Boolean).map((s) => (

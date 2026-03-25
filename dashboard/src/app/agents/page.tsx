@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AgentCard, { type AgentCardProps } from "@/components/AgentCard";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-
-const TICKERS = [
-  "AAPL", "TSLA", "NVDA", "BTC-USD",
-  "ETH-USD", "MSFT", "XOM", "GLD",
-];
+import { TICKERS } from "@/lib/constants";
 
 /* ── agent visual config ───────────────────────────────── */
 interface AgentMeta {
