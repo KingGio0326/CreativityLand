@@ -361,7 +361,7 @@ export default function PerformancePage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span
             style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
+              fontFamily: "var(--font-barlow-condensed), sans-serif",
               fontWeight: 700,
               fontSize: 12,
               letterSpacing: "0.1em",
@@ -380,7 +380,7 @@ export default function PerformancePage() {
               border: "1px solid rgba(139,92,246,0.3)",
               borderRadius: 10,
               color: "var(--accent-light)",
-              fontFamily: "'Barlow Condensed', sans-serif",
+              fontFamily: "var(--font-barlow-condensed), sans-serif",
               fontWeight: 700,
               fontSize: 14,
               letterSpacing: "0.08em",
@@ -420,7 +420,7 @@ export default function PerformancePage() {
                 fontWeight: 700,
                 color:
                   (data?.horizons?.[h]?.count ?? 0) > 0 ? "#10b981" : "var(--text-secondary)",
-                fontFamily: "'Barlow Condensed', sans-serif",
+                fontFamily: "var(--font-barlow-condensed), sans-serif",
                 letterSpacing: "0.06em",
               }}
             >
@@ -575,7 +575,7 @@ export default function PerformancePage() {
                     <div>
                       <span
                         style={{
-                          fontFamily: "'Barlow Condensed', sans-serif",
+                          fontFamily: "var(--font-barlow-condensed), sans-serif",
                           fontWeight: 700,
                           fontSize: 13,
                           letterSpacing: "0.1em",

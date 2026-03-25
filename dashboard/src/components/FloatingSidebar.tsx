@@ -106,7 +106,7 @@ function NavItem({
 
       {/* Label — only visible when expanded */}
       <span style={{
-        fontFamily: "'Barlow Condensed', sans-serif",
+        fontFamily: "var(--font-barlow-condensed), sans-serif",
         fontWeight: 700,
         fontSize: 13,
         letterSpacing: '0.1em',
@@ -309,7 +309,7 @@ export default function FloatingSidebar() {
               flexShrink: 0,
             }} />
             <span style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
+              fontFamily: "var(--font-barlow-condensed), sans-serif",
               fontWeight: 700,
               fontSize: 10,
               letterSpacing: '0.12em',

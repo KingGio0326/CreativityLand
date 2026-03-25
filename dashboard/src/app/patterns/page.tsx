@@ -1314,7 +1314,7 @@ export default function PatternsPage() {
                   borderColor: chartType === type ? "#7c3aed" : "rgba(255,255,255,0.1)",
                   background: chartType === type ? "rgba(124,58,237,0.2)" : "transparent",
                   color: chartType === type ? "#a855f7" : "#6b6b85",
-                  fontFamily: "'Barlow Condensed', sans-serif",
+                  fontFamily: "var(--font-barlow-condensed), sans-serif",
                   fontWeight: 700,
                   fontSize: 12,
                   letterSpacing: "0.08em",

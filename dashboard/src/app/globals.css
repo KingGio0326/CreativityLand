@@ -247,7 +247,7 @@ body {
 /* ── Barlow Condensed font class ──────────────────────── */
 
 .barlow {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow-condensed), sans-serif;
 }
 
 /* ── Floating Sidebar ─────────────────────────────────── */
@@ -297,7 +297,7 @@ body {
   padding: 8px 4px;
   text-decoration: none;
   color: var(--text-muted);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow-condensed), sans-serif;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -348,7 +348,7 @@ body {
   padding: 14px 8px;
   text-decoration: none;
   color: var(--text-muted);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--font-barlow-condensed), sans-serif;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
