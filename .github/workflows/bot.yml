@@ -20,10 +20,36 @@ jobs:
           cache: "pip"
       - run: pip install -r requirements.txt
       - name: Scrape news
-        run: python -m scraper.news_scraper
+        run: |
+          python -c "
+          import asyncio, os
+          from scraper.news_scraper import NewsScraper
+
+          async def main():
+              scraper = NewsScraper()
+              tickers_input = os.getenv('INPUT_TICKERS',
+                  'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD')
+              tickers = [t.strip() for t in tickers_input.split(',')]
+
+              print(f'Scraping {len(tickers)} ticker...')
+              results = await scraper.run_all(tickers=tickers, days_back=2)
+
+              total_found = sum(r['found'] for r in results.values())
+              total_saved = sum(r['saved'] for r in results.values())
+              for ticker, r in results.items():
+                  status = 'OK' if r['found'] > 0 else 'EMPTY'
+                  print(f'  {ticker}: found={r[\"found\"]}, saved={r[\"saved\"]} [{status}]')
+              print(f'  TOTALE: {total_found} trovati, {total_saved} salvati')
+
+              with open(os.environ['GITHUB_ENV'], 'a') as f:
+                  f.write(f'ARTICLES_COUNT={total_saved}\n')
+
+          asyncio.run(main())
+          "
       - name: Process Sentiment
         run: |
           python -c "
+          import os
           from nlp.sentiment import SentimentAnalyzer
           sa = SentimentAnalyzer()
           total = 0
@@ -33,6 +59,8 @@ jobs:
               if n == 0:
                   break
           print(f'Sentiment processati: {total}')
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'SENTIMENT_COUNT={total}\n')
           "
       - name: Process Embeddings
         run: |
