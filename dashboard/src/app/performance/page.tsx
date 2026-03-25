@@ -12,12 +12,9 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
-
-const TICKERS = [
-  "AAPL", "TSLA", "NVDA", "BTC-USD",
-  "ETH-USD", "MSFT", "XOM", "GLD",
-];
+import { TICKERS } from "@/lib/constants";
 
 /* ── types ─────────────────────────────────────────────── */
 interface Evaluation {
@@ -93,6 +90,28 @@ const HORIZON_LABELS: Record<Horizon, string> = {
   "168h": "7 giorni",
 };
 
+interface EquityPoint {
+  date: string;
+  cumulative_pnl: number;
+  signal: string;
+  pnl: number;
+  entry_price: number;
+  exit_price: number;
+}
+
+type EquityCurveData = Record<string, Record<string, EquityPoint[]>>;
+
+const TICKER_COLORS: Record<string, string> = {
+  AAPL: "#3b82f6",
+  TSLA: "#ef4444",
+  NVDA: "#10b981",
+  "BTC-USD": "#f59e0b",
+  "ETH-USD": "#8b5cf6",
+  MSFT: "#06b6d4",
+  XOM: "#f97316",
+  GLD: "#eab308",
+};
+
 /* ── helpers ──────────────────────────────────────────── */
 function signalBadge(signal: string) {
   switch (signal) {
@@ -142,7 +161,7 @@ function StatCard({
   return (
     <div
       style={{
-        background: "#12121a",
+        background: "var(--bg-card)",
         border: "1px solid",
         borderRadius: 16,
         padding: 20,
@@ -166,7 +185,7 @@ function StatCard({
           background: showInfo
             ? "rgba(124,58,237,0.3)"
             : "rgba(255,255,255,0.05)",
-          color: showInfo ? "#a855f7" : "#6b6b85",
+          color: showInfo ? "var(--accent-light)" : "var(--text-muted)",
           fontSize: 12,
           fontWeight: 700,
           cursor: "pointer",
@@ -180,7 +199,7 @@ function StatCard({
         i
       </button>
 
-      <div style={{ fontSize: 12, color: "#6b6b85", marginBottom: 8 }}>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
         {title}
       </div>
       <div
@@ -194,7 +213,7 @@ function StatCard({
       >
         {value}
       </div>
-      <div style={{ fontSize: 12, color: "#4a4a6a" }}>{subtitle}</div>
+      <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{subtitle}</div>
 
       <div
         style={{
@@ -212,12 +231,12 @@ function StatCard({
         >
           <div
             style={{
-              background: "#07070f",
+              background: "var(--bg-primary)",
               borderRadius: 8,
               padding: "8px 12px",
               fontFamily: "monospace",
               fontSize: 12,
-              color: "#a855f7",
+              color: "var(--accent-light)",
               marginBottom: 10,
               border: "1px solid rgba(124,58,237,0.2)",
               letterSpacing: "0.02em",
@@ -228,7 +247,7 @@ function StatCard({
           <p
             style={{
               fontSize: 12,
-              color: "#8b8ba8",
+              color: "var(--text-secondary)",
               lineHeight: 1.7,
               margin: 0,
             }}
@@ -248,6 +267,14 @@ export default function PerformancePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [horizon, setHorizon] = useState<Horizon>("168h");
+  const [equityData, setEquityData] = useState<EquityCurveData | null>(null);
+
+  useEffect(() => {
+    fetch("/api/equity-curve")
+      .then((r) => r.json())
+      .then((d) => { if (!d.error) setEquityData(d); })
+      .catch(() => {});
+  }, []);
 
   const fetchData = useCallback(async (t: string) => {
     setLoading(true);
@@ -325,7 +352,7 @@ export default function PerformancePage() {
               fontSize: 12,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: "#6b6b85",
+              color: "var(--text-muted)",
             }}
           >
             ORIZZONTE
@@ -333,11 +360,12 @@ export default function PerformancePage() {
           <select
             value={horizon}
             onChange={(e) => setHorizon(e.target.value as Horizon)}
+            aria-label="Orizzonte temporale"
             style={{
-              background: "#12121a",
+              background: "var(--bg-card)",
               border: "1px solid rgba(139,92,246,0.3)",
               borderRadius: 10,
-              color: "#a855f7",
+              color: "var(--accent-light)",
               fontFamily: "'Barlow Condensed', sans-serif",
               fontWeight: 700,
               fontSize: 14,
@@ -377,7 +405,7 @@ export default function PerformancePage() {
                 fontSize: 11,
                 fontWeight: 700,
                 color:
-                  (data?.horizons?.[h]?.count ?? 0) > 0 ? "#10b981" : "#4a4a6a",
+                  (data?.horizons?.[h]?.count ?? 0) > 0 ? "#10b981" : "var(--text-secondary)",
                 fontFamily: "'Barlow Condensed', sans-serif",
                 letterSpacing: "0.06em",
               }}
@@ -487,13 +515,7 @@ export default function PerformancePage() {
           </div>
 
           {/* ── SECTION 2: Mini charts grid (4 horizons) ── */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 16,
-            }}
-          >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(["6h", "24h", "72h", "168h"] as const).map((h) => {
               const hData = data?.horizons?.[h];
               const hChartData = hData?.chart_data ?? [];
@@ -503,9 +525,17 @@ export default function PerformancePage() {
               return (
                 <div
                   key={h}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setHorizon(h)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      setHorizon(h)
+                    }
+                  }}
                   style={{
-                    background: isSelected ? "#16163a" : "#12121a",
+                    background: isSelected ? "var(--bg-card-hover)" : "var(--bg-card)",
                     border: `1px solid ${
                       isSelected
                         ? "rgba(124,58,237,0.4)"
@@ -536,7 +566,7 @@ export default function PerformancePage() {
                           fontSize: 13,
                           letterSpacing: "0.1em",
                           textTransform: "uppercase",
-                          color: isSelected ? "#a855f7" : "#6b6b85",
+                          color: isSelected ? "var(--accent-light)" : "var(--text-muted)",
                         }}
                       >
                         {h === "6h"
@@ -547,7 +577,7 @@ export default function PerformancePage() {
                               ? "72 ORE"
                               : "7 GIORNI"}
                       </span>
-                      <div style={{ fontSize: 11, color: "#4a4a6a", marginTop: 2 }}>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
                         {hData?.count ?? 0} BUY/SELL
                       </div>
                     </div>
@@ -564,7 +594,7 @@ export default function PerformancePage() {
                       >
                         {hData?.hit_rate ?? 0}%
                       </div>
-                      <div style={{ fontSize: 10, color: "#4a4a6a" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>
                         hit rate
                       </div>
                     </div>
@@ -613,7 +643,7 @@ export default function PerformancePage() {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        color: "#4a4a6a",
+                        color: "var(--text-secondary)",
                         fontSize: 12,
                         fontStyle: "italic",
                       }}
@@ -927,6 +957,131 @@ export default function PerformancePage() {
             Nessun dato per{" "}
             <span className="font-mono font-medium">{ticker}</span>
           </p>
+        </div>
+      )}
+
+      {/* ── EQUITY CURVES ──────────────────────────────────── */}
+      {equityData && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold tracking-tight mt-4">Equity Curves</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {(["6h", "24h", "72h", "168h"] as const).map((h) => {
+              const horizonTickers = equityData[h] ?? {};
+              const activeTickers = Object.keys(horizonTickers).filter(
+                (t) => horizonTickers[t]?.length > 0,
+              );
+
+              // Merge all ticker series into unified date-indexed array
+              const dateMap = new Map<string, Record<string, number>>();
+              for (const t of activeTickers) {
+                for (const pt of horizonTickers[t]) {
+                  if (!dateMap.has(pt.date)) dateMap.set(pt.date, {});
+                  dateMap.get(pt.date)![t] = pt.cumulative_pnl;
+                }
+              }
+
+              // Sort by date, forward-fill missing values
+              const sortedDates = [...dateMap.keys()].sort();
+              const lastVal: Record<string, number> = {};
+              const merged = sortedDates.map((date) => {
+                const row: Record<string, unknown> = { date };
+                for (const t of activeTickers) {
+                  if (dateMap.get(date)![t] !== undefined) {
+                    lastVal[t] = dateMap.get(date)![t];
+                  }
+                  row[t] = lastVal[t] ?? 0;
+                }
+                return row;
+              });
+
+              // Build tooltip lookup for signal details
+              const tooltipLookup = new Map<string, EquityPoint>();
+              for (const t of activeTickers) {
+                for (const pt of horizonTickers[t]) {
+                  tooltipLookup.set(`${pt.date}_${t}`, pt);
+                }
+              }
+
+              return (
+                <div
+                  key={h}
+                  className="rounded-xl border bg-card p-5"
+                >
+                  <p className="text-sm font-semibold mb-4">
+                    Equity Curve &mdash; {HORIZON_LABELS[h]}
+                    {activeTickers.length === 0 && (
+                      <span className="text-muted-foreground font-normal ml-2">
+                        (in attesa di dati)
+                      </span>
+                    )}
+                  </p>
+                  {merged.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <LineChart data={merged}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.06)"
+                        />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10, fill: "#6b6b85" }}
+                          interval={Math.max(0, Math.floor(merged.length / 6))}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: "#6b6b85" }}
+                          tickFormatter={(v: number) =>
+                            `$${v >= 0 ? "+" : ""}${v.toFixed(0)}`
+                          }
+                        />
+                        <ReferenceLine y={0} stroke="#4a4a6a" strokeDasharray="4 4" />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#12122a",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: 10,
+                            fontSize: 11,
+                          }}
+                          formatter={(value: number, name: string) => {
+                            return [`$${value >= 0 ? "+" : ""}${value.toFixed(2)}`, name];
+                          }}
+                          labelFormatter={(label: string) => `Data: ${label}`}
+                        />
+                        <Legend
+                          wrapperStyle={{ fontSize: 11 }}
+                        />
+                        {activeTickers.map((t) => (
+                          <Line
+                            key={t}
+                            type="monotone"
+                            dataKey={t}
+                            stroke={TICKER_COLORS[t] ?? "#888"}
+                            strokeWidth={2}
+                            dot={false}
+                            name={t}
+                            connectNulls
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div
+                      style={{
+                        height: 240,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--text-secondary)",
+                        fontSize: 13,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Nessun segnale valutato a {HORIZON_LABELS[h]}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
