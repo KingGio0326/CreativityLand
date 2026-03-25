@@ -53,7 +53,7 @@ const signalBg = (s: string) =>
 export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [status, setStatus] = useState("Pronto");
+  const [status, setStatus] = useState("Ready");
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -67,7 +67,7 @@ export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
     if (isRunning) return;
     setIsRunning(true);
     setMessages([]);
-    setStatus("Connessione...");
+    setStatus("Connecting...");
 
     abortRef.current = new AbortController();
 
@@ -76,7 +76,7 @@ export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
         signal: abortRef.current.signal,
       });
       if (!res.ok || !res.body) {
-        setStatus("Errore connessione");
+        setStatus("Connection error");
         setIsRunning(false);
         return;
       }
@@ -111,7 +111,7 @@ export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
               isFinal: data.isFinal,
             };
             setMessages((prev) => [...prev, msg]);
-            setStatus(`${data.agent} completato`);
+            setStatus(`${data.agent} completed`);
 
             if (data.isFinal && data.signal && onSignalReady) {
               onSignalReady(data.signal, data.confidence ?? 0);
@@ -122,12 +122,12 @@ export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
         }
       }
 
-      setStatus("Analisi completata");
+      setStatus("Analysis completed");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        setStatus("Interrotto");
+        setStatus("Aborted");
       } else {
-        setStatus("Errore");
+        setStatus("Error");
       }
     } finally {
       setIsRunning(false);
@@ -137,7 +137,7 @@ export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
   // Auto-run when ticker changes
   useEffect(() => {
     setMessages([]);
-    setStatus("Pronto");
+    setStatus("Ready");
   }, [ticker]);
 
   return (
@@ -171,7 +171,7 @@ export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
         {messages.length === 0 && !isRunning && (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-            Clicca &quot;Run&quot; per avviare l&apos;analisi di {ticker}
+            Click &quot;Run&quot; to start analysis for {ticker}
           </div>
         )}
 

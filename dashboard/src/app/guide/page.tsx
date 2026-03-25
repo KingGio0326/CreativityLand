@@ -6,305 +6,305 @@ const agents = [
   {
     id: 'sentiment', name: 'SentimentAgent', abbr: 'SE',
     color: '#4facfe', bg: 'rgba(79,172,254,0.15)', weight: '22%',
-    tagline: 'Legge l\'umore del mercato su 8+ fonti',
+    tagline: 'Reads market mood across 8+ sources',
     category: ['active','news'],
-    analogy: 'Come un reporter che legge 100 articoli al giorno e capisce se il "tono" delle notizie su un\'azienda e positivo, negativo o neutro.',
-    desc: 'Usa FinBERT -- un modello AI addestrato su testi finanziari -- per analizzare centinaia di articoli di news. Non guarda solo le parole, ma il contesto. "Apple crolla" e diverso da "Apple cresce meno del previsto".',
-    stats: [{ label: 'Fonti', val: '8+' }, { label: 'Articoli/run', val: '~650' }, { label: 'Peso', val: '22%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 88 }, { label: 'Velocita di aggiornamento', val: 95 }],
+    analogy: 'Like a reporter reading 100 articles a day and figuring out whether the overall "tone" of news about a company is positive, negative, or neutral.',
+    desc: 'Uses FinBERT -- an AI model trained on financial text -- to analyze hundreds of news articles. It doesn\'t just look at words, but context. "Apple crashes" is different from "Apple grows less than expected".',
+    stats: [{ label: 'Sources', val: '8+' }, { label: 'Articles/run', val: '~650' }, { label: 'Weight', val: '22%' }],
+    meters: [{ label: 'Influence on final signal', val: 88 }, { label: 'Update speed', val: 95 }],
     signals: [
-      { type: 'buy', text: 'Molte notizie positive, sentiment score > 0.6' },
-      { type: 'sell', text: 'Notizie negative prevalenti, score < -0.4' },
-      { type: 'hold', text: 'Notizie miste o poche notizie disponibili' },
+      { type: 'buy', text: 'Many positive news articles, sentiment score > 0.6' },
+      { type: 'sell', text: 'Predominantly negative news, score < -0.4' },
+      { type: 'hold', text: 'Mixed news or few articles available' },
     ],
     interpret: [
-      { color: '#22d3a0', text: 'Score vicino a +1.0 = euforia (attenzione ai reversal)' },
-      { color: '#f25c5c', text: 'Score vicino a -1.0 = panico (possibile rimbalzo)' },
-      { color: '#f5c842', text: 'Score vicino a 0 = mercato indeciso o assenza di notizie' },
+      { color: '#22d3a0', text: 'Score near +1.0 = euphoria (watch for reversals)' },
+      { color: '#f25c5c', text: 'Score near -1.0 = panic (possible bounce)' },
+      { color: '#f5c842', text: 'Score near 0 = indecisive market or lack of news' },
     ],
-    tip: 'Le notizie geopolitiche (guerre, sanzioni, tassi Fed) hanno un peso 2x rispetto alle notizie normali grazie al sistema di geo-weighting.',
+    tip: 'Geopolitical news (wars, sanctions, Fed rates) carry 2x weight compared to regular news thanks to the geo-weighting system.',
   },
   {
     id: 'fundamental', name: 'FundamentalAgent', abbr: 'FA',
     color: '#f59142', bg: 'rgba(245,145,66,0.15)', weight: '18%',
-    tagline: 'Analizza la salute finanziaria dell\'azienda',
+    tagline: 'Analyzes the company\'s financial health',
     category: ['active'],
-    analogy: 'Come un revisore dei conti che guarda i bilanci di un\'azienda e decide se vale quello che costa in borsa.',
-    desc: 'Legge P/E ratio, PEG, ROE, EPS growth e le raccomandazioni degli analisti istituzionali. E l\'agente piu "classico" -- guarda se l\'azienda e cara o economica rispetto ai suoi guadagni.',
-    stats: [{ label: 'P/E target', val: '<25' }, { label: 'ROE target', val: '>15%' }, { label: 'Peso', val: '18%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 72 }, { label: 'Frequenza aggiornamento dati', val: 45 }],
+    analogy: 'Like an auditor reviewing a company\'s financial statements and deciding whether it\'s worth what it costs on the stock market.',
+    desc: 'Reads P/E ratio, PEG, ROE, EPS growth, and institutional analyst recommendations. It\'s the most "classic" agent -- it checks whether a company is expensive or cheap relative to its earnings.',
+    stats: [{ label: 'P/E target', val: '<25' }, { label: 'ROE target', val: '>15%' }, { label: 'Weight', val: '18%' }],
+    meters: [{ label: 'Influence on final signal', val: 72 }, { label: 'Data update frequency', val: 45 }],
     signals: [
-      { type: 'buy', text: 'P/E basso, ROE alto, analisti ottimisti (Strong Buy)' },
-      { type: 'sell', text: 'P/E altissimo, crescita EPS negativa, downgrade analisti' },
-      { type: 'hold', text: 'Dati misti o assenza di copertura analitica' },
+      { type: 'buy', text: 'Low P/E, high ROE, optimistic analysts (Strong Buy)' },
+      { type: 'sell', text: 'Very high P/E, negative EPS growth, analyst downgrades' },
+      { type: 'hold', text: 'Mixed data or no analyst coverage' },
     ],
     interpret: [
-      { color: '#22d3a0', text: 'BTC-USD e ETH-USD danno HTTP 404 -- normale, non hanno fondamentali' },
-      { color: '#f5c842', text: 'P/E <15 = potenzialmente sottovalutato. P/E >40 = caro ma puo crescere ancora' },
-      { color: '#f59142', text: 'ROE >20% = azienda molto efficiente nel generare utili' },
+      { color: '#22d3a0', text: 'BTC-USD and ETH-USD return HTTP 404 -- normal, they have no fundamentals' },
+      { color: '#f5c842', text: 'P/E <15 = potentially undervalued. P/E >40 = expensive but may still grow' },
+      { color: '#f59142', text: 'ROE >20% = very efficient company at generating profits' },
     ],
-    tip: 'GLD (oro) e crypto non hanno fondamentali tradizionali. Per questi ticker l\'agente restituisce HOLD con confidence bassa.',
+    tip: 'GLD (gold) and crypto have no traditional fundamentals. For these tickers, the agent returns HOLD with low confidence.',
   },
   {
     id: 'momentum', name: 'MomentumAgent', abbr: 'MO',
     color: '#a78bfa', bg: 'rgba(167,139,250,0.15)', weight: '12%',
-    tagline: 'Segue la forza del trend in corso',
+    tagline: 'Tracks the strength of the current trend',
     category: ['active','technical'],
-    analogy: 'Come guardare se un\'auto sta accelerando o decelerando. Non importa la direzione attuale, importa se sta guadagnando o perdendo velocita.',
-    desc: 'Misura il momentum su piu timeframe: 5, 10, 20, 60 giorni. Se il prezzo sale su tutti i timeframe, il momentum e forte. Se diverge (sale sul breve ma scende sul lungo), e un segnale di attenzione.',
-    stats: [{ label: 'Timeframe', val: '4' }, { label: 'Periodo', val: '5-60d' }, { label: 'Peso', val: '12%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 48 }, { label: 'Reattivita ai movimenti recenti', val: 85 }],
+    analogy: 'Like watching whether a car is accelerating or decelerating. The current direction doesn\'t matter -- what matters is whether it\'s gaining or losing speed.',
+    desc: 'Measures momentum across multiple timeframes: 5, 10, 20, 60 days. If the price is rising on all timeframes, momentum is strong. If it diverges (rising short-term but falling long-term), it\'s a warning sign.',
+    stats: [{ label: 'Timeframes', val: '4' }, { label: 'Period', val: '5-60d' }, { label: 'Weight', val: '12%' }],
+    meters: [{ label: 'Influence on final signal', val: 48 }, { label: 'Responsiveness to recent moves', val: 85 }],
     signals: [
-      { type: 'buy', text: 'Momentum positivo su tutti i timeframe (allineamento)' },
-      { type: 'sell', text: 'Momentum negativo su tutti i timeframe' },
-      { type: 'hold', text: 'Segnali contrastanti tra timeframe diversi' },
+      { type: 'buy', text: 'Positive momentum across all timeframes (alignment)' },
+      { type: 'sell', text: 'Negative momentum across all timeframes' },
+      { type: 'hold', text: 'Conflicting signals across different timeframes' },
     ],
     interpret: [
-      { color: '#22d3a0', text: 'Allineamento su tutti i timeframe = segnale forte e affidabile' },
-      { color: '#f25c5c', text: 'Divergenza (breve positivo, lungo negativo) = possibile inversione' },
-      { color: '#a78bfa', text: 'Momentum != previsione: il trend puo continuare o invertirsi' },
+      { color: '#22d3a0', text: 'Alignment across all timeframes = strong and reliable signal' },
+      { color: '#f25c5c', text: 'Divergence (short-term positive, long-term negative) = possible reversal' },
+      { color: '#a78bfa', text: 'Momentum != prediction: the trend may continue or reverse' },
     ],
-    tip: 'Il momentum e uno degli effetti piu documentati in finanza. Azioni che salgono tendono a continuare a salire nel breve termine.',
+    tip: 'Momentum is one of the most well-documented effects in finance. Stocks that are rising tend to keep rising in the short term.',
   },
   {
     id: 'technical', name: 'TechnicalAgent', abbr: 'TA',
     color: '#34d399', bg: 'rgba(52,211,153,0.15)', weight: '11%',
-    tagline: 'Legge i grafici con indicatori classici',
+    tagline: 'Reads charts with classic indicators',
     category: ['active','technical'],
-    analogy: 'Come un geometra che misura esattamente dove si trova il prezzo rispetto alle sue "zone di conforto" storiche.',
-    desc: 'Combina RSI (forza relativa), MACD (convergenza/divergenza), Bande di Bollinger (volatilita) e medie mobili MA50/MA200. Identifica golden cross e death cross.',
-    stats: [{ label: 'Indicatori', val: '5+' }, { label: 'Golden Cross', val: 'MA50>200' }, { label: 'Peso', val: '11%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 44 }, { label: 'Copertura segnali tecnici', val: 70 }],
+    analogy: 'Like a surveyor precisely measuring where the price sits relative to its historical "comfort zones".',
+    desc: 'Combines RSI (relative strength), MACD (convergence/divergence), Bollinger Bands (volatility), and moving averages MA50/MA200. Identifies golden crosses and death crosses.',
+    stats: [{ label: 'Indicators', val: '5+' }, { label: 'Golden Cross', val: 'MA50>200' }, { label: 'Weight', val: '11%' }],
+    meters: [{ label: 'Influence on final signal', val: 44 }, { label: 'Technical signal coverage', val: 70 }],
     signals: [
-      { type: 'buy', text: 'RSI < 30 (ipervenduto), Golden Cross MA50>MA200, MACD rialzista' },
-      { type: 'sell', text: 'RSI > 70 (ipercomprato), Death Cross MA50<MA200, MACD ribassista' },
-      { type: 'hold', text: 'RSI neutro (40-60), nessun cross, Bollinger contratto' },
+      { type: 'buy', text: 'RSI < 30 (oversold), Golden Cross MA50>MA200, bullish MACD' },
+      { type: 'sell', text: 'RSI > 70 (overbought), Death Cross MA50<MA200, bearish MACD' },
+      { type: 'hold', text: 'Neutral RSI (40-60), no cross, contracted Bollinger Bands' },
     ],
     interpret: [
-      { color: '#22d3a0', text: 'RSI 30-70 = zona neutrale. Sotto 30 = ipervenduto. Sopra 70 = ipercomprato' },
-      { color: '#f5c842', text: 'Golden Cross (MA50 supera MA200) = segnale rialzista storico molto forte' },
-      { color: '#34d399', text: 'Bande di Bollinger strette = poca volatilita, esplosione imminente' },
+      { color: '#22d3a0', text: 'RSI 30-70 = neutral zone. Below 30 = oversold. Above 70 = overbought' },
+      { color: '#f5c842', text: 'Golden Cross (MA50 crosses above MA200) = historically very strong bullish signal' },
+      { color: '#34d399', text: 'Tight Bollinger Bands = low volatility, breakout imminent' },
     ],
-    tip: 'Il RSI a 70+ non significa "vendi subito" -- in trend forti puo restare alto a lungo. Il contesto conta.',
+    tip: 'RSI at 70+ doesn\'t mean "sell immediately" -- in strong trends it can stay high for a long time. Context matters.',
   },
   {
     id: 'ml', name: 'MLPredictionAgent', abbr: 'ML',
     color: '#f472b6', bg: 'rgba(244,114,182,0.15)', weight: '11%',
-    tagline: 'Predice il futuro con intelligenza artificiale',
+    tagline: 'Predicts the future with artificial intelligence',
     category: ['active'],
-    analogy: 'Come uno studente che ha letto 2 anni di storia del mercato e cerca di capire "questa situazione a quale altra assomiglia e come e andata?"',
-    desc: 'Usa GradientBoosting con 20+ feature: RSI, MACD, volatilita, momentum, rate direction, sentiment, volume. Addestrato con walk-forward validation per evitare di "imparare il futuro".',
-    stats: [{ label: 'Algoritmo', val: 'GBClassifier' }, { label: 'Feature', val: '20+' }, { label: 'Peso', val: '11%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 44 }, { label: 'Accuracy media NVDA', val: 62 }],
+    analogy: 'Like a student who has studied 2 years of market history and tries to figure out "which past situation does this resemble, and how did it play out?"',
+    desc: 'Uses GradientBoosting with 20+ features: RSI, MACD, volatility, momentum, rate direction, sentiment, volume. Trained with walk-forward validation to avoid "learning the future".',
+    stats: [{ label: 'Algorithm', val: 'GBClassifier' }, { label: 'Features', val: '20+' }, { label: 'Weight', val: '11%' }],
+    meters: [{ label: 'Influence on final signal', val: 44 }, { label: 'Average accuracy NVDA', val: 62 }],
     signals: [
-      { type: 'buy', text: 'Modello predice rialzo con accuracy > 52% e modello affidabile' },
-      { type: 'sell', text: 'Modello predice ribasso con alta confidence' },
-      { type: 'hold', text: 'Confidence bassa o modello non affidabile (-25% confidence)' },
+      { type: 'buy', text: 'Model predicts upside with accuracy > 52% and reliable model' },
+      { type: 'sell', text: 'Model predicts downside with high confidence' },
+      { type: 'hold', text: 'Low confidence or unreliable model (-25% confidence)' },
     ],
     interpret: [
-      { color: '#22d3a0', text: '"wf_acc=0.61" = accuratezza walk-forward 61% -- sopra il caso (50%)' },
-      { color: '#f25c5c', text: '"modello non affidabile" = std > 10% o accuracy < 52% -- peso ridotto del 25%' },
-      { color: '#f472b6', text: 'TSLA (40%) e GLD (45%) non affidabili. NVDA (61%) e MSFT (60%) affidabili' },
+      { color: '#22d3a0', text: '"wf_acc=0.61" = walk-forward accuracy 61% -- above chance (50%)' },
+      { color: '#f25c5c', text: '"unreliable model" = std > 10% or accuracy < 52% -- weight reduced by 25%' },
+      { color: '#f472b6', text: 'TSLA (40%) and GLD (45%) unreliable. NVDA (61%) and MSFT (60%) reliable' },
     ],
-    tip: '52% di accuracy puo sembrare poco ma nel trading e sufficiente per avere edge positivo se la gestione del rischio e corretta.',
+    tip: '52% accuracy may seem low, but in trading it\'s enough to have a positive edge if risk management is done correctly.',
   },
   {
     id: 'liquidity', name: 'LiquidityAgent', abbr: 'LI',
     color: '#22d3a0', bg: 'rgba(34,211,160,0.1)', weight: '8%',
-    tagline: 'Monitora i rubinetti del denaro globale',
+    tagline: 'Monitors global money flow',
     category: ['active','macro'],
-    analogy: 'Come controllare la pressione dell\'acqua nei tubi prima di aprire il rubinetto. Se la Fed drena liquidita, tutti i mercati scendono indipendentemente dai fondamentali.',
-    desc: 'Usa la FRED API per monitorare: Fed balance sheet, M2 money supply, SOFR, EURIBOR, VIX. Quando la liquidita si contrae, quasi tutto scende.',
-    stats: [{ label: 'Fonte', val: 'FRED API' }, { label: 'Serie', val: '10+' }, { label: 'Peso', val: '8%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 32 }, { label: 'Copertura macro globale', val: 75 }],
+    analogy: 'Like checking water pressure in the pipes before turning on the faucet. If the Fed drains liquidity, all markets drop regardless of fundamentals.',
+    desc: 'Uses the FRED API to monitor: Fed balance sheet, M2 money supply, SOFR, EURIBOR, VIX. When liquidity contracts, almost everything drops.',
+    stats: [{ label: 'Source', val: 'FRED API' }, { label: 'Series', val: '10+' }, { label: 'Weight', val: '8%' }],
+    meters: [{ label: 'Influence on final signal', val: 32 }, { label: 'Global macro coverage', val: 75 }],
     signals: [
-      { type: 'buy', text: 'Fed espande balance sheet, M2 in crescita, VIX basso' },
-      { type: 'sell', text: 'Fed restringe, M2 in calo, tassi overnight alti, VIX > 30' },
-      { type: 'hold', text: 'Situazione mista o stabile (ora: stable +0.5%, VIX 22.4)' },
+      { type: 'buy', text: 'Fed expanding balance sheet, M2 growing, low VIX' },
+      { type: 'sell', text: 'Fed tightening, M2 declining, high overnight rates, VIX > 30' },
+      { type: 'hold', text: 'Mixed or stable situation (current: stable +0.5%, VIX 22.4)' },
     ],
     interpret: [
-      { color: '#22d3a0', text: '"Fed balance sheet stable (+0.5%)" = nessuna restrizione attiva' },
-      { color: '#f5c842', text: '"VIX 22.4 (elevated)" = volatilita sopra la media, mercato nervoso' },
-      { color: '#f25c5c', text: '"Fed funds rate falling" = tassi in calo = positivo per growth stocks' },
+      { color: '#22d3a0', text: '"Fed balance sheet stable (+0.5%)" = no active tightening' },
+      { color: '#f5c842', text: '"VIX 22.4 (elevated)" = above-average volatility, nervous market' },
+      { color: '#f25c5c', text: '"Fed funds rate falling" = rates declining = positive for growth stocks' },
     ],
-    tip: 'VIX sotto 15 = calma. 15-25 = normale. 25-35 = paura. Sopra 35 = panico. Ora siamo a 22.4: elevated ma non panico.',
+    tip: 'VIX below 15 = calm. 15-25 = normal. 25-35 = fear. Above 35 = panic. Currently at 22.4: elevated but not panic.',
   },
   {
     id: 'options', name: 'OptionsAgent', abbr: 'OP',
     color: '#fbbf24', bg: 'rgba(251,191,36,0.1)', weight: '6%',
-    tagline: 'Spia il mercato dei derivati',
+    tagline: 'Spies on the derivatives market',
     category: ['active'],
-    analogy: 'Come guardare dove i grandi giocatori piazzano le loro scommesse sui derivati. Il max pain e dove il prezzo "vuole" andare per fare perdere piu soldi al maggior numero di opzionisti.',
-    desc: 'Analizza put/call ratio, max pain e implied volatility. Il put/call ratio misura quante scommesse al ribasso ci sono rispetto a quelle al rialzo.',
-    stats: [{ label: 'Metrica', val: 'PC ratio' }, { label: 'Max Pain', val: 'Calcolato' }, { label: 'Peso', val: '6%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 24 }, { label: 'Potere predittivo OpEx week', val: 80 }],
+    analogy: 'Like watching where the big players place their bets on derivatives. Max pain is where the price "wants" to go to cause the most losses for the largest number of options holders.',
+    desc: 'Analyzes put/call ratio, max pain, and implied volatility. The put/call ratio measures how many bearish bets exist relative to bullish ones.',
+    stats: [{ label: 'Metric', val: 'PC ratio' }, { label: 'Max Pain', val: 'Calculated' }, { label: 'Weight', val: '6%' }],
+    meters: [{ label: 'Influence on final signal', val: 24 }, { label: 'Predictive power OpEx week', val: 80 }],
     signals: [
-      { type: 'buy', text: 'PC ratio < 0.7 (piu call che put), prezzo sopra max pain' },
-      { type: 'sell', text: 'PC ratio > 1.2 (piu put che call), alto short interest' },
-      { type: 'hold', text: 'PC ratio 0.7-1.2 (equilibrio)' },
+      { type: 'buy', text: 'PC ratio < 0.7 (more calls than puts), price above max pain' },
+      { type: 'sell', text: 'PC ratio > 1.2 (more puts than calls), high short interest' },
+      { type: 'hold', text: 'PC ratio 0.7-1.2 (equilibrium)' },
     ],
     interpret: [
-      { color: '#22d3a0', text: '"PC ratio 0.812 (neutro)" = equilibrio tra scommesse rialziste e ribassiste' },
-      { color: '#fbbf24', text: '"Max Pain $185 (52.8% sotto)" = il prezzo e molto sopra dove i MM farebbero perdere di piu' },
-      { color: '#f472b6', text: '"IV 24.69%" = volatilita implicita -- piu e alta, piu il mercato si aspetta movimenti forti' },
+      { color: '#22d3a0', text: '"PC ratio 0.812 (neutral)" = balance between bullish and bearish bets' },
+      { color: '#fbbf24', text: '"Max Pain $185 (52.8% below)" = price is well above where MMs would cause max losses' },
+      { color: '#f472b6', text: '"IV 24.69%" = implied volatility -- the higher it is, the more the market expects large moves' },
     ],
-    tip: 'La terza settimana di ogni mese (OpEx week) e la piu importante: i market maker muovono il prezzo verso il max pain.',
+    tip: 'The third week of every month (OpEx week) is the most important: market makers move the price toward max pain.',
   },
   {
     id: 'macro', name: 'MacroAgent', abbr: 'MA',
     color: '#818cf8', bg: 'rgba(129,140,248,0.12)', weight: '4%',
-    tagline: 'L\'analista macro con accesso a Claude AI',
+    tagline: 'The macro analyst with access to Claude AI',
     category: ['active','macro'],
-    analogy: 'Come un economista che legge le notizie geopolitiche, i dati Fed e la letteratura accademica, poi chiede a un esperto (Claude AI) di sintetizzare tutto.',
-    desc: 'L\'unico agente che usa Claude API per ragionare. Riceve articoli geopolitici ad alta rilevanza, rate direction (TLT proxy), research context da arXiv. Produce una valutazione qualitativa con reasoning dettagliato.',
-    stats: [{ label: 'LLM', val: 'Claude' }, { label: 'Input', val: '3 fonti' }, { label: 'Peso', val: '4%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 16 }, { label: 'Ricchezza del reasoning', val: 95 }],
+    analogy: 'Like an economist who reads geopolitical news, Fed data, and academic literature, then asks an expert (Claude AI) to synthesize everything.',
+    desc: 'The only agent that uses Claude API for reasoning. Receives high-relevance geopolitical articles, rate direction (TLT proxy), and research context from arXiv. Produces a qualitative assessment with detailed reasoning.',
+    stats: [{ label: 'LLM', val: 'Claude' }, { label: 'Input', val: '3 sources' }, { label: 'Weight', val: '4%' }],
+    meters: [{ label: 'Influence on final signal', val: 16 }, { label: 'Reasoning depth', val: 95 }],
     signals: [
-      { type: 'buy', text: 'Macro favorevole: liquidita in espansione, geopolitica stabile' },
-      { type: 'sell', text: 'Recessione imminente, sanzioni, crisi energetica, stretta monetaria' },
-      { type: 'hold', text: 'Incertezza macro -- situazione mista difficile da interpretare' },
+      { type: 'buy', text: 'Favorable macro: expanding liquidity, stable geopolitics' },
+      { type: 'sell', text: 'Imminent recession, sanctions, energy crisis, monetary tightening' },
+      { type: 'hold', text: 'Macro uncertainty -- mixed situation difficult to interpret' },
     ],
     interpret: [
-      { color: '#818cf8', text: '"Rate direction: falling" = tassi in calo, positivo per growth e crypto' },
-      { color: '#22d3a0', text: '"Integrato insight da 3 paper arXiv" = research context attivo' },
-      { color: '#f5c842', text: '"geo_articles: 2 high, 4 medium" = notizie geopolitiche pesano nel contesto' },
+      { color: '#818cf8', text: '"Rate direction: falling" = rates declining, positive for growth and crypto' },
+      { color: '#22d3a0', text: '"Integrated insights from 3 arXiv papers" = research context active' },
+      { color: '#f5c842', text: '"geo_articles: 2 high, 4 medium" = geopolitical news weighing on context' },
     ],
-    tip: 'Peso basso (4%) perche il giudizio qualitativo e meno preciso di segnali quantitativi. Ma il reasoning e prezioso per capire il contesto.',
+    tip: 'Low weight (4%) because qualitative judgment is less precise than quantitative signals. But the reasoning is valuable for understanding the context.',
   },
   {
     id: 'meanreversion', name: 'MeanReversionAgent', abbr: 'MR',
     color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', weight: '2%',
-    tagline: 'Scommette sul ritorno alla media',
+    tagline: 'Bets on a return to the mean',
     category: ['active','technical'],
-    analogy: 'Come scommettere che una montagna russa che e salita molto tornera giu. I prezzi tendono a tornare verso la loro media storica.',
-    desc: 'Calcola lo z-score (quante deviazioni standard siamo dalla media) e il Bollinger %B. Se il prezzo e troppo distante dalla media, scommette sul ritorno.',
-    stats: [{ label: 'Metrica', val: 'Z-score' }, { label: 'Soglia', val: '+/-2s' }, { label: 'Peso', val: '2%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 8 }, { label: 'Affidabilita in trend forti', val: 20 }],
+    analogy: 'Like betting that a roller coaster that has climbed too high will come back down. Prices tend to revert to their historical average.',
+    desc: 'Calculates the z-score (how many standard deviations away from the mean) and Bollinger %B. If the price is too far from the mean, it bets on a reversion.',
+    stats: [{ label: 'Metric', val: 'Z-score' }, { label: 'Threshold', val: '+/-2s' }, { label: 'Weight', val: '2%' }],
+    meters: [{ label: 'Influence on final signal', val: 8 }, { label: 'Reliability in strong trends', val: 20 }],
     signals: [
-      { type: 'buy', text: 'Z-score < -2 (prezzo molto sotto la media), %B < 0' },
-      { type: 'sell', text: 'Z-score > 2 (prezzo molto sopra la media), %B > 1' },
-      { type: 'hold', text: 'Prezzo vicino alla media, z-score tra -1 e +1' },
+      { type: 'buy', text: 'Z-score < -2 (price well below average), %B < 0' },
+      { type: 'sell', text: 'Z-score > 2 (price well above average), %B > 1' },
+      { type: 'hold', text: 'Price near the average, z-score between -1 and +1' },
     ],
     interpret: [
-      { color: '#94a3b8', text: 'Z-score = distanza dalla media in "deviazioni standard". >2 e statisticamente estremo' },
-      { color: '#f5c842', text: 'Funziona meglio in mercati laterali. In trend forti puo restare estremo a lungo' },
-      { color: '#22d3a0', text: 'Peso ridotto a 2% perche spesso contrasta con TechnicalAgent e MomentumAgent' },
+      { color: '#94a3b8', text: 'Z-score = distance from the mean in "standard deviations". >2 is statistically extreme' },
+      { color: '#f5c842', text: 'Works best in sideways markets. In strong trends it can stay extreme for a long time' },
+      { color: '#22d3a0', text: 'Weight reduced to 2% because it often conflicts with TechnicalAgent and MomentumAgent' },
     ],
-    tip: 'Mean reversion e l\'opposto del momentum. Entrambi funzionano, ma in situazioni diverse. Il sistema li bilancia automaticamente.',
+    tip: 'Mean reversion is the opposite of momentum. Both work, but in different situations. The system balances them automatically.',
   },
   {
     id: 'intermarket', name: 'IntermarketAgent', abbr: 'IM',
     color: '#6366f1', bg: 'rgba(99,102,241,0.12)', weight: '4%',
-    tagline: 'Legge le relazioni tra mercati diversi',
+    tagline: 'Reads relationships between different markets',
     category: ['active','macro'],
-    analogy: 'Come capire che quando il dollaro si rafforza, l\'oro tende a scendere. I mercati sono tutti collegati.',
-    desc: 'Implementa le relazioni intermarket di John Murphy: USD forte = tech e crypto scendono. Bond yield alto = growth stocks scendono. Petrolio alto = XOM sale.',
-    stats: [{ label: 'Relazioni', val: '4 tipi' }, { label: 'ETF proxy', val: 'UUP/TLT' }, { label: 'Peso', val: '4%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 16 }, { label: 'Utilita in contesti macro forti', val: 85 }],
+    analogy: 'Like understanding that when the dollar strengthens, gold tends to fall. All markets are interconnected.',
+    desc: 'Implements John Murphy\'s intermarket relationships: strong USD = tech and crypto fall. High bond yields = growth stocks fall. High oil = XOM rises.',
+    stats: [{ label: 'Relationships', val: '4 types' }, { label: 'ETF proxy', val: 'UUP/TLT' }, { label: 'Weight', val: '4%' }],
+    meters: [{ label: 'Influence on final signal', val: 16 }, { label: 'Usefulness in strong macro contexts', val: 85 }],
     signals: [
-      { type: 'buy', text: 'Dollar debole, bond yield in calo, VIX in calo, settore forte' },
-      { type: 'sell', text: 'Dollar forte, bond yield alto, VIX in salita, settore debole' },
-      { type: 'hold', text: 'Segnali contrastanti tra i diversi mercati' },
+      { type: 'buy', text: 'Weak dollar, falling bond yields, falling VIX, strong sector' },
+      { type: 'sell', text: 'Strong dollar, high bond yields, rising VIX, weak sector' },
+      { type: 'hold', text: 'Conflicting signals across different markets' },
     ],
     interpret: [
-      { color: '#6366f1', text: '"USD forte (+2.1%) = BEARISH per AAPL" = profitti esteri valgono meno in USD' },
-      { color: '#22d3a0', text: '"Petrolio in rialzo = BULLISH per XOM" = Exxon guadagna di piu' },
-      { color: '#f5c842', text: '"Bond 10Y yield in salita = BEARISH per NVDA" = tassi alti = crescita futura vale meno oggi' },
+      { color: '#6366f1', text: '"Strong USD (+2.1%) = BEARISH for AAPL" = foreign profits worth less in USD' },
+      { color: '#22d3a0', text: '"Oil rising = BULLISH for XOM" = Exxon earns more' },
+      { color: '#f5c842', text: '"10Y bond yield rising = BEARISH for NVDA" = high rates = future growth worth less today' },
     ],
-    tip: 'Con la guerra in Medio Oriente: petrolio sale = XOM BULLISH. Ma USD sale (bene rifugio) = AAPL/NVDA BEARISH. Tutto e connesso.',
+    tip: 'With the Middle East conflict: oil rises = XOM BULLISH. But USD rises (safe haven) = AAPL/NVDA BEARISH. Everything is connected.',
   },
   {
     id: 'seasonal', name: 'SeasonalAgent', abbr: 'SN',
     color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', weight: '4%',
-    tagline: 'Sfrutta i pattern stagionali del mercato',
+    tagline: 'Exploits seasonal market patterns',
     category: ['active'],
-    analogy: 'Come sapere che i saldi di fine stagione arrivano sempre in gennaio e luglio. Il mercato ha i suoi "saldi" stagionali prevedibili.',
-    desc: 'Riconosce: January Effect, Sell in May, September Effect, Santa Rally, OpEx week, Quarter End rebalancing, Monday Effect.',
-    stats: [{ label: 'Effetti', val: '9' }, { label: 'Ora attivo', val: 'Q-End' }, { label: 'Peso', val: '4%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 16 }, { label: 'Affidabilita storica pattern', val: 65 }],
+    analogy: 'Like knowing that end-of-season sales always come in January and July. The market has its own predictable seasonal "sales".',
+    desc: 'Recognizes: January Effect, Sell in May, September Effect, Santa Rally, OpEx week, Quarter End rebalancing, Monday Effect.',
+    stats: [{ label: 'Effects', val: '9' }, { label: 'Currently active', val: 'Q-End' }, { label: 'Weight', val: '4%' }],
+    meters: [{ label: 'Influence on final signal', val: 16 }, { label: 'Historical pattern reliability', val: 65 }],
     signals: [
-      { type: 'buy', text: 'January Effect (gennaio), Santa Rally (nov-dic), post-OpEx' },
-      { type: 'sell', text: 'Sell in May (maggio-settembre), September Effect' },
-      { type: 'hold', text: 'Periodo neutro o effetti contrastanti (OpEx, Q-end)' },
+      { type: 'buy', text: 'January Effect, Santa Rally (Nov-Dec), post-OpEx' },
+      { type: 'sell', text: 'Sell in May (May-September), September Effect' },
+      { type: 'hold', text: 'Neutral period or conflicting effects (OpEx, Q-end)' },
     ],
     interpret: [
-      { color: '#f59e0b', text: '"Quarter End Rebalancing" (ora attivo) = fondi ribilanciano i portfolio a fine marzo' },
-      { color: '#22d3a0', text: '"OpEx Week" (15-21 del mese) = market maker chiudono le opzioni' },
-      { color: '#f25c5c', text: '"September Effect" = storicamente il peggior mese dell\'anno per le azioni USA' },
+      { color: '#f59e0b', text: '"Quarter End Rebalancing" (currently active) = funds rebalance portfolios at end of March' },
+      { color: '#22d3a0', text: '"OpEx Week" (15th-21st of month) = market makers close options positions' },
+      { color: '#f25c5c', text: '"September Effect" = historically the worst month of the year for US stocks' },
     ],
-    tip: 'Oggi siamo in "Quarter End Rebalancing" -- i grandi fondi devono ribilanciare entro il 31 marzo. Aspettati piu volatilita.',
+    tip: 'We are currently in "Quarter End Rebalancing" -- large funds must rebalance by March 31. Expect more volatility.',
   },
   {
     id: 'institutional', name: 'InstitutionalAgent', abbr: 'IN',
     color: '#10b981', bg: 'rgba(16,185,129,0.1)', weight: '4%',
-    tagline: 'Segue il "smart money" istituzionale',
+    tagline: 'Follows institutional "smart money"',
     category: ['active'],
-    analogy: 'Come spiare cosa fanno Berkshire Hathaway, BlackRock e i CEO con i propri soldi. Se il CEO compra azioni proprie, sa qualcosa che tu non sai.',
-    desc: 'Legge insider transactions, flussi degli ETF settoriali (XLK, XLE, IBIT) e ownership istituzionale. "Smart money" che compra = segnale bullish.',
-    stats: [{ label: 'Fonte', val: 'yfinance' }, { label: 'Lookback', val: '90 giorni' }, { label: 'Peso', val: '4%' }],
-    meters: [{ label: 'Influenza sul segnale finale', val: 16 }, { label: 'Affidabilita segnale insider', val: 70 }],
+    analogy: 'Like spying on what Berkshire Hathaway, BlackRock, and CEOs do with their own money. If the CEO buys their own stock, they know something you don\'t.',
+    desc: 'Reads insider transactions, sector ETF flows (XLK, XLE, IBIT), and institutional ownership. "Smart money" buying = bullish signal.',
+    stats: [{ label: 'Source', val: 'yfinance' }, { label: 'Lookback', val: '90 days' }, { label: 'Weight', val: '4%' }],
+    meters: [{ label: 'Influence on final signal', val: 16 }, { label: 'Insider signal reliability', val: 70 }],
     signals: [
-      { type: 'buy', text: 'Insider in acquisto, ETF in inflow, ownership istituzionale > 75%' },
-      { type: 'sell', text: 'Insider in vendita massiva, ETF in outflow, ownership < 30%' },
-      { type: 'hold', text: 'Nessuna transazione rilevante o segnali misti' },
+      { type: 'buy', text: 'Insiders buying, ETF inflows, institutional ownership > 75%' },
+      { type: 'sell', text: 'Massive insider selling, ETF outflows, ownership < 30%' },
+      { type: 'hold', text: 'No significant transactions or mixed signals' },
     ],
     interpret: [
-      { color: '#10b981', text: '"Smart money in acquisto" = notizia bullish. I CEO rischiano in proprio.' },
-      { color: '#f25c5c', text: '"Insider vendono" = puo essere liquidita personale oppure segnale preoccupante' },
-      { color: '#f5c842', text: '"ETF XLK inflow (+3.2% 30d)" = denaro che entra nel settore tech' },
+      { color: '#10b981', text: '"Smart money buying" = bullish news. CEOs risk their own money.' },
+      { color: '#f25c5c', text: '"Insiders selling" = could be personal liquidity or a concerning signal' },
+      { color: '#f5c842', text: '"ETF XLK inflow (+3.2% 30d)" = money flowing into the tech sector' },
     ],
-    tip: 'Gli insider possono vendere per mille motivi. Ma quando comprano, di solito e perche credono nel titolo.',
+    tip: 'Insiders can sell for a thousand reasons. But when they buy, it\'s usually because they believe in the stock.',
   },
   {
     id: 'research', name: 'ResearchAgent', abbr: 'RA',
     color: '#ec4899', bg: 'rgba(236,72,153,0.1)', weight: '0%',
-    tagline: 'Legge paper accademici e sintetizza con AI',
+    tagline: 'Reads academic papers and synthesizes with AI',
     category: ['support'],
-    analogy: 'Come avere un PhD in finanza quantitativa nel team che ogni giorno legge i paper piu recenti di arXiv e dice "questo studio supporta o smentisce il nostro segnale?"',
-    desc: 'Cerca su arXiv i paper piu recenti su ML per trading, regime detection, sentiment analysis. Claude API sintetizza i risultati. Output usato da MacroAgent e WeightedVotingAgent (+/-5% confidence).',
-    stats: [{ label: 'Fonte', val: 'arXiv' }, { label: 'Query', val: '10 preset' }, { label: 'Ruolo', val: 'Context' }],
-    meters: [{ label: 'Influenza indiretta', val: 20 }, { label: 'Ricchezza del contesto', val: 90 }],
+    analogy: 'Like having a PhD in quantitative finance on the team who reads the latest arXiv papers every day and says "does this study support or contradict our signal?"',
+    desc: 'Searches arXiv for the latest papers on ML for trading, regime detection, sentiment analysis. Claude API synthesizes the results. Output used by MacroAgent and WeightedVotingAgent (+/-5% confidence).',
+    stats: [{ label: 'Source', val: 'arXiv' }, { label: 'Queries', val: '10 preset' }, { label: 'Role', val: 'Context' }],
+    meters: [{ label: 'Indirect influence', val: 20 }, { label: 'Context richness', val: 90 }],
     signals: [
-      { type: 'buy', text: '"Letteratura conferma il segnale" = confidence +5%' },
-      { type: 'sell', text: '"Letteratura smentisce il segnale" = confidence -5%' },
-      { type: 'hold', text: 'Letteratura mista o neutrale = nessun boost' },
+      { type: 'buy', text: '"Literature confirms the signal" = confidence +5%' },
+      { type: 'sell', text: '"Literature contradicts the signal" = confidence -5%' },
+      { type: 'hold', text: 'Mixed or neutral literature = no boost' },
     ],
     interpret: [
-      { color: '#ec4899', text: 'Peso 0% = non vota direttamente, ma modifica la confidence degli altri' },
-      { color: '#22d3a0', text: '"3 paper arXiv integrati" = research context attivo e funzionante' },
-      { color: '#a78bfa', text: 'Gli insights vengono mostrati nella card Research della dashboard /agents' },
+      { color: '#ec4899', text: 'Weight 0% = does not vote directly, but modifies other agents\' confidence' },
+      { color: '#22d3a0', text: '"3 arXiv papers integrated" = research context active and working' },
+      { color: '#a78bfa', text: 'Insights are shown in the Research card on the /agents dashboard' },
     ],
-    tip: 'arXiv e gratuito e pubblica ogni giorno decine di paper su ML finanziario. Il ResearchAgent ti tiene aggiornato senza leggerli manualmente.',
+    tip: 'arXiv is free and publishes dozens of financial ML papers every day. The ResearchAgent keeps you updated without reading them manually.',
   },
   {
     id: 'risk', name: 'RiskAgent', abbr: 'RI',
     color: '#f43f5e', bg: 'rgba(244,63,94,0.1)', weight: '0%',
-    tagline: 'Il guardiano: blocca i segnali pericolosi',
+    tagline: 'The guardian: blocks dangerous signals',
     category: ['support'],
-    analogy: 'Come un semaforo che non ti dice dove andare, ma ti ferma se stai per attraversare con il rosso. Non decide il segnale, ma puo annullarlo se troppo rischioso.',
-    desc: 'Calcola il Kelly Criterion per il position sizing ottimale, valuta il rischio di correlazione tra posizioni aperte, e funge da gate finale.',
-    stats: [{ label: 'Formula', val: 'Kelly 0.5x' }, { label: 'Max pos.', val: '25% cap' }, { label: 'Ruolo', val: 'Gate' }],
-    meters: [{ label: 'Potere di veto', val: 100 }, { label: 'Frequenza di intervento', val: 30 }],
+    analogy: 'Like a traffic light that doesn\'t tell you where to go, but stops you if you\'re about to cross on red. It doesn\'t decide the signal, but can override it if too risky.',
+    desc: 'Calculates the Kelly Criterion for optimal position sizing, evaluates correlation risk between open positions, and acts as the final gate.',
+    stats: [{ label: 'Formula', val: 'Kelly 0.5x' }, { label: 'Max pos.', val: '25% cap' }, { label: 'Role', val: 'Gate' }],
+    meters: [{ label: 'Veto power', val: 100 }, { label: 'Intervention frequency', val: 30 }],
     signals: [
-      { type: 'buy', text: 'Segnale passa: confidence > soglia, bassa correlazione, Kelly positivo' },
-      { type: 'sell', text: 'Segnale bloccato: edge negativo, alta correlazione, rischio eccessivo' },
-      { type: 'hold', text: 'Confidence ridotta: Kelly suggerisce posizione molto piccola' },
+      { type: 'buy', text: 'Signal passes: confidence > threshold, low correlation, positive Kelly' },
+      { type: 'sell', text: 'Signal blocked: negative edge, high correlation, excessive risk' },
+      { type: 'hold', text: 'Reduced confidence: Kelly suggests very small position' },
     ],
     interpret: [
-      { color: '#f43f5e', text: '"Kelly 8.5% del capitale" = non rischiare piu dell\'8.5% su questo trade' },
-      { color: '#f5c842', text: '"Edge positivo" = il sistema ha storicamente guadagnato con questo tipo di segnale' },
-      { color: '#22d3a0', text: '"Win rate 0.55" = il bot ha ragione il 55% delle volte (default iniziale)' },
+      { color: '#f43f5e', text: '"Kelly 8.5% of capital" = don\'t risk more than 8.5% on this trade' },
+      { color: '#f5c842', text: '"Positive edge" = the system has historically profited from this type of signal' },
+      { color: '#22d3a0', text: '"Win rate 0.55" = the bot is right 55% of the time (initial default)' },
     ],
-    tip: 'Il Kelly Criterion dice: se hai un vantaggio statistico, quanto dovresti rischiare per massimizzare la crescita del capitale? Di solito: meno di quello che pensi.',
+    tip: 'The Kelly Criterion says: if you have a statistical edge, how much should you risk to maximize capital growth? Usually: less than you think.',
   },
 ]
 
 const FILTERS = [
-  { key: 'all', label: 'Tutti (14)' },
-  { key: 'active', label: 'Attivi' },
-  { key: 'support', label: 'Supporto' },
+  { key: 'all', label: 'All (14)' },
+  { key: 'active', label: 'Active' },
+  { key: 'support', label: 'Support' },
   { key: 'news', label: 'News' },
-  { key: 'technical', label: 'Tecnici' },
+  { key: 'technical', label: 'Technical' },
   { key: 'macro', label: 'Macro' },
 ]
 
@@ -388,7 +388,7 @@ function AgentCard({ agent }: { agent: typeof agents[0] }) {
           </div>
 
           {/* Description */}
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b6b85', margin: '16px 0 10px' }}>Come funziona</div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b6b85', margin: '16px 0 10px' }}>How it works</div>
           <p style={{ fontSize: 14, lineHeight: 1.7, color: '#b0b0c8' }}>{agent.desc}</p>
 
           {/* Stats */}
@@ -429,7 +429,7 @@ function AgentCard({ agent }: { agent: typeof agents[0] }) {
           ))}
 
           {/* Signals */}
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b6b85', margin: '16px 0 10px' }}>Cosa significa il segnale</div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b6b85', margin: '16px 0 10px' }}>What the signal means</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 12 }}>
             {agent.signals.map(s => (
               <div key={s.type} style={{
@@ -451,7 +451,7 @@ function AgentCard({ agent }: { agent: typeof agents[0] }) {
           ))}
 
           {/* Interpret */}
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b6b85', margin: '16px 0 10px' }}>Come interpretare i dati</div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b6b85', margin: '16px 0 10px' }}>How to interpret the data</div>
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column' as const, gap: 8, padding: 0, margin: 0 }}>
             {agent.interpret.map((item, idx) => (
               <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, lineHeight: 1.5, color: '#b0b0c8' }}>
@@ -494,13 +494,13 @@ export default function GuidePage() {
       <div style={{ textAlign: 'center' as const, padding: '60px 24px 40px', position: 'relative' as const }}>
         <div style={{ position: 'absolute' as const, top: 0, left: '50%', transform: 'translateX(-50%)', width: 600, height: 300, background: 'radial-gradient(ellipse, rgba(124,106,247,0.15) 0%, transparent 70%)', pointerEvents: 'none' as const }} />
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(124,106,247,0.12)', border: '1px solid rgba(124,106,247,0.3)', padding: '6px 16px', borderRadius: 100, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', color: '#7c6af7', textTransform: 'uppercase' as const, marginBottom: 24 }}>
-          Guida al Trading Bot
+          Trading Bot Guide
         </div>
         <h1 style={{ fontSize: 'clamp(32px, 6vw, 64px)', fontWeight: 800, lineHeight: 1.05, marginBottom: 16, background: 'linear-gradient(135deg, #fff 0%, #a89ff5 60%, #7c6af7 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          Il tuo team<br />di 14 analisti
+          Your team<br />of 14 analysts
         </h1>
         <p style={{ color: '#6b6b85', fontSize: 16, maxWidth: 480, margin: '0 auto 40px', lineHeight: 1.6 }}>
-          Ogni agente analizza il mercato da una prospettiva diversa. Capiscili tutti e interpreta i segnali come un pro.
+          Each agent analyzes the market from a different perspective. Understand them all and interpret signals like a pro.
         </p>
 
         {/* Search */}
@@ -508,7 +508,7 @@ export default function GuidePage() {
           <span style={{ color: '#6b6b85' }}>&#128269;</span>
           <input
             type="text"
-            placeholder="Cerca un agente..."
+            placeholder="Search for an agent..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{ background: 'none', border: 'none', outline: 'none', color: '#e8e8f0', fontFamily: 'inherit', fontSize: 15, width: '100%' }}
@@ -551,7 +551,7 @@ export default function GuidePage() {
       >
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center' as const, padding: '60px 24px', color: '#6b6b85', fontSize: 15, gridColumn: '1/-1' }}>
-            Nessun agente trovato per &quot;{search}&quot;
+            No agent found for &quot;{search}&quot;
           </div>
         ) : (
           filtered.map(a => <AgentCard key={a.id} agent={a} />)

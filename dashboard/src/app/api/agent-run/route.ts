@@ -46,13 +46,13 @@ export async function GET(request: NextRequest) {
         } else {
           send({
             agent: 'Orchestrator',
-            message: `Nessun dato disponibile per ${ticker}. Esegui il bot prima.`,
+            message: `No data available for ${ticker}. Run the bot first.`,
           })
         }
 
         send({
           agent: 'WeightedVote',
-          message: `Segnale finale: ${signal?.signal ?? 'HOLD'}`,
+          message: `Final signal: ${signal?.signal ?? 'HOLD'}`,
           signal: signal?.signal ?? 'HOLD',
           confidence: signal?.confidence ?? 0,
           isFinal: true,
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         send({
           agent: 'Orchestrator',
-          message: `Errore: ${String(err)}`,
+          message: `Error: ${String(err)}`,
         })
       }
 

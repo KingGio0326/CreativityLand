@@ -122,14 +122,14 @@ function parseOptions(line: string, data: ApiData | null): Record<string, string
     const pcVal = opt.pc_ratio;
     let pcLabel = "";
     if (pcVal != null) {
-      pcLabel = pcVal < 0.5 ? " (bullish)" : pcVal > 1.5 ? " (bearish)" : " (neutro)";
+      pcLabel = pcVal < 0.5 ? " (bullish)" : pcVal > 1.5 ? " (bearish)" : " (neutral)";
     }
     return {
       "Put/Call Ratio": pcVal != null ? `${pcVal}${pcLabel}` : "—",
       "Max Pain": opt.max_pain != null
         ? `$${opt.max_pain}${opt.distance_to_max_pain ? ` (${opt.distance_to_max_pain})` : ""}`
         : "—",
-      "IV Media": opt.avg_iv != null ? `${opt.avg_iv}%` : "—",
+      "Avg IV": opt.avg_iv != null ? `${opt.avg_iv}%` : "—",
     };
   }
   // Fallback: parse from reasoning line
@@ -137,7 +137,7 @@ function parseOptions(line: string, data: ApiData | null): Record<string, string
   return {
     "Put/Call Ratio": pcRatio ?? "—",
     "Max Pain": line.match(/MaxPain=\$?([\d.]+)/)?.[1] ? `$${line.match(/MaxPain=\$?([\d.]+)/)?.[1]}` : "—",
-    "IV Media": extractKV(line, "IV") ? `${extractKV(line, "IV")}` : "—",
+    "Avg IV": extractKV(line, "IV") ? `${extractKV(line, "IV")}` : "—",
   };
 }
 
@@ -151,9 +151,9 @@ function parseLiquidity(line: string, data: ApiData | null): Record<string, stri
         : "—",
       "Fed Funds Rate": liq.fed_funds_rate?.direction ?? "—",
       "Yield Curve": liq.yield_curve?.inverted
-        ? `${liq.yield_curve.value}% INVERTITA`
+        ? `${liq.yield_curve.value}% INVERTED`
         : liq.yield_curve?.value
-          ? `${liq.yield_curve.value}% normale`
+          ? `${liq.yield_curve.value}% normal`
           : "—",
       "VIX": liq.vix ? `${liq.vix.value} (${liq.vix.regime})` : "—",
     };
@@ -169,17 +169,17 @@ function parseInstitutional(line: string, data: ApiData | null): Record<string, 
   const inst = data?.institutional;
   if (inst) {
     const insiderLabel = inst.insider_signal === "BULLISH"
-      ? "Smart money in acquisto"
+      ? "Smart money buying"
       : inst.insider_signal === "BEARISH"
-        ? "Smart money in vendita"
-        : "Neutro";
+        ? "Smart money selling"
+        : "Neutral";
     return {
-      "Insider": `${inst.insider_buy_count} acquisti / ${inst.insider_sell_count} vendite`,
+      "Insider": `${inst.insider_buy_count} buys / ${inst.insider_sell_count} sells`,
       "Smart Money": insiderLabel,
       "ETF Flow": inst.etf_symbol
         ? `${inst.etf_symbol} ${inst.etf_flow}${inst.etf_return_30d != null ? ` (${inst.etf_return_30d > 0 ? "+" : ""}${inst.etf_return_30d}% 30d)` : ""}`
         : inst.etf_flow ?? "—",
-      "Ownership Ist.": inst.institutional_pct != null ? `${inst.institutional_pct}%` : "—",
+      "Inst. Ownership": inst.institutional_pct != null ? `${inst.institutional_pct}%` : "—",
     };
   }
   // Fallback: parse from reasoning line
@@ -192,12 +192,12 @@ function parseInstitutional(line: string, data: ApiData | null): Record<string, 
 }
 
 function parseSeasonal(line: string): Record<string, string | number> {
-  const effectsMatch = line.match(/Effetti attivi:\s*([^|]+)/);
+  const effectsMatch = line.match(/(?:Effetti attivi|Active effects):\s*([^|]+)/);
   const bullishMatch = line.match(/Bullish:\s*(\d+)/);
   const bearishMatch = line.match(/Bearish:\s*(\d+)/);
   const volatileMatch = line.match(/Volatile:\s*(\d+)/);
   return {
-    "Effetti": effectsMatch ? effectsMatch[1].trim() : "—",
+    "Effects": effectsMatch ? effectsMatch[1].trim() : "—",
     "Bullish": bullishMatch ? parseInt(bullishMatch[1]) : 0,
     "Bearish": bearishMatch ? parseInt(bearishMatch[1]) : 0,
     "Volatile": volatileMatch ? parseInt(volatileMatch[1]) : 0,
@@ -208,15 +208,15 @@ function parseIntermarket(line: string, data: ApiData | null): Record<string, st
   const im = data?.intermarket;
   if (im) {
     return {
-      Segnale: `${im.signal} (${im.confidence}%)`,
-      Sommario: im.summary || "—",
-      Dettagli: im.details.slice(0, 2).join("; ") || "—",
+      Signal: `${im.signal} (${im.confidence}%)`,
+      Summary: im.summary || "—",
+      Details: im.details.slice(0, 2).join("; ") || "—",
     };
   }
   // Fallback: parse from reasoning line
   const summaryMatch = line.match(/\|\s*(\d+\/\d+\s*segnali\s*bullish\s*\|\s*\d+\/\d+\s*bearish)/);
   return {
-    Sommario: summaryMatch?.[1] ?? "—",
+    Summary: summaryMatch?.[1] ?? "—",
   };
 }
 
@@ -229,10 +229,10 @@ function parseRisk(line: string, data: ApiData | null): Record<string, string | 
     Drawdown: extractKV(line, "drawdown") ?? "—",
   };
   if (kelly) {
-    result["Kelly Sizing"] = `${kelly.suggested_pct}% capitale`;
+    result["Kelly Sizing"] = `${kelly.suggested_pct}% capital`;
     result["Edge"] = kelly.edge > 0
-      ? `+${kelly.edge.toFixed(3)} (positivo)`
-      : `${kelly.edge.toFixed(3)} (negativo)`;
+      ? `+${kelly.edge.toFixed(3)} (positive)`
+      : `${kelly.edge.toFixed(3)} (negative)`;
     result["Win Rate"] = `${(kelly.win_rate * 100).toFixed(0)}%`;
   }
   return result;
@@ -378,11 +378,11 @@ function buildCards(data: ApiData): AgentCardProps[] {
     let details: Record<string, string | number> = {};
     if (agent.prefix === "SentimentAgent") {
       details = {
-        "Articoli": sent.articles_analyzed,
-        "Positivi": sent.positive,
-        "Negativi": sent.negative,
-        "Neutrali": sent.neutral,
-        "Score pesato": sent.weighted_score,
+        "Articles": sent.articles_analyzed,
+        "Positive": sent.positive,
+        "Negative": sent.negative,
+        "Neutral": sent.neutral,
+        "Weighted Score": sent.weighted_score,
       };
     } else if (line && parsers[agent.prefix]) {
       const parsed = parsers[agent.prefix](line);
@@ -720,14 +720,14 @@ function PipelineLog({ reasoning }: { reasoning: string[] }) {
               <svg className="w-3.5 h-3.5 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
-              Copiato
+              Copied
             </>
           ) : (
             <>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
-              Copia
+              Copy
             </>
           )}
         </button>
@@ -756,7 +756,7 @@ function SignalHistory({ history, ticker }: { history: HistoryEntry[]; ticker: s
     <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] overflow-hidden">
       <div className="px-5 py-3 border-b border-[rgba(139,92,246,0.12)]">
         <p className="text-sm font-semibold text-[var(--text-primary)]">
-          Storico segnali{" "}
+          Signal History{" "}
           <span className="text-[var(--text-muted)] font-normal">— {ticker}</span>
         </p>
       </div>
@@ -764,8 +764,8 @@ function SignalHistory({ history, ticker }: { history: HistoryEntry[]; ticker: s
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-[rgba(139,92,246,0.12)]">
-              <th className="text-left px-4 py-2.5 font-medium text-[var(--text-muted)]">Data</th>
-              <th className="text-left px-4 py-2.5 font-medium text-[var(--text-muted)]">Segnale</th>
+              <th className="text-left px-4 py-2.5 font-medium text-[var(--text-muted)]">Date</th>
+              <th className="text-left px-4 py-2.5 font-medium text-[var(--text-muted)]">Signal</th>
               <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">Confidence</th>
               <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">Sentiment Score</th>
             </tr>
@@ -870,7 +870,7 @@ export default function AgentsPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Agenti Attivi</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Active Agents</h1>
           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[rgba(16,185,129,0.15)] text-[#10b981] border border-[rgba(16,185,129,0.3)]">12 LIVE</span>
           <span className="text-xs font-mono text-[var(--text-muted)]">&Sigma; 100%</span>
         </div>
@@ -936,7 +936,7 @@ export default function AgentsPage() {
       {/* Donut Chart - Weight Distribution */}
       {!loading && !error && cards.length > 0 && (
         <div className="card-gradient rounded-2xl p-5 border border-[rgba(139,92,246,0.2)]">
-          <p className="text-sm font-semibold text-[var(--text-primary)] mb-4">Distribuzione Pesi Agenti</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)] mb-4">Agent Weight Distribution</p>
           <div className="flex flex-col md:flex-row items-center gap-6">
             {/* Chart */}
             <div className="relative" style={{ width: 200, height: 200 }}>
@@ -993,7 +993,7 @@ export default function AgentsPage() {
       {/* Error */}
       {error && (
         <div className="rounded-2xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.05)] p-5">
-          <p className="text-[#ef4444] text-sm font-medium">Errore</p>
+          <p className="text-[#ef4444] text-sm font-medium">Error</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{error}</p>
         </div>
       )}
@@ -1026,7 +1026,7 @@ export default function AgentsPage() {
       {!loading && !error && data && !data.signal && (
         <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-8 text-center">
           <p className="text-[var(--text-muted)] text-sm">
-            Nessun segnale disponibile per <span className="font-mono font-medium">{ticker}</span>
+            No signal available for <span className="font-mono font-medium">{ticker}</span>
           </p>
         </div>
       )}

@@ -35,14 +35,14 @@ export default function Error({
           !
         </div>
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-          Qualcosa è andato storto
+          Something went wrong
         </h2>
         <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-          Si è verificato un errore imprevisto. Riprova o torna alla dashboard.
+          An unexpected error occurred. Try again or go back to the dashboard.
         </p>
         <div className="flex gap-3 justify-center pt-2">
           <button onClick={reset} className="btn-primary">
-            Riprova
+            Retry
           </button>
           <a
             href="/"

@@ -77,7 +77,7 @@ export default function ArticlesPage() {
           value={ticker}
           onChange={(e) => { setTicker(e.target.value); setPage(1); }}
           className="border rounded-md px-3 py-1.5 text-sm bg-background"
-          aria-label="Filtra per ticker"
+          aria-label="Filter by ticker"
         >
           <option value="">All tickers</option>
           {[...TICKERS, "SPY"].map((t) => (
@@ -88,7 +88,7 @@ export default function ArticlesPage() {
           value={sentiment}
           onChange={(e) => { setSentiment(e.target.value); setPage(1); }}
           className="border rounded-md px-3 py-1.5 text-sm bg-background"
-          aria-label="Filtra per sentiment"
+          aria-label="Filter by sentiment"
         >
           <option value="">All sentiments</option>
           {SENTIMENTS.filter(Boolean).map((s) => (

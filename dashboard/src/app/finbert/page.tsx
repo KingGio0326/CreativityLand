@@ -12,7 +12,7 @@ const PHASE_LABELS = ["Scraping", "Text Extract", "Sentiment", "Embeddings"] as 
 type TabId = "scraping" | "text" | "sentiment" | "embedding";
 const TABS: { id: TabId; label: string }[] = [
   { id: "scraping", label: "Scraping" },
-  { id: "text", label: "Testo" },
+  { id: "text", label: "Text" },
   { id: "sentiment", label: "Sentiment" },
   { id: "embedding", label: "Embedding" },
 ];
@@ -108,9 +108,9 @@ const signalBg = (s: string) =>
       : "bg-zinc-500";
 
 function timeAgo(hours: number): string {
-  if (hours < 1) return `${Math.round(hours * 60)}m fa`;
-  if (hours < 24) return `${Math.round(hours)}h fa`;
-  return `${Math.round(hours / 24)}d fa`;
+  if (hours < 1) return `${Math.round(hours * 60)}m ago`;
+  if (hours < 24) return `${Math.round(hours)}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
 function healthColor(pct: number): string {
@@ -236,7 +236,7 @@ export default function FinBertDebugPage() {
             disabled={loading}
             className="px-4 py-1 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/80 disabled:opacity-50 transition-all ml-2"
           >
-            {loading ? "..." : "Ricarica"}
+            {loading ? "..." : "Reload"}
           </button>
         </div>
       </div>
@@ -290,20 +290,20 @@ export default function FinBertDebugPage() {
             {/* ── sidebar: article list ── */}
             <div className="lg:col-span-2 rounded-xl border bg-card flex flex-col max-h-[640px]">
               <div className="p-3 border-b text-xs text-muted-foreground">
-                {filtered.length} articoli
+                {filtered.length} articles
                 {phaseFilter && (
                   <button
                     onClick={() => setPhaseFilter(null)}
                     className="ml-2 text-primary hover:underline"
                   >
-                    rimuovi filtro
+                    remove filter
                   </button>
                 )}
               </div>
               <div className="overflow-y-auto flex-1 divide-y divide-border">
                 {filtered.length === 0 && (
                   <p className="p-6 text-center text-muted-foreground text-sm">
-                    Nessun articolo
+                    No articles
                   </p>
                 )}
                 {filtered.map((a) => (
@@ -364,7 +364,7 @@ export default function FinBertDebugPage() {
               {!selected ? (
                 <div className="flex items-center justify-center h-full min-h-[200px]">
                   <p className="text-muted-foreground text-sm">
-                    Seleziona un articolo dalla lista
+                    Select an article from the list
                   </p>
                 </div>
               ) : (
@@ -393,7 +393,7 @@ export default function FinBertDebugPage() {
                         {/* url */}
                         <div className="rounded-lg border p-3">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                            URL sorgente
+                            Source URL
                           </p>
                           <a
                             href={selected.scraping.url}
@@ -404,16 +404,16 @@ export default function FinBertDebugPage() {
                             {selected.scraping.url}
                           </a>
                           <div className="flex gap-3 mt-2 text-[11px] text-muted-foreground">
-                            <span>Fonte: {selected.scraping.source}</span>
+                            <span>Source: {selected.scraping.source}</span>
                             <span>Scraped: {selected.scraping.scraped_at ? timeAgo((Date.now() - new Date(selected.scraping.scraped_at).getTime()) / 3600000) : "N/A"}</span>
-                            <span>Pubblicato: {timeAgo(selected.scraping.hours_since_publish)}</span>
+                            <span>Published: {timeAgo(selected.scraping.hours_since_publish)}</span>
                           </div>
                         </div>
 
                         {/* title */}
                         <div className="rounded-lg border p-3">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                            Titolo estratto
+                            Extracted title
                           </p>
                           <p className="text-sm font-medium">
                             {selected.scraping.title}
@@ -426,7 +426,7 @@ export default function FinBertDebugPage() {
                         {/* content */}
                         <div className="rounded-lg border p-3">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                            Contenuto estratto
+                            Extracted content
                           </p>
                           {selected.scraping.has_content ? (
                             <>
@@ -444,14 +444,14 @@ export default function FinBertDebugPage() {
                                     onClick={() => setExpandContent(!expandContent)}
                                     className="text-[10px] text-primary hover:underline"
                                   >
-                                    {expandContent ? "nascondi ▲" : "mostra tutto ▼"}
+                                    {expandContent ? "collapse ▲" : "show all ▼"}
                                   </button>
                                 )}
                               </div>
                             </>
                           ) : (
                             <p className="text-xs text-red-400 italic">
-                              Nessun contenuto estratto
+                              No content extracted
                             </p>
                           )}
                         </div>
@@ -464,7 +464,7 @@ export default function FinBertDebugPage() {
                         {/* raw text stats */}
                         <div className="rounded-lg border p-3">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                            Testo grezzo
+                            Raw text
                           </p>
                           <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap max-h-24 overflow-y-auto font-mono bg-muted/30 rounded p-2">
                             {selected.text_processing.raw_text.substring(0, 500)}
@@ -472,19 +472,19 @@ export default function FinBertDebugPage() {
                           </p>
                           <div className="flex gap-4 mt-2 text-[11px] text-muted-foreground">
                             <span>
-                              Caratteri:{" "}
+                              Chars:{" "}
                               <strong className="text-foreground">
                                 {selected.text_processing.char_count.toLocaleString()}
                               </strong>
                             </span>
                             <span>
-                              Token est:{" "}
+                              Est. tokens:{" "}
                               <strong className="text-foreground">
                                 ~{selected.text_processing.estimated_tokens}
                               </strong>
                             </span>
                             <span>
-                              Troncato:{" "}
+                              Truncated:{" "}
                               <strong
                                 className={
                                   selected.text_processing.was_truncated
@@ -493,8 +493,8 @@ export default function FinBertDebugPage() {
                                 }
                               >
                                 {selected.text_processing.was_truncated
-                                  ? "SI (> 512 token)"
-                                  : "NO (< 512 token)"}
+                                  ? "YES (> 512 tokens)"
+                                  : "NO (< 512 tokens)"}
                               </strong>
                             </span>
                           </div>
@@ -503,7 +503,7 @@ export default function FinBertDebugPage() {
                         {/* sentences */}
                         <div className="rounded-lg border p-3">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-                            Frasi estratte ({selected.text_processing.sentence_count})
+                            Extracted sentences ({selected.text_processing.sentence_count})
                           </p>
                           <div className="space-y-1 max-h-40 overflow-y-auto">
                             {selected.text_processing.sentences.map((s, i) => (
@@ -523,7 +523,7 @@ export default function FinBertDebugPage() {
                         <div className="rounded-lg border p-3">
                           <div className="flex items-center justify-between mb-1">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                              Testo inviato a FinBERT
+                              Text sent to FinBERT
                             </p>
                             <button
                               onClick={() =>
@@ -531,7 +531,7 @@ export default function FinBertDebugPage() {
                               }
                               className="text-[10px] text-primary hover:underline"
                             >
-                              {copied ? "copiato ✓" : "copia negli appunti"}
+                              {copied ? "copied ✓" : "copy to clipboard"}
                             </button>
                           </div>
                           <pre className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono bg-muted/30 rounded p-2 max-h-32 overflow-y-auto">
@@ -547,10 +547,10 @@ export default function FinBertDebugPage() {
                         {!selected.sentiment.processed ? (
                           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-center">
                             <p className="text-amber-400 text-sm font-medium">
-                              Sentiment non ancora elaborato
+                              Sentiment not yet processed
                             </p>
                             <p className="text-[11px] text-muted-foreground mt-1">
-                              FinBERT non ha ancora processato questo articolo
+                              FinBERT has not processed this article yet
                             </p>
                           </div>
                         ) : (
@@ -566,7 +566,7 @@ export default function FinBertDebugPage() {
                             {/* class scores */}
                             <div className="rounded-lg border p-3">
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">
-                                Output classi
+                                Class output
                               </p>
                               <div className="space-y-2.5">
                                 {(["positive", "negative", "neutral"] as const).map(
@@ -615,7 +615,7 @@ export default function FinBertDebugPage() {
                                 )}
                               </div>
                               <p className="text-xs mt-3">
-                                → Classificato:{" "}
+                                → Classified:{" "}
                                 <strong
                                   className={
                                     selected.sentiment.label === "positive"
@@ -636,10 +636,10 @@ export default function FinBertDebugPage() {
                             {/* contribution formula */}
                             <div className="rounded-lg bg-muted/40 border p-4 font-mono text-xs leading-loose space-y-1">
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 font-sans">
-                                Contributo al score aggregato
+                                Contribution to aggregate score
                               </p>
                               <p>
-                                Ore dalla pubblicazione:{" "}
+                                Hours since publication:{" "}
                                 <span className="text-foreground font-bold">
                                   {selected.sentiment.hours_ago}h
                                 </span>
@@ -662,7 +662,7 @@ export default function FinBertDebugPage() {
                                 </span>
                               </p>
                               <p>
-                                Contributo:{" "}
+                                Contribution:{" "}
                                 <span className="text-foreground">
                                   {selected.sentiment.score.toFixed(4)} ×{" "}
                                   {selected.sentiment.direction} ×{" "}
@@ -687,7 +687,7 @@ export default function FinBertDebugPage() {
                                 </span>
                               </p>
                               <div className="border-t border-border mt-2 pt-2 text-muted-foreground">
-                                <p>Soglie segnale:</p>
+                                <p>Signal thresholds:</p>
                                 <p>
                                   score {">"} +0.15 →{" "}
                                   <span className="text-emerald-400">BUY</span>
@@ -715,13 +715,13 @@ export default function FinBertDebugPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-xs">
-                                Modello:{" "}
+                                Model:{" "}
                                 <strong className="text-foreground">
                                   all-MiniLM-L6-v2
                                 </strong>
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Dimensioni: {selected.embeddings.dimensions || 384}
+                                Dimensions: {selected.embeddings.dimensions || 384}
                               </p>
                             </div>
                             <span
@@ -732,8 +732,8 @@ export default function FinBertDebugPage() {
                               }`}
                             >
                               {selected.embeddings.has_embedding
-                                ? "✓ generato"
-                                : "✗ non generato"}
+                                ? "✓ generated"
+                                : "✗ not generated"}
                             </span>
                           </div>
                         </div>
@@ -741,7 +741,7 @@ export default function FinBertDebugPage() {
                         {!selected.embeddings.has_embedding ? (
                           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-center">
                             <p className="text-amber-400 text-sm">
-                              Embedding non ancora generato
+                              Embedding not yet generated
                             </p>
                           </div>
                         ) : (
@@ -749,7 +749,7 @@ export default function FinBertDebugPage() {
                             {/* vector stats */}
                             <div className="rounded-lg border p-3">
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-                                Statistiche vettore
+                                Vector statistics
                               </p>
                               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs font-mono">
                                 <div>
@@ -772,13 +772,13 @@ export default function FinBertDebugPage() {
                                   </span>
                                 </div>
                                 <div>
-                                  Norma:{" "}
+                                  Norm:{" "}
                                   <span className="text-foreground">
                                     {selected.embeddings.vector_norm}
                                   </span>
                                 </div>
                                 <div className="col-span-2">
-                                  Valori non-zero:{" "}
+                                  Non-zero values:{" "}
                                   <span className="text-foreground">
                                     {selected.embeddings.vector_stats?.nonzero}/
                                     {selected.embeddings.dimensions} (
@@ -797,7 +797,7 @@ export default function FinBertDebugPage() {
                             {/* vector preview */}
                             <div className="rounded-lg border p-3">
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-                                Anteprima primi 8 valori
+                                First 8 values preview
                               </p>
                               <div className="font-mono text-xs text-muted-foreground bg-muted/30 rounded p-2">
                                 [{selected.embeddings.vector_preview?.join(", ")}, ...]
@@ -807,7 +807,7 @@ export default function FinBertDebugPage() {
                             {/* heatmap */}
                             <div className="rounded-lg border p-3">
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-                                Visualizzazione vettore (24×16 heatmap)
+                                Vector visualization (24×16 heatmap)
                               </p>
                               <div
                                 style={{
@@ -834,26 +834,26 @@ export default function FinBertDebugPage() {
                                 ))}
                               </div>
                               <div className="flex justify-between mt-1.5 text-[9px] text-muted-foreground">
-                                <span className="text-red-400">negativo ←</span>
+                                <span className="text-red-400">negative ←</span>
                                 <span>dim 0...383</span>
-                                <span className="text-emerald-400">→ positivo</span>
+                                <span className="text-emerald-400">→ positive</span>
                               </div>
                             </div>
 
                             {/* usage info */}
                             <div className="rounded-lg bg-muted/30 border p-3 text-xs text-muted-foreground space-y-1">
                               <p className="font-medium text-foreground">
-                                Usato per:
+                                Used for:
                               </p>
-                              <p>Semantic search su pgvector</p>
+                              <p>Semantic search on pgvector</p>
                               <p>
-                                Operatore:{" "}
+                                Operator:{" "}
                                 <code className="font-mono text-foreground">
                                   {"<->"}
                                 </code>{" "}
                                 (cosine distance)
                               </p>
-                              <p>Index: IVFFlat con 100 liste</p>
+                              <p>Index: IVFFlat with 100 lists</p>
                             </div>
                           </>
                         )}
@@ -869,12 +869,12 @@ export default function FinBertDebugPage() {
           <div className="rounded-xl border bg-card overflow-hidden">
             <div className="p-4 border-b">
               <h2 className="font-semibold text-sm">
-                System Log — Ultima esecuzione per {data.ticker}
+                System Log — Last run for {data.ticker}
               </h2>
             </div>
             {(data.recent_signals ?? []).length === 0 ? (
               <p className="p-6 text-center text-muted-foreground text-sm">
-                Nessun segnale storico trovato
+                No historical signals found
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -885,10 +885,10 @@ export default function FinBertDebugPage() {
                         Timestamp
                       </th>
                       <th className="text-left p-2.5 font-medium text-muted-foreground w-24">
-                        Evento
+                        Event
                       </th>
                       <th className="text-left p-2.5 font-medium text-muted-foreground">
-                        Dettaglio
+                        Detail
                       </th>
                     </tr>
                   </thead>
@@ -942,7 +942,7 @@ export default function FinBertDebugPage() {
                           {(
                             (data.recent_signals[0].confidence ?? 0) * 100
                           ).toFixed(1)}
-                          % — {new Date(data.recent_signals[0].created_at).toLocaleString("it-IT")}
+                          % — {new Date(data.recent_signals[0].created_at).toLocaleString("en-US")}
                         </td>
                       </tr>
                     )}
@@ -956,7 +956,7 @@ export default function FinBertDebugPage() {
               <div className="border-t">
                 <div className="p-3 border-b bg-muted/10">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    Confronto ultimi {data.recent_signals.length} segnali
+                    Comparison of last {data.recent_signals.length} signals
                   </p>
                 </div>
                 <div className="divide-y divide-border">
@@ -966,7 +966,7 @@ export default function FinBertDebugPage() {
                       className="flex items-center gap-3 px-3 py-2"
                     >
                       <span className="text-[10px] font-mono text-muted-foreground w-32">
-                        {new Date(run.created_at).toLocaleString("it-IT")}
+                        {new Date(run.created_at).toLocaleString("en-US")}
                       </span>
                       <span
                         className={`px-2 py-0.5 rounded text-white text-[10px] font-bold ${signalBg(run.signal)}`}

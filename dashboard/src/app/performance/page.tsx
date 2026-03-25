@@ -84,10 +84,10 @@ interface PerfData {
 type Horizon = "6h" | "24h" | "72h" | "168h";
 
 const HORIZON_LABELS: Record<Horizon, string> = {
-  "6h": "6 ore",
-  "24h": "24 ore",
-  "72h": "3 giorni",
-  "168h": "7 giorni",
+  "6h": "6 hours",
+  "24h": "24 hours",
+  "72h": "3 days",
+  "168h": "7 days",
 };
 
 interface EquityPoint {
@@ -105,19 +105,19 @@ const TICKER_COLORS: Record<string, string> = {
   // Mega cap
   AAPL: "#3b82f6", TSLA: "#ef4444", NVDA: "#10b981", MSFT: "#06b6d4",
   AMZN: "#ff9900", GOOG: "#4285f4", META: "#1877f2",
-  // Semiconduttori
+  // Semiconductors
   AMD: "#ed1c24", INTC: "#0071c5", AVGO: "#cc0000", TSM: "#e60012", MU: "#003da5",
-  // Finanziari
+  // Financials
   JPM: "#0c2340", GS: "#7399c6", BAC: "#012169", V: "#1a1f71", MA: "#eb001b",
-  // Energia
+  // Energy
   XOM: "#f97316", CVX: "#0066b2", COP: "#c41230", OXY: "#cf202e",
-  // Difesa
+  // Defense
   LMT: "#003366", RTX: "#00205b", NOC: "#003b71",
   // Healthcare
   JNJ: "#d51900", PFE: "#0093d0", LLY: "#d52b1e",
   // Retail / Consumer
   WMT: "#0071ce", COST: "#e31837", DIS: "#113ccf",
-  // ETF macro
+  // Macro ETFs
   GLD: "#eab308", SPY: "#78909c", QQQ: "#9575cd", XLE: "#ff8f00",
   XLF: "#5c6bc0", SLV: "#90a4ae", USO: "#6d4c41", TLT: "#26a69a",
   // Crypto
@@ -144,7 +144,7 @@ function returnColor(val: number) {
 }
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("it-IT", {
+  return new Date(d).toLocaleDateString("en-US", {
     day: "2-digit",
     month: "2-digit",
     year: "2-digit",
@@ -369,12 +369,12 @@ export default function PerformancePage() {
               color: "var(--text-muted)",
             }}
           >
-            ORIZZONTE
+            HORIZON
           </span>
           <select
             value={horizon}
             onChange={(e) => setHorizon(e.target.value as Horizon)}
-            aria-label="Orizzonte temporale"
+            aria-label="Time horizon"
             style={{
               background: "var(--bg-card)",
               border: "1px solid rgba(139,92,246,0.3)",
@@ -395,10 +395,10 @@ export default function PerformancePage() {
               backgroundPosition: "right 10px center",
             }}
           >
-            <option value="6h">6 ore</option>
-            <option value="24h">24 ore</option>
-            <option value="72h">72 ore (3 giorni)</option>
-            <option value="168h">168 ore (7 giorni)</option>
+            <option value="6h">6 hours</option>
+            <option value="24h">24 hours</option>
+            <option value="72h">72 hours (3 days)</option>
+            <option value="168h">168 hours (7 days)</option>
           </select>
 
           {(["6h", "24h", "72h", "168h"] as const).map((h) => (
@@ -475,7 +475,7 @@ export default function PerformancePage() {
       {/* Error */}
       {error && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-5">
-          <p className="text-red-400 text-sm font-medium">Errore</p>
+          <p className="text-red-400 text-sm font-medium">Error</p>
           <p className="text-xs text-muted-foreground mt-1">{error}</p>
         </div>
       )}
@@ -487,44 +487,44 @@ export default function PerformancePage() {
             <StatCard
               title="Hit Rate"
               value={`${currentStats.hit_rate ?? 0}%`}
-              subtitle={`${currentStats.count ?? 0} segnali BUY/SELL`}
+              subtitle={`${currentStats.count ?? 0} BUY/SELL signals`}
               color={
                 (currentStats.hit_rate ?? 0) >= 50 ? "#10b981" : "#ef4444"
               }
-              formula="hit_rate = segnali_corretti / totale_segnali × 100"
-              explanation="Percentuale di segnali BUY/SELL che hanno indovinato la direzione del prezzo. Un segnale SELL è 'corretto' se il prezzo è sceso nell'orizzonte considerato. Gli HOLD sono esclusi perché non sono trade azionabili. Sopra il 50% significa che il bot batte il caso."
+              formula="hit_rate = correct_signals / total_signals × 100"
+              explanation="Percentage of BUY/SELL signals that correctly predicted the price direction. A SELL signal is 'correct' if the price dropped within the selected horizon. HOLD signals are excluded as they are not actionable trades. Above 50% means the bot beats random chance."
             />
             <StatCard
               title="Avg Score"
               value={`${parseFloat(currentStats.avg_score) >= 0 ? "+" : ""}${currentStats.avg_score ?? 0}`}
-              subtitle={`a ${HORIZON_LABELS[horizon]}`}
+              subtitle={`at ${HORIZON_LABELS[horizon]}`}
               color={
                 parseFloat(currentStats.avg_score) >= 0
                   ? "#10b981"
                   : "#ef4444"
               }
               formula="score = (return × confidence) + direction_bonus"
-              explanation="Misura la qualità del segnale pesata per la confidence. Il direction_bonus vale +1 se la direzione era giusta, -1 se era sbagliata. Un segnale SELL con 60% confidence che porta a -2% di prezzo = (0.02 × 0.6) + 1 = +1.012. Score positivo = segnale utile, negativo = dannoso."
+              explanation="Measures signal quality weighted by confidence. The direction_bonus is +1 if the direction was correct, -1 if wrong. A SELL signal with 60% confidence leading to -2% price = (0.02 × 0.6) + 1 = +1.012. Positive score = useful signal, negative = harmful."
             />
             <StatCard
               title="Avg Return"
               value={`${parseFloat(currentStats.avg_return) >= 0 ? "+" : ""}${currentStats.avg_return ?? 0}%`}
-              subtitle={`a ${HORIZON_LABELS[horizon]}`}
+              subtitle={`at ${HORIZON_LABELS[horizon]}`}
               color={
                 parseFloat(currentStats.avg_return) >= 0
                   ? "#10b981"
                   : "#ef4444"
               }
-              formula="return = (prezzo_futuro - prezzo_entrata) / prezzo_entrata × 100"
-              explanation="Variazione percentuale media del prezzo nell'orizzonte temporale selezionato. Per un segnale SELL, un return negativo è positivo (il prezzo è sceso come previsto). Non tiene conto delle commissioni o dello slippage — è il movimento grezzo del mercato."
+              formula="return = (future_price - entry_price) / entry_price × 100"
+              explanation="Average percentage price change over the selected time horizon. For a SELL signal, a negative return is positive (price dropped as predicted). Does not account for commissions or slippage — it is the raw market movement."
             />
             <StatCard
               title="Alpha"
               value={`${stats.alpha >= 0 ? "+" : ""}${stats.alpha ?? 0}%`}
               subtitle="vs SPY"
               color={stats.alpha >= 0 ? "#10b981" : "#ef4444"}
-              formula="alpha = return_segnale - return_SPY (stesso periodo)"
-              explanation="Confronta il return del segnale con quello dell'indice S&P 500 (SPY) nello stesso periodo. Alpha positivo = il bot ha fatto meglio del mercato. Alpha negativo = meglio comprare un ETF passivo. È la metrica più importante per valutare se il sistema aggiunge valore reale rispetto al semplice buy&hold."
+              formula="alpha = signal_return - SPY_return (same period)"
+              explanation="Compares the signal return with the S&P 500 (SPY) return over the same period. Positive alpha = the bot outperformed the market. Negative alpha = better to buy a passive ETF. This is the most important metric to evaluate whether the system adds real value vs simple buy&hold."
             />
           </div>
 
@@ -584,12 +584,12 @@ export default function PerformancePage() {
                         }}
                       >
                         {h === "6h"
-                          ? "6 ORE"
+                          ? "6 HOURS"
                           : h === "24h"
-                            ? "24 ORE"
+                            ? "24 HOURS"
                             : h === "72h"
-                              ? "72 ORE"
-                              : "7 GIORNI"}
+                              ? "72 HOURS"
+                              : "7 DAYS"}
                       </span>
                       <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
                         {hData?.count ?? 0} BUY/SELL
@@ -662,7 +662,7 @@ export default function PerformancePage() {
                         fontStyle: "italic",
                       }}
                     >
-                      In attesa di dati...
+                      Waiting for data...
                     </div>
                   )}
                 </div>
@@ -674,7 +674,7 @@ export default function PerformancePage() {
           {chartData.length > 0 && (
             <div className="rounded-xl border bg-card p-5">
               <p className="text-sm font-semibold mb-4">
-                Score Cumulativo vs SPY
+                Cumulative Score vs SPY
               </p>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData}>
@@ -735,7 +735,7 @@ export default function PerformancePage() {
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="px-5 py-3 border-b">
                 <p className="text-sm font-semibold">
-                  Ultimi Segnali Valutati
+                  Latest Evaluated Signals
                 </p>
               </div>
               <div className="overflow-auto">
@@ -743,10 +743,10 @@ export default function PerformancePage() {
                   <thead>
                     <tr className="border-b bg-muted/30">
                       <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
-                        Data
+                        Date
                       </th>
                       <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">
-                        Segnale
+                        Signal
                       </th>
                       <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
                         Conf.
@@ -761,7 +761,7 @@ export default function PerformancePage() {
                         +72h
                       </th>
                       <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                        +7gg
+                        +7d
                       </th>
                       <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
                         Score
@@ -841,7 +841,7 @@ export default function PerformancePage() {
             >
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-semibold">
-                  Affidabilit&agrave; ML (Walk-Forward)
+                  ML Reliability (Walk-Forward)
                 </p>
                 <span
                   className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
@@ -851,14 +851,14 @@ export default function PerformancePage() {
                   }`}
                 >
                   {data.ml_validation.is_reliable
-                    ? "Affidabile"
-                    : "Non affidabile"}
+                    ? "Reliable"
+                    : "Unreliable"}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <p className="text-[10px] text-muted-foreground">
-                    Accuracy media
+                    Avg Accuracy
                   </p>
                   <p className="text-lg font-bold font-mono">
                     {(data.ml_validation.avg_accuracy * 100).toFixed(1)}%
@@ -897,8 +897,8 @@ export default function PerformancePage() {
               </div>
               {data.ml_validation.updated_at && (
                 <p className="text-[10px] text-muted-foreground mt-2">
-                  Ultimo aggiornamento:{" "}
-                  {new Date(data.ml_validation.updated_at).toLocaleString()}
+                  Last updated:{" "}
+                  {new Date(data.ml_validation.updated_at).toLocaleString("en-US")}
                 </p>
               )}
             </div>
@@ -916,12 +916,12 @@ export default function PerformancePage() {
                 fontSize: 14,
               }}
             >
-              Segnali valutabili (BUY/SELL): 0 &mdash; Gli HOLD non vengono conteggiati nelle performance.
-              Nessun segnale BUY/SELL valutato a {HORIZON_LABELS[horizon]}.
-              {horizon === "6h" && " Disponibile ~6h dopo ogni run."}
-              {horizon === "24h" && " Disponibile dal 20 marzo."}
-              {horizon === "72h" && " Disponibile dal 22 marzo."}
-              {horizon === "168h" && " Disponibile dal 26 marzo."}
+              Evaluable signals (BUY/SELL): 0 &mdash; HOLD signals are not counted in performance.
+              No BUY/SELL signals evaluated at {HORIZON_LABELS[horizon]}.
+              {horizon === "6h" && " Available ~6h after each run."}
+              {horizon === "24h" && " Available from March 20."}
+              {horizon === "72h" && " Available from March 22."}
+              {horizon === "168h" && " Available from March 26."}
             </div>
           )}
           {currentStats.count > 0 && currentStats.count < 10 && (
@@ -929,9 +929,9 @@ export default function PerformancePage() {
               className={`rounded-xl border p-5 bg-amber-500/5 border-amber-500/25`}
             >
               <p className="text-sm text-amber-400">
-                Segnali valutabili (BUY/SELL): {currentStats.count} &mdash; Gli
-                HOLD non vengono conteggiati. Servono almeno 10 segnali per
-                risultati statisticamente significativi.
+                Evaluable signals (BUY/SELL): {currentStats.count} &mdash; HOLD
+                signals are not counted. At least 10 signals are needed for
+                statistically significant results.
               </p>
             </div>
           )}
@@ -940,12 +940,12 @@ export default function PerformancePage() {
               className={`rounded-xl border p-5 bg-zinc-500/5 border-zinc-500/25`}
             >
               <p className="text-sm text-muted-foreground">
-                Segnali valutabili (BUY/SELL):{" "}
+                Evaluable signals (BUY/SELL):{" "}
                 <span className="font-bold text-foreground">
                   {currentStats.count}
                 </span>{" "}
-                a {HORIZON_LABELS[horizon]}. Gli HOLD non vengono conteggiati.
-                Servono almeno 30 per un&apos;analisi affidabile.
+                at {HORIZON_LABELS[horizon]}. HOLD signals are not counted.
+                At least 30 are needed for reliable analysis.
               </p>
             </div>
           )}
@@ -954,10 +954,10 @@ export default function PerformancePage() {
               className={`rounded-xl border p-5 bg-emerald-500/5 border-emerald-500/25`}
             >
               <p className="text-sm text-emerald-400">
-                Analisi statistica affidabile &mdash;{" "}
-                <span className="font-bold">{currentStats.count}</span> segnali
-                BUY/SELL valutati a {HORIZON_LABELS[horizon]}. Gli HOLD sono
-                esclusi.
+                Statistically reliable analysis &mdash;{" "}
+                <span className="font-bold">{currentStats.count}</span> BUY/SELL
+                signals evaluated at {HORIZON_LABELS[horizon]}. HOLD signals are
+                excluded.
               </p>
             </div>
           )}
@@ -968,7 +968,7 @@ export default function PerformancePage() {
       {!loading && !error && !data && (
         <div className="rounded-xl border bg-card p-8 text-center">
           <p className="text-muted-foreground text-sm">
-            Nessun dato per{" "}
+            No data for{" "}
             <span className="font-mono font-medium">{ticker}</span>
           </p>
         </div>
@@ -990,7 +990,7 @@ export default function PerformancePage() {
           <div className="flex items-center justify-between flex-wrap gap-3 mt-4">
             <h2 className="text-xl font-bold tracking-tight">Equity Curves</h2>
             <div className="flex gap-1.5">
-              {([["7d", "7g"], ["30d", "30g"], ["90d", "90g"], ["all", "Tutto"]] as const).map(([val, label]) => (
+              {([["7d", "7d"], ["30d", "30d"], ["90d", "90d"], ["all", "All"]] as const).map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => setEquityPeriod(val)}
@@ -1060,7 +1060,7 @@ export default function PerformancePage() {
                     Equity Curve &mdash; {HORIZON_LABELS[h]}
                     {filteredTickers.length === 0 && (
                       <span className="text-muted-foreground font-normal ml-2">
-                        (in attesa di dati)
+                        (waiting for data)
                       </span>
                     )}
                   </p>
@@ -1093,7 +1093,7 @@ export default function PerformancePage() {
                           formatter={(value: number, name: string) => {
                             return [`$${value >= 0 ? "+" : ""}${value.toFixed(2)}`, name];
                           }}
-                          labelFormatter={(label: string) => `Data: ${label}`}
+                          labelFormatter={(label: string) => `Date: ${label}`}
                         />
                         <Legend
                           wrapperStyle={{ fontSize: 11 }}
@@ -1124,7 +1124,7 @@ export default function PerformancePage() {
                         fontStyle: "italic",
                       }}
                     >
-                      Nessun segnale valutato a {HORIZON_LABELS[h]}
+                      No signals evaluated at {HORIZON_LABELS[h]}
                     </div>
                   )}
                 </div>

@@ -35,25 +35,25 @@ const QUICK_LINKS = [
     href: "/agents",
     icon: "🤖",
     title: "Agents",
-    desc: "Visualizza tutti gli agenti e i loro voti in dettaglio",
+    desc: "View all agents and their detailed votes",
   },
   {
     href: "/patterns",
     icon: "🔮",
     title: "Patterns",
-    desc: "Pattern storici con matching e previsioni ML",
+    desc: "Historical patterns with matching and ML predictions",
   },
   {
     href: "/performance",
     icon: "🏆",
     title: "Performance",
-    desc: "Metriche e hit-rate degli agenti nel tempo",
+    desc: "Agent metrics and hit-rate over time",
   },
   {
     href: "/guide",
     icon: "📖",
-    title: "Guida",
-    desc: "Come funziona ogni agente e come leggere i segnali",
+    title: "Guide",
+    desc: "How each agent works and how to read the signals",
   },
 ];
 
@@ -72,10 +72,10 @@ const signalDot = (s: string) =>
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m fa`;
+  if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h fa`;
-  return `${Math.floor(hrs / 24)}d fa`;
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 /* ── Component ─────────────────────────────────────────── */
@@ -110,25 +110,25 @@ export default function DashboardPage() {
       } else {
         // Mock data when no real data
         setChartData([
-          { day: "Lun", confidence: 62 },
-          { day: "Mar", confidence: 58 },
-          { day: "Mer", confidence: 71 },
-          { day: "Gio", confidence: 65 },
-          { day: "Ven", confidence: 74 },
-          { day: "Sab", confidence: 69 },
-          { day: "Dom", confidence: 78 },
+          { day: "Mon", confidence: 62 },
+          { day: "Tue", confidence: 58 },
+          { day: "Wed", confidence: 71 },
+          { day: "Thu", confidence: 65 },
+          { day: "Fri", confidence: 74 },
+          { day: "Sat", confidence: 69 },
+          { day: "Sun", confidence: 78 },
         ]);
       }
     } catch {
       // Mock fallback
       setChartData([
-        { day: "Lun", confidence: 62 },
-        { day: "Mar", confidence: 58 },
-        { day: "Mer", confidence: 71 },
-        { day: "Gio", confidence: 65 },
-        { day: "Ven", confidence: 74 },
-        { day: "Sab", confidence: 69 },
-        { day: "Dom", confidence: 78 },
+        { day: "Mon", confidence: 62 },
+        { day: "Tue", confidence: 58 },
+        { day: "Wed", confidence: 71 },
+        { day: "Thu", confidence: 65 },
+        { day: "Fri", confidence: 74 },
+        { day: "Sat", confidence: 69 },
+        { day: "Sun", confidence: 78 },
       ]);
     } finally {
       setLoading(false);
@@ -187,9 +187,9 @@ export default function DashboardPage() {
         <StatCard
           icon="📊"
           iconBg="rgba(168,85,247,0.15)"
-          label="Segnali oggi"
+          label="Signals today"
           value={loading ? "—" : String(todaySignals)}
-          sub={`su ${TICKERS.length} ticker`}
+          sub={`out of ${TICKERS.length} tickers`}
           trend={todaySignals > 0 ? "up" : "neutral"}
         />
         <StatCard
@@ -197,7 +197,7 @@ export default function DashboardPage() {
           iconBg="var(--green-bg)"
           label="BUY"
           value={loading ? "—" : String(buyCount)}
-          sub={todaySignals > 0 ? `${Math.round((buyCount / todaySignals) * 100)}% del totale` : "—"}
+          sub={todaySignals > 0 ? `${Math.round((buyCount / todaySignals) * 100)}% of total` : "—"}
           trend="up"
         />
         <StatCard
@@ -205,15 +205,15 @@ export default function DashboardPage() {
           iconBg="var(--red-bg)"
           label="SELL"
           value={loading ? "—" : String(sellCount)}
-          sub={todaySignals > 0 ? `${Math.round((sellCount / todaySignals) * 100)}% del totale` : "—"}
+          sub={todaySignals > 0 ? `${Math.round((sellCount / todaySignals) * 100)}% of total` : "—"}
           trend="down"
         />
         <StatCard
           icon="🎯"
           iconBg="rgba(245,158,11,0.12)"
-          label="Confidence media"
+          label="Avg Confidence"
           value={loading ? "—" : `${avgConfidence}%`}
-          sub={avgConfidence >= 70 ? "Alta" : avgConfidence >= 50 ? "Moderata" : "Bassa"}
+          sub={avgConfidence >= 70 ? "High" : avgConfidence >= 50 ? "Moderate" : "Low"}
           trend={avgConfidence >= 60 ? "up" : "down"}
         />
       </div>
@@ -224,7 +224,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-3 card-gradient rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[rgba(139,92,246,0.12)] flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              Segnali per ticker
+              Signals by ticker
             </h2>
             <span className="text-[10px] text-[var(--text-muted)] font-mono">
               {selectedSignal ? timeAgo(selectedSignal.created_at) : "—"}
@@ -236,10 +236,10 @@ export default function DashboardPage() {
               <thead>
                 <tr className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">
                   <th className="text-left px-5 py-2.5 font-medium">Ticker</th>
-                  <th className="text-left px-3 py-2.5 font-medium">Segnale</th>
+                  <th className="text-left px-3 py-2.5 font-medium">Signal</th>
                   <th className="text-left px-3 py-2.5 font-medium">Confidence</th>
                   <th className="text-left px-3 py-2.5 font-medium hidden sm:table-cell">Consensus</th>
-                  <th className="text-right px-5 py-2.5 font-medium hidden md:table-cell">Aggiornato</th>
+                  <th className="text-right px-5 py-2.5 font-medium hidden md:table-cell">Updated</th>
                 </tr>
               </thead>
               <tbody>
@@ -339,7 +339,7 @@ export default function DashboardPage() {
                 Confidence trend
               </h3>
               <p className="text-[11px] text-[var(--text-muted)]">
-                {selectedTicker} — ultimi run
+                {selectedTicker} — recent runs
               </p>
             </div>
             <span className="font-mono text-lg font-bold text-[var(--accent-light)]">
@@ -414,7 +414,7 @@ export default function DashboardPage() {
       {/* ── Quick Links ─────────────────────────────────── */}
       <div>
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
-          Link rapidi
+          Quick links
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {QUICK_LINKS.map((link) => (

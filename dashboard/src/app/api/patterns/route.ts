@@ -177,8 +177,8 @@ function generateRecommendation(stats10d: ReturnType<typeof outcomeStats>) {
     return {
       signal: "HOLD" as const,
       reason: stats10d
-        ? `Solo ${stats10d.count} pattern simili — confidenza bassa`
-        : "Dati insufficienti",
+        ? `Only ${stats10d.count} similar patterns — low confidence`
+        : "Insufficient data",
     };
   }
 
@@ -191,9 +191,9 @@ function generateRecommendation(stats10d: ReturnType<typeof outcomeStats>) {
       positive_rate,
       sample_size: count,
       reason:
-        `Pattern simili hanno prodotto +${mean.toFixed(1)}% ` +
-        `in media nei 10gg successivi ` +
-        `(${positive_rate.toFixed(0)}% dei casi positivi)`,
+        `Similar patterns produced +${mean.toFixed(1)}% ` +
+        `on average in the following 10 days ` +
+        `(${positive_rate.toFixed(0)}% of cases positive)`,
     };
   }
 
@@ -204,9 +204,9 @@ function generateRecommendation(stats10d: ReturnType<typeof outcomeStats>) {
       positive_rate,
       sample_size: count,
       reason:
-        `Pattern simili hanno prodotto ${mean.toFixed(1)}% ` +
-        `in media nei 10gg successivi ` +
-        `(${(100 - positive_rate).toFixed(0)}% dei casi negativi)`,
+        `Similar patterns produced ${mean.toFixed(1)}% ` +
+        `on average in the following 10 days ` +
+        `(${(100 - positive_rate).toFixed(0)}% of cases negative)`,
     };
   }
 
@@ -216,8 +216,8 @@ function generateRecommendation(stats10d: ReturnType<typeof outcomeStats>) {
     positive_rate,
     sample_size: count,
     reason:
-      `Pattern simili con rendimento medio ${mean.toFixed(1)}% ` +
-      `— segnale non chiaro`,
+      `Similar patterns with average return ${mean.toFixed(1)}% ` +
+      `— unclear signal`,
   };
 }
 
@@ -292,7 +292,7 @@ export async function GET(request: NextRequest) {
 
     if (!priceData || priceData.prices.length < 5) {
       return NextResponse.json(
-        { error: `Dati prezzi non disponibili per ${ticker}` },
+        { error: `Price data not available for ${ticker}` },
         { status: 404 },
       );
     }

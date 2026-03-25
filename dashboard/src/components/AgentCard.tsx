@@ -116,7 +116,7 @@ export default function AgentCard({
       {/* Top articles (SentimentAgent only) */}
       {topArticles && topArticles.length > 0 && (
         <div className="px-4 py-3 border-b border-[rgba(139,92,246,0.12)] space-y-1.5">
-          <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-medium">Top articoli</p>
+          <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-medium">Top articles</p>
           {topArticles.map((a, i) => (
             <div key={i} className="flex items-center gap-2 text-[11px]">
               <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${labelColor(a.label)}`}>
@@ -133,11 +133,11 @@ export default function AgentCard({
       {researchPapers !== undefined && (
         <div className="px-4 py-3 border-b border-[rgba(139,92,246,0.12)] space-y-2">
           <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-medium">
-            Paper arXiv analizzati: {researchPapers.length}
+            arXiv papers analyzed: {researchPapers.length}
           </p>
           {researchPapers.length === 0 && (
             <p className="text-[11px] text-[var(--text-muted)]">
-              Nessun paper trovato — arXiv non raggiungibile
+              No papers found — arXiv unreachable
             </p>
           )}
           {researchPapers.map((p, i) => (

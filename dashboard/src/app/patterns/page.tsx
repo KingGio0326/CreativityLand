@@ -150,11 +150,11 @@ function signalDot(signal: string | null) {
 /* ── format date for display ──────────────────────────── */
 function fmtDate(d: string) {
   const p = new Date(d);
-  return p.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });
+  return p.toLocaleDateString("en-US", { day: "2-digit", month: "2-digit" });
 }
 
 function fmtDateFull(d: string) {
-  return new Date(d).toLocaleDateString("it-IT", {
+  return new Date(d).toLocaleDateString("en-US", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -250,7 +250,7 @@ function CandlestickChart({
                 }}
               >
                 <div style={{ color: "#6b6b85", marginBottom: 4 }}>
-                  Giorno {d.name}
+                  Day {d.name}
                 </div>
                 <div style={{ color: "#10b981" }}>
                   O: {d.open?.toFixed(4)}
@@ -276,7 +276,7 @@ function CandlestickChart({
             strokeDasharray="5 3"
             strokeWidth={2}
             label={{
-              value: "\u25C0 ORA",
+              value: "\u25C0 NOW",
               position: "insideTopRight",
               fill: "#a855f7",
               fontSize: 11,
@@ -453,10 +453,10 @@ function TradingPanel({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Errore ordine");
+      if (!res.ok) throw new Error(data.error ?? "Order error");
       setToast({
         type: "success",
-        message: `Ordine eseguito: ${side.toUpperCase()} ${qty} ${ticker} | Stop Loss: $${data.stop_loss_price} | Take Profit: $${data.take_profit_price}`,
+        message: `Order executed: ${side.toUpperCase()} ${qty} ${ticker} | Stop Loss: $${data.stop_loss_price} | Take Profit: $${data.take_profit_price}`,
       });
     } catch (err) {
       setToast({ type: "error", message: String(err) });
@@ -481,7 +481,7 @@ function TradingPanel({
         {/* Side + Qty */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Direzione</label>
+            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Direction</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setSide("buy")}
@@ -506,7 +506,7 @@ function TradingPanel({
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Quantita</label>
+            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Quantity</label>
             <input
               type="number"
               min={1}
@@ -560,7 +560,7 @@ function TradingPanel({
           <div className="rounded-xl bg-[rgba(124,58,237,0.08)] border border-[rgba(139,92,246,0.2)] p-3 space-y-1 text-[11px]">
             <div className="flex justify-between items-center">
               <span className="text-[var(--text-muted)]">
-                Position sizing consigliato (Kelly)
+                Suggested position sizing (Kelly)
               </span>
               <span className="text-2xl font-bold text-[#a855f7] font-mono">
                 {kellySizing.suggested_pct}%
@@ -591,7 +591,7 @@ function TradingPanel({
         {/* Order type */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Tipo ordine</label>
+            <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Order type</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setOrderType("market")}
@@ -617,7 +617,7 @@ function TradingPanel({
           </div>
           {orderType === "limit" && (
             <div className="space-y-1.5">
-              <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Prezzo limite</label>
+              <label className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">Limit price</label>
               <input
                 type="number"
                 step={0.01}
@@ -646,7 +646,7 @@ function TradingPanel({
           </p>
           <div className="flex gap-4 pt-1 border-t border-[rgba(139,92,246,0.12)] mt-1">
             <p className="text-red-400 font-mono">
-              Rischio max: -${maxRisk}
+              Max risk: -${maxRisk}
             </p>
             <p className="text-emerald-400 font-mono">
               Target: +${targetGain}
@@ -664,10 +664,10 @@ function TradingPanel({
               : "bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-[0_4px_20px_rgba(239,68,68,0.3)]"
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
-          {submitting ? "Invio in corso..." : "CONFERMA ORDINE"}
+          {submitting ? "Submitting..." : "CONFIRM ORDER"}
         </button>
         <p className="text-[10px] text-center text-amber-400/70">
-          Paper Trading Mode — nessun denaro reale
+          Paper Trading Mode — no real money
         </p>
       </div>
 
@@ -711,7 +711,7 @@ function PortfolioPanel() {
   }, [fetchPortfolio]);
 
   const handleClose = async (symbol: string) => {
-    if (!confirm(`Chiudere posizione ${symbol}?`)) return;
+    if (!confirm(`Close position ${symbol}?`)) return;
     setClosing(symbol);
     try {
       const res = await fetch("/api/trade/close", {
@@ -723,10 +723,10 @@ function PortfolioPanel() {
         fetchPortfolio();
       } else {
         const data = await res.json();
-        alert(data.error ?? "Errore nella chiusura");
+        alert(data.error ?? "Error closing position");
       }
     } catch {
-      alert("Errore nella chiusura");
+      alert("Error closing position");
     } finally {
       setClosing(null);
     }
@@ -735,7 +735,7 @@ function PortfolioPanel() {
   return (
     <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-[rgba(139,92,246,0.12)]">
-        <p className="text-sm font-semibold">Portfolio Aperto</p>
+        <p className="text-sm font-semibold">Open Portfolio</p>
         <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
           PAPER MODE
         </span>
@@ -753,7 +753,7 @@ function PortfolioPanel() {
 
       {!loading && !error && positions.length === 0 && (
         <div className="p-5 text-xs text-[var(--text-muted)] text-center">
-          Nessuna posizione aperta
+          No open positions
         </div>
       )}
 
@@ -763,16 +763,16 @@ function PortfolioPanel() {
             <thead>
               <tr className="border-b border-[rgba(139,92,246,0.12)] bg-[rgba(255,255,255,0.03)]">
                 <th className="text-left px-4 py-2.5 font-medium text-[var(--text-muted)]">
-                  Simbolo
+                  Symbol
                 </th>
                 <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
                   Qty
                 </th>
                 <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
-                  Ingresso
+                  Entry
                 </th>
                 <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
-                  Attuale
+                  Current
                 </th>
                 <th className="text-right px-4 py-2.5 font-medium text-[var(--text-muted)]">
                   P&L
@@ -820,7 +820,7 @@ function PortfolioPanel() {
                         disabled={closing === p.symbol}
                         className="px-2 py-1 text-[10px] font-medium rounded border border-[rgba(239,68,68,0.3)] text-[#ef4444] hover:bg-[rgba(239,68,68,0.1)] transition-colors disabled:opacity-50"
                       >
-                        {closing === p.symbol ? "..." : "Chiudi"}
+                        {closing === p.symbol ? "..." : "Close"}
                       </button>
                     </td>
                   </tr>
@@ -890,10 +890,10 @@ function PatternPerformanceSection({ perfData }: { perfData: PatPerfData | null 
           <span className="text-2xl">&#9203;</span>
           <div>
             <p className="text-sm text-[var(--text-muted)]">
-              Pattern evaluation in corso &mdash; i primi risultati saranno disponibili dal ~30 marzo
+              Pattern evaluation in progress &mdash; first results will be available from ~March 30
             </p>
             <p className="text-xs text-[var(--text-muted)] mt-1 opacity-60">
-              I pattern vengono valutati dopo 168h (7 giorni) dal segnale
+              Patterns are evaluated 168h (7 days) after the signal
             </p>
           </div>
         </div>
@@ -929,7 +929,7 @@ function PatternPerformanceSection({ perfData }: { perfData: PatPerfData | null 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold tracking-tight">Pattern Matching Performance</h2>
         <span className="text-xs text-[var(--text-muted)] font-mono">
-          {perfData.total} valutazioni
+          {perfData.total} evaluations
         </span>
       </div>
 
@@ -955,7 +955,7 @@ function PatternPerformanceSection({ perfData }: { perfData: PatPerfData | null 
           <p className="text-3xl font-bold font-mono text-[#a855f7]">
             {perfData.avg_boost.toFixed(1)}%
           </p>
-          <p className="text-[10px] text-[var(--text-muted)] mt-1">confidenza</p>
+          <p className="text-[10px] text-[var(--text-muted)] mt-1">confidence</p>
         </div>
 
         {/* Prediction breakdown */}
@@ -973,7 +973,7 @@ function PatternPerformanceSection({ perfData }: { perfData: PatPerfData | null 
                 {e.hit_rate}%
               </p>
               <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                {e.total} segnali
+                {e.total} signals
               </p>
             </div>
           ))}
@@ -983,7 +983,7 @@ function PatternPerformanceSection({ perfData }: { perfData: PatPerfData | null 
       {regimeChartData.length > 0 && (
         <div>
           <p className="text-xs text-[var(--text-muted)] barlow uppercase tracking-wider mb-3">
-            Hit Rate per Regime
+            Hit Rate by Regime
           </p>
           <div className="h-40">
             <ResponsiveContainer width="100%" height="100%">
@@ -1040,19 +1040,19 @@ function PatternPerformanceSection({ perfData }: { perfData: PatPerfData | null 
       {perfData.recent.length > 0 && (
         <div>
           <p className="text-xs text-[var(--text-muted)] barlow uppercase tracking-wider mb-3">
-            Ultime Valutazioni
+            Recent Evaluations
           </p>
           <div className="overflow-x-auto rounded-xl border border-[rgba(139,92,246,0.1)]">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[rgba(139,92,246,0.1)] text-[var(--text-muted)]">
                   <th className="px-3 py-2 text-left font-medium">Ticker</th>
-                  <th className="px-3 py-2 text-left font-medium">Data</th>
+                  <th className="px-3 py-2 text-left font-medium">Date</th>
                   <th className="px-3 py-2 text-center font-medium">Pred.</th>
                   <th className="px-3 py-2 text-right font-medium">Boost</th>
                   <th className="px-3 py-2 text-center font-medium">Regime</th>
                   <th className="px-3 py-2 text-right font-medium">Return 7d</th>
-                  <th className="px-3 py-2 text-center font-medium">Esito</th>
+                  <th className="px-3 py-2 text-center font-medium">Result</th>
                 </tr>
               </thead>
               <tbody>
@@ -1063,7 +1063,7 @@ function PatternPerformanceSection({ perfData }: { perfData: PatPerfData | null 
                   >
                     <td className="px-3 py-2 font-mono font-medium">{r.ticker}</td>
                     <td className="px-3 py-2 text-[var(--text-muted)]">
-                      {new Date(r.date).toLocaleDateString("it-IT", {
+                      {new Date(r.date).toLocaleDateString("en-US", {
                         day: "2-digit",
                         month: "2-digit",
                       })}
@@ -1294,7 +1294,7 @@ export default function PatternsPage() {
       {/* Error */}
       {error && (
         <div className="rounded-2xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.05)] p-5">
-          <p className="text-red-400 text-sm font-medium">Errore</p>
+          <p className="text-red-400 text-sm font-medium">Error</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{error}</p>
         </div>
       )}
@@ -1323,7 +1323,7 @@ export default function PatternsPage() {
                   transition: "all 0.15s ease",
                 }}
               >
-                {type === "candle" ? "Candele" : type === "line" ? "Linea" : "Area"}
+                {type === "candle" ? "Candle" : type === "line" ? "Line" : "Area"}
               </button>
             ))}
           </div>
@@ -1333,7 +1333,7 @@ export default function PatternsPage() {
             {/* Current pattern */}
             <div style={{ background: "rgba(7,7,15,0.8)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 16, padding: 20 }}>
               <div className="flex items-baseline justify-between mb-4">
-                <p className="text-sm font-semibold">Pattern Attuale</p>
+                <p className="text-sm font-semibold">Current Pattern</p>
                 <p className="text-xs text-[var(--text-muted)] font-mono">
                   ${data?.current?.current_price ?? 0}{" "}
                   <span
@@ -1367,7 +1367,7 @@ export default function PatternsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#4a4a6a" }} interval={4} />
                       <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} domain={["auto", "auto"]} tickFormatter={(v: number) => `$${v}`} />
-                      <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Prezzo"]} />
+                      <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Price"]} />
                       <Area type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} fill="url(#gradCurrent)" />
                     </AreaChart>
                   ) : (
@@ -1375,7 +1375,7 @@ export default function PatternsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#4a4a6a" }} interval={4} />
                       <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} domain={["auto", "auto"]} tickFormatter={(v: number) => `$${v}`} />
-                      <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Prezzo"]} />
+                      <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`$${v}`, "Price"]} />
                       <Line type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} dot={false} />
                     </LineChart>
                   )}
@@ -1386,7 +1386,7 @@ export default function PatternsPage() {
             {/* Best similar pattern */}
             <div style={{ background: "rgba(7,7,15,0.8)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 16, padding: 20 }}>
               <div className="flex items-baseline justify-between mb-4">
-                <p className="text-sm font-semibold">Pattern Storico Simile — {historicalLength} giorni</p>
+                <p className="text-sm font-semibold">Similar Historical Pattern — {historicalLength} days</p>
                 {best && (
                   <p className="text-xs text-[var(--text-muted)] font-mono">
                     Similarity:{" "}
@@ -1417,20 +1417,20 @@ export default function PatternsPage() {
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                          <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Giorno", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
+                          <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Day", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
                           <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
-                          <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]} />
-                          <ReferenceLine x={currentLength} stroke="#a855f7" strokeDasharray="5 3" strokeWidth={2} label={{ value: "\u25C0 ORA", position: "insideTopRight", fill: "#a855f7", fontSize: 11, fontWeight: 700 }} />
+                          <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Return"]} />
+                          <ReferenceLine x={currentLength} stroke="#a855f7" strokeDasharray="5 3" strokeWidth={2} label={{ value: "\u25C0 NOW", position: "insideTopRight", fill: "#a855f7", fontSize: 11, fontWeight: 700 }} />
                           <ReferenceArea x1={currentLength} x2={historicalLength} fill="rgba(124,58,237,0.06)" stroke="rgba(124,58,237,0.1)" strokeDasharray="4 3" />
                           <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} fill="url(#gradHistoric)" />
                         </AreaChart>
                       ) : (
                         <LineChart data={historicChartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                          <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Giorno", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
+                          <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4a4a6a" }} label={{ value: "Day", position: "insideBottomRight", offset: -5, style: { fontSize: 10, fill: "#4a4a6a" } }} />
                           <YAxis tick={{ fontSize: 10, fill: "#4a4a6a" }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
-                          <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Rendimento"]} />
-                          <ReferenceLine x={currentLength} stroke="#a855f7" strokeDasharray="5 3" strokeWidth={2} label={{ value: "\u25C0 ORA", position: "insideTopRight", fill: "#a855f7", fontSize: 11, fontWeight: 700 }} />
+                          <Tooltip contentStyle={{ backgroundColor: "#12122a", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "8px", color: "#f0f0ff", fontSize: "12px" }} formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Return"]} />
+                          <ReferenceLine x={currentLength} stroke="#a855f7" strokeDasharray="5 3" strokeWidth={2} label={{ value: "\u25C0 NOW", position: "insideTopRight", fill: "#a855f7", fontSize: 11, fontWeight: 700 }} />
                           <ReferenceArea x1={currentLength} x2={historicalLength} fill="rgba(124,58,237,0.06)" stroke="rgba(124,58,237,0.1)" strokeDasharray="4 3" />
                           <Line type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} dot={false} />
                         </LineChart>
@@ -1438,12 +1438,12 @@ export default function PatternsPage() {
                     </ResponsiveContainer>
                   )}
                   <p className="text-[11px] text-[var(--text-muted)] text-center mt-2">
-                    Periodo: {fmtDateFull(best.start_date)} — {fmtDateFull(best.end_date)}
+                    Period: {fmtDateFull(best.start_date)} — {fmtDateFull(best.end_date)}
                   </p>
                 </>
               ) : (
                 <div className="h-[280px] flex items-center justify-center text-sm text-[var(--text-muted)]">
-                  Nessun pattern storico trovato
+                  No historical patterns found
                 </div>
               )}
             </div>
@@ -1453,12 +1453,12 @@ export default function PatternsPage() {
           {best && (
             <>
               <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5">
-                <p className="text-sm font-semibold mb-4">Overlay Comparativo — Top 3 Pattern</p>
+                <p className="text-sm font-semibold mb-4">Comparative Overlay — Top 3 Patterns</p>
                 {/* Custom legend */}
                 <div className="flex flex-wrap gap-2 mb-4">
                   <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[rgba(59,130,246,0.15)]">
                     <span className="w-2 h-2 rounded-full bg-[#3b82f6]" />
-                    <span className="text-[#3b82f6]">Attuale</span>
+                    <span className="text-[#3b82f6]">Current</span>
                   </span>
                   {best && <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[rgba(245,158,11,0.15)]">
                     <span className="w-2 h-2 rounded-full bg-[#f59e0b]" />
@@ -1495,7 +1495,7 @@ export default function PatternsPage() {
                       }}
                       formatter={(v: number, name: string) => {
                         const label =
-                          name === "current" ? "Attuale"
+                          name === "current" ? "Current"
                             : name === "match1" ? "Match #1"
                               : name === "match2" ? "Match #2"
                                 : "Match #3";
@@ -1517,48 +1517,48 @@ export default function PatternsPage() {
               {/* ── Consensus storico ──────────────────────── */}
               {allMatches.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-sm font-semibold">Consensus Storico</p>
+                  <p className="text-sm font-semibold">Historical Consensus</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-4 space-y-1">
-                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">5 giorni</p>
+                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">5 days</p>
                       <p className={`text-2xl font-bold font-mono ${positiveCount5d > allMatches.length / 2 ? "text-emerald-400" : positiveCount5d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
-                        {positiveCount5d}/{allMatches.length} rialzo
+                        {positiveCount5d}/{allMatches.length} up
                       </p>
                       {avgReturn5d != null && (
                         <p className={`text-xs font-mono ${avgReturn5d >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                          media: {avgReturn5d >= 0 ? "+" : ""}{avgReturn5d}%
+                          avg: {avgReturn5d >= 0 ? "+" : ""}{avgReturn5d}%
                         </p>
                       )}
                     </div>
                     <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-4 space-y-1">
-                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">10 giorni</p>
+                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">10 days</p>
                       <p className={`text-2xl font-bold font-mono ${positiveCount10d > allMatches.length / 2 ? "text-emerald-400" : positiveCount10d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
-                        {positiveCount10d}/{allMatches.length} rialzo
+                        {positiveCount10d}/{allMatches.length} up
                       </p>
                       {avgReturn10d != null && (
                         <p className={`text-xs font-mono ${avgReturn10d >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                          media: {avgReturn10d >= 0 ? "+" : ""}{avgReturn10d}%
+                          avg: {avgReturn10d >= 0 ? "+" : ""}{avgReturn10d}%
                         </p>
                       )}
                     </div>
                     <div className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-4 space-y-1">
-                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">20 giorni</p>
+                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">20 days</p>
                       <p className={`text-2xl font-bold font-mono ${positiveCount20d > allMatches.length / 2 ? "text-emerald-400" : positiveCount20d < allMatches.length / 2 ? "text-red-400" : "text-zinc-400"}`}>
-                        {positiveCount20d}/{allMatches.length} rialzo
+                        {positiveCount20d}/{allMatches.length} up
                       </p>
                       {avgReturn20d != null && (
                         <p className={`text-xs font-mono ${avgReturn20d >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                          media: {avgReturn20d >= 0 ? "+" : ""}{avgReturn20d}%
+                          avg: {avgReturn20d >= 0 ? "+" : ""}{avgReturn20d}%
                         </p>
                       )}
                     </div>
                   </div>
                   <p className="text-xs text-[var(--text-muted)]">
                     {positiveCount5d === allMatches.length
-                      ? `Tutti i ${allMatches.length} pattern storici simili hanno portato a un rialzo nei 5gg successivi`
+                      ? `All ${allMatches.length} similar historical patterns led to a rise in the following 5 days`
                       : positiveCount5d === 0
-                        ? `Nessuno dei ${allMatches.length} pattern storici simili ha portato a un rialzo nei 5gg successivi`
-                        : `${positiveCount5d}/${allMatches.length} pattern storici simili hanno portato a un rialzo nei 5gg successivi`}
+                        ? `None of the ${allMatches.length} similar historical patterns led to a rise in the following 5 days`
+                        : `${positiveCount5d}/${allMatches.length} similar historical patterns led to a rise in the following 5 days`}
                   </p>
                 </div>
               )}
@@ -1575,18 +1575,18 @@ export default function PatternsPage() {
                   {regimeLabel(data.market_regime)}
                 </span>
                 <span className="text-[var(--text-muted)]">
-                  Pattern cercati in regime:{" "}
+                  Patterns searched in regime:{" "}
                   <span className="text-foreground font-medium">{data.market_regime}</span>
                 </span>
                 {data.vix_approx != null && (
                   <span className="text-[var(--text-muted)]">
-                    VIX stimato:{" "}
+                    Estimated VIX:{" "}
                     <span className="text-foreground font-mono">{data.vix_approx}%</span>
                   </span>
                 )}
                 {data.spy_trend_30d != null && (
                   <span className="text-[var(--text-muted)]">
-                    SPY trend 30gg:{" "}
+                    SPY trend 30d:{" "}
                     <span
                       className={`font-mono font-medium ${
                         data.spy_trend_30d >= 0 ? "text-emerald-400" : "text-red-400"
@@ -1606,14 +1606,14 @@ export default function PatternsPage() {
             {(["5d", "10d", "20d"] as const).map((horizon) => {
               const s = data?.analysis?.outcomes?.[horizon] ?? null;
               const label =
-                horizon === "5d" ? "5 giorni" : horizon === "10d" ? "10 giorni" : "20 giorni";
+                horizon === "5d" ? "5 days" : horizon === "10d" ? "10 days" : "20 days";
               return (
                 <div key={horizon} className="card-gradient rounded-2xl border border-[rgba(139,92,246,0.2)] p-5 space-y-3">
-                  <p className="text-sm font-semibold">Orizzonte {label}</p>
+                  <p className="text-sm font-semibold">Horizon {label}</p>
                   {s ? (
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs">
-                        <span className="text-[var(--text-muted)]">Media</span>
+                        <span className="text-[var(--text-muted)]">Mean</span>
                         <span
                           className={`font-mono font-medium ${
                             s.mean >= 0 ? "text-emerald-400" : "text-red-400"
@@ -1624,7 +1624,7 @@ export default function PatternsPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-[var(--text-muted)]">Mediana</span>
+                        <span className="text-[var(--text-muted)]">Median</span>
                         <span
                           className={`font-mono font-medium ${
                             s.median >= 0 ? "text-emerald-400" : "text-red-400"
@@ -1635,7 +1635,7 @@ export default function PatternsPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-[var(--text-muted)]">Casi positivi</span>
+                        <span className="text-[var(--text-muted)]">Positive cases</span>
                         <span className="font-mono font-medium">{s.positive_rate}%</span>
                       </div>
                       {/* visual bar */}
@@ -1653,12 +1653,12 @@ export default function PatternsPage() {
                         />
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-[var(--text-muted)]">Campione</span>
-                        <span className="font-mono">{s.count} casi</span>
+                        <span className="text-[var(--text-muted)]">Sample</span>
+                        <span className="font-mono">{s.count} cases</span>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-[var(--text-muted)]">Dati insufficienti</p>
+                    <p className="text-xs text-[var(--text-muted)]">Insufficient data</p>
                   )}
                 </div>
               );
@@ -1680,7 +1680,7 @@ export default function PatternsPage() {
                 <span
                   className={`w-3 h-3 rounded-full ${signalDot(combined)}`}
                 />
-                <p className="text-sm font-bold">Raccomandazione</p>
+                <p className="text-sm font-bold">Recommendation</p>
                 <span
                   className={`ml-auto px-3 py-1 rounded-full text-xs font-bold border ${signalStyle(combined)}`}
                 >
@@ -1693,11 +1693,11 @@ export default function PatternsPage() {
                   rec.signal !== "HOLD" && (
                     <>
                       {" "}
-                      Combinato con il segnale{" "}
+                      Combined with the signal{" "}
                       <span className="font-semibold text-foreground">
                         {data.pipeline_signal.signal}
                       </span>{" "}
-                      della pipeline, il sistema suggerisce{" "}
+                      from the pipeline, the system suggests{" "}
                       <span className="font-semibold text-foreground">{combined}</span>.
                     </>
                   )}
@@ -1705,11 +1705,11 @@ export default function PatternsPage() {
                   rec.signal === "HOLD" && (
                     <>
                       {" "}
-                      La pipeline indica{" "}
+                      The pipeline indicates{" "}
                       <span className="font-semibold text-foreground">
                         {data.pipeline_signal.signal}
                       </span>
-                      , ma il pattern matching non conferma.
+                      , but pattern matching does not confirm.
                     </>
                   )}
               </p>
@@ -1734,7 +1734,7 @@ export default function PatternsPage() {
       {!loading && !error && !data && (
         <div className="card-gradient rounded-2xl p-8 text-center">
           <p className="text-[var(--text-muted)] text-sm">
-            Nessun dato per <span className="font-mono font-medium">{ticker}</span>
+            No data for <span className="font-mono font-medium">{ticker}</span>
           </p>
         </div>
       )}

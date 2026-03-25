@@ -2,7 +2,7 @@
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import exp
 
 from dotenv import load_dotenv
@@ -104,9 +104,29 @@ class SignalEngine:
         return [self.generate_signal(t) for t in tickers]
 
     def save_signal(self, signal: dict) -> str | None:
-        """Save a signal to Supabase. Returns the signal UUID."""
+        """Save a signal to Supabase. Returns the signal UUID.
+
+        Skips insert if a signal for the same ticker already exists
+        within the last 2 hours to prevent duplicates from back-to-back runs.
+        """
+        ticker = signal["ticker"]
+
+        # Dedup check: skip if a signal for this ticker exists in the last 2h
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        existing = (
+            self.supabase.table("signals")
+            .select("id")
+            .eq("ticker", ticker)
+            .gte("created_at", cutoff)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            logger.info("Skip %s: signal already exists within last 2h (id=%s)", ticker, existing.data[0]["id"])
+            return existing.data[0]["id"]
+
         row = {
-            "ticker": signal["ticker"],
+            "ticker": ticker,
             "signal": signal["signal"],
             "confidence": signal["confidence"],
             "reasoning": signal.get("reasoning", ""),
@@ -115,7 +135,7 @@ class SignalEngine:
         }
         result = self.supabase.table("signals").insert(row).execute()
         signal_id = result.data[0]["id"] if result.data else None
-        logger.info("Saved signal for %s to Supabase (id=%s)", signal["ticker"], signal_id)
+        logger.info("Saved signal for %s to Supabase (id=%s)", ticker, signal_id)
         return signal_id
 
 

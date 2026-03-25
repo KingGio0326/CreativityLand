@@ -54,14 +54,14 @@ export default function SearchPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           placeholder="Search articles by meaning..."
-          aria-label="Cerca articoli per significato"
+          aria-label="Search articles by meaning"
           className="flex-1 border rounded-md px-4 py-2 text-sm bg-background"
         />
         <select
           value={ticker}
           onChange={(e) => setTicker(e.target.value)}
           className="border rounded-md px-3 py-2 text-sm bg-background"
-          aria-label="Filtra per ticker"
+          aria-label="Filter by ticker"
         >
           <option value="">All tickers</option>
           {TICKERS.map((t) => (

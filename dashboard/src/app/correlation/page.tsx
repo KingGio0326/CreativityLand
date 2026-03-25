@@ -54,7 +54,7 @@ export default function CorrelationPage() {
   if (loading)
     return (
       <p className="text-center text-muted-foreground py-20">
-        Caricamento matrice di correlazione...
+        Loading correlation matrix...
       </p>
     );
 
@@ -62,10 +62,10 @@ export default function CorrelationPage() {
     return (
       <div className="text-center py-20">
         <p className="text-muted-foreground">
-          Nessun dato di correlazione disponibile.
+          No correlation data available.
         </p>
         <p className="text-xs text-muted-foreground mt-2">
-          La matrice viene calcolata ad ogni run del bot.
+          The matrix is computed on each bot run.
         </p>
       </div>
     );
@@ -77,12 +77,12 @@ export default function CorrelationPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
-          Matrice di Correlazione
+          Correlation Matrix
         </h1>
         {data.computed_at && (
           <p className="text-xs text-muted-foreground mt-1">
-            Ultimo aggiornamento:{" "}
-            {new Date(data.computed_at).toLocaleString("it-IT")}
+            Last updated:{" "}
+            {new Date(data.computed_at).toLocaleString("en-US")}
           </p>
         )}
       </div>
@@ -137,23 +137,23 @@ export default function CorrelationPage() {
       <div className="flex flex-wrap gap-3 text-xs">
         <span className="flex items-center gap-1">
           <span className="inline-block w-4 h-4 rounded bg-red-600" />
-          Alta positiva (&gt;0.7)
+          High positive (&gt;0.7)
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-4 h-4 rounded bg-red-400/70" />
-          Moderata positiva
+          Moderate positive
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-4 h-4 rounded bg-neutral-700" />
-          Neutro
+          Neutral
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-4 h-4 rounded bg-blue-500/70" />
-          Moderata negativa
+          Moderate negative
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-4 h-4 rounded bg-blue-700" />
-          Alta negativa (&lt;-0.7)
+          High negative (&lt;-0.7)
         </span>
       </div>
 
@@ -162,11 +162,11 @@ export default function CorrelationPage() {
         {/* High correlations */}
         <div className="border rounded-lg p-4">
           <h2 className="font-semibold mb-3">
-            Coppie altamente correlate (&gt;0.7)
+            Highly correlated pairs (&gt;0.7)
           </h2>
           {data.high_correlations.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nessuna coppia con correlazione &gt; 0.7
+              No pairs with correlation &gt; 0.7
             </p>
           ) : (
             <ul className="space-y-2">
@@ -193,18 +193,18 @@ export default function CorrelationPage() {
             </ul>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            Rischio concentrazione: segnali simili si muovono insieme.
+            Concentration risk: similar signals move together.
           </p>
         </div>
 
         {/* Low correlations */}
         <div className="border rounded-lg p-4">
           <h2 className="font-semibold mb-3">
-            Coppie decorrelate (&lt;0.2) — diversificazione ottimale
+            Decorrelated pairs (&lt;0.2) — optimal diversification
           </h2>
           {data.low_correlations.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nessuna coppia con correlazione &lt; 0.2
+              No pairs with correlation &lt; 0.2
             </p>
           ) : (
             <ul className="space-y-2">
@@ -225,16 +225,16 @@ export default function CorrelationPage() {
             </ul>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            Diversificazione: queste coppie si muovono indipendentemente.
+            Diversification: these pairs move independently.
           </p>
         </div>
       </div>
 
       {/* Disclaimer */}
       <p className="text-xs text-muted-foreground border-t pt-4">
-        Nota: in periodi di crisi le correlazioni tendono a convergere
-        verso 1, riducendo i benefici della diversificazione. La matrice
-        viene ricalcolata sui rendimenti degli ultimi 90 giorni.
+        Note: during crisis periods correlations tend to converge
+        toward 1, reducing diversification benefits. The matrix
+        is recalculated on the last 90 days of returns.
       </p>
     </div>
   );
