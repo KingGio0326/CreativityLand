@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       tickers:
-        description: "Ticker da analizzare (comma separated)"
-        default: "AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD"
+        description: "Tickers to analyze (comma separated)"
+        default: "AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD,AMZN,GOOG,META,AMD,INTC,AVGO,TSM,MU,JPM,GS,BAC,V,MA,CVX,COP,OXY,LMT,RTX,NOC,JNJ,PFE,LLY,WMT,COST,DIS,SPY,QQQ,XLE,XLF,SLV,USO,TLT,SOL-USD,XRP-USD,DOGE-USD"
 
 jobs:
   run-bot:
@@ -28,7 +28,7 @@ jobs:
           async def main():
               scraper = NewsScraper()
               tickers_input = os.getenv('INPUT_TICKERS',
-                  'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD')
+                  'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD,AMZN,GOOG,META,AMD,INTC,AVGO,TSM,MU,JPM,GS,BAC,V,MA,CVX,COP,OXY,LMT,RTX,NOC,JNJ,PFE,LLY,WMT,COST,DIS,SPY,QQQ,XLE,XLF,SLV,USO,TLT,SOL-USD,XRP-USD,DOGE-USD')
               tickers = [t.strip() for t in tickers_input.split(',')]
 
               print(f'Scraping {len(tickers)} ticker...')
@@ -83,7 +83,7 @@ jobs:
           from engine.utils import safe_json_dumps
 
           tickers_input = os.getenv('INPUT_TICKERS',
-              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD')
+              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD,AMZN,GOOG,META,AMD,INTC,AVGO,TSM,MU,JPM,GS,BAC,V,MA,CVX,COP,OXY,LMT,RTX,NOC,JNJ,PFE,LLY,WMT,COST,DIS,SPY,QQQ,XLE,XLF,SLV,USO,TLT,SOL-USD,XRP-USD,DOGE-USD')
           tickers = [t.strip() for t in tickers_input.split(',')]
 
           bot = TradingOrchestrator()
@@ -259,7 +259,7 @@ jobs:
 
           agent = MLPredictionAgent()
           tickers = os.getenv('INPUT_TICKERS',
-              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD').split(',')
+              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD,AMZN,GOOG,META,AMD,INTC,AVGO,TSM,MU,JPM,GS,BAC,V,MA,CVX,COP,OXY,LMT,RTX,NOC,JNJ,PFE,LLY,WMT,COST,DIS,SPY,QQQ,XLE,XLF,SLV,USO,TLT,SOL-USD,XRP-USD,DOGE-USD').split(',')
 
           results = {}
           for ticker in tickers:
@@ -303,7 +303,7 @@ jobs:
           )
 
           tickers = os.getenv('INPUT_TICKERS',
-              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD').split(',')
+              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD,AMZN,GOOG,META,AMD,INTC,AVGO,TSM,MU,JPM,GS,BAC,V,MA,CVX,COP,OXY,LMT,RTX,NOC,JNJ,PFE,LLY,WMT,COST,DIS,SPY,QQQ,XLE,XLF,SLV,USO,TLT,SOL-USD,XRP-USD,DOGE-USD').split(',')
           tickers = [t.strip() for t in tickers]
           ticker_stats = {}
           total_signals = 0
