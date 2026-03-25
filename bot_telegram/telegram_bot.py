@@ -23,7 +23,17 @@ ALLOWED_CHAT_IDS = set(
     if x.strip().isdigit()
 )
 
-TICKERS = ['AAPL', 'TSLA', 'NVDA', 'BTC-USD', 'ETH-USD', 'MSFT', 'XOM', 'GLD']
+TICKERS = [
+    'AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMZN', 'GOOG', 'META',
+    'AMD', 'INTC', 'AVGO', 'TSM', 'MU',
+    'JPM', 'GS', 'BAC', 'V', 'MA',
+    'XOM', 'CVX', 'COP', 'OXY',
+    'LMT', 'RTX', 'NOC',
+    'JNJ', 'PFE', 'LLY',
+    'WMT', 'COST', 'DIS',
+    'GLD', 'SPY', 'QQQ', 'XLE', 'XLF', 'SLV', 'USO', 'TLT',
+    'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD',
+]
 
 _supabase: Client | None = None
 

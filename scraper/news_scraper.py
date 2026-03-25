@@ -15,7 +15,7 @@ from supabase import create_client
 
 # ── Configuration ──────────────────────────────────────────────
 
-CRYPTO_TICKERS = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"]
+CRYPTO_TICKERS = ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "DOGE-USD", "BNB-USD"]
 
 # ── Geopolitical classification ───────────────────────────────
 
@@ -86,19 +86,80 @@ RSS_SOURCES_CRYPTO = {
 
 # ── Monitored tickers ────────────────────────────────────────
 MONITORED_TICKERS = [
-    "AAPL", "TSLA", "NVDA", "MSFT", "XOM", "GLD", "BTC-USD", "ETH-USD",
+    # Mega cap
+    "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOG", "META",
+    # Semiconduttori
+    "AMD", "INTC", "AVGO", "TSM", "MU",
+    # Finanziari
+    "JPM", "GS", "BAC", "V", "MA",
+    # Energia
+    "XOM", "CVX", "COP", "OXY",
+    # Difesa
+    "LMT", "RTX", "NOC",
+    # Healthcare
+    "JNJ", "PFE", "LLY",
+    # Retail / Consumer
+    "WMT", "COST", "DIS",
+    # ETF macro
+    "GLD", "SPY", "QQQ", "XLE", "XLF", "SLV", "USO", "TLT",
+    # Crypto
+    "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "DOGE-USD",
 ]
 
 # ── Ticker detection for general-purpose feeds ────────────────
 TICKER_KEYWORDS: dict[str, list[str]] = {
+    # Mega cap
     "AAPL": ["apple", "aapl", "iphone", "ipad", "tim cook", "cupertino"],
     "TSLA": ["tesla", "tsla", "elon musk", "cybertruck", "model 3", "model y"],
     "NVDA": ["nvidia", "nvda", "geforce", "rtx", "jensen huang", "cuda"],
     "MSFT": ["microsoft", "msft", "azure", "windows", "satya nadella", "copilot"],
-    "XOM": ["exxon", "xom", "exxonmobil", "oil major"],
+    "AMZN": ["amazon", "amzn", "aws", "andy jassy", "prime"],
+    "GOOG": ["google", "alphabet", "goog", "googl", "sundar pichai", "deepmind"],
+    "META": ["meta platforms", "meta", "facebook", "instagram", "zuckerberg", "whatsapp"],
+    # Semiconduttori
+    "AMD": ["amd", "advanced micro", "lisa su", "ryzen", "epyc", "radeon"],
+    "INTC": ["intel", "intc", "pat gelsinger", "core ultra"],
+    "AVGO": ["broadcom", "avgo", "vmware", "hock tan"],
+    "TSM": ["tsmc", "tsm", "taiwan semiconductor"],
+    "MU": ["micron", "mu", "memory chip", "dram", "nand"],
+    # Finanziari
+    "JPM": ["jpmorgan", "jpm", "jp morgan", "jamie dimon", "chase"],
+    "GS": ["goldman sachs", "gs", "goldman"],
+    "BAC": ["bank of america", "bac", "bofa"],
+    "V": ["visa", "visa inc"],
+    "MA": ["mastercard", "ma"],
+    # Energia
+    "XOM": ["exxon", "xom", "exxonmobil"],
+    "CVX": ["chevron", "cvx"],
+    "COP": ["conocophillips", "cop", "conoco"],
+    "OXY": ["occidental", "oxy", "occidental petroleum"],
+    # Difesa
+    "LMT": ["lockheed", "lmt", "lockheed martin", "f-35"],
+    "RTX": ["raytheon", "rtx", "pratt & whitney"],
+    "NOC": ["northrop", "noc", "northrop grumman", "b-21"],
+    # Healthcare
+    "JNJ": ["johnson & johnson", "jnj", "j&j"],
+    "PFE": ["pfizer", "pfe"],
+    "LLY": ["eli lilly", "lly", "lilly", "mounjaro", "ozempic"],
+    # Retail / Consumer
+    "WMT": ["walmart", "wmt"],
+    "COST": ["costco", "cost"],
+    "DIS": ["disney", "dis", "walt disney"],
+    # ETF macro
     "GLD": ["gold", "gld", "precious metal", "gold etf", "oro"],
-    "BTC-USD": ["bitcoin", "btc", "crypto", "satoshi"],
+    "SPY": ["s&p 500", "spy", "s&p500"],
+    "QQQ": ["nasdaq", "qqq", "nasdaq 100"],
+    "XLE": ["energy sector", "xle"],
+    "XLF": ["financial sector", "xlf"],
+    "SLV": ["silver", "slv", "argento"],
+    "USO": ["oil fund", "uso", "crude oil", "petrolio"],
+    "TLT": ["treasury bond", "tlt", "long bond"],
+    # Crypto
+    "BTC-USD": ["bitcoin", "btc", "satoshi"],
     "ETH-USD": ["ethereum", "eth", "ether", "vitalik"],
+    "SOL-USD": ["solana", "sol"],
+    "XRP-USD": ["xrp", "ripple"],
+    "DOGE-USD": ["dogecoin", "doge"],
 }
 
 
@@ -125,6 +186,8 @@ def clean_ticker_crypto(ticker: str) -> str:
         "BTC-USD": "Bitcoin",
         "ETH-USD": "Ethereum",
         "SOL-USD": "Solana",
+        "XRP-USD": "XRP",
+        "DOGE-USD": "Dogecoin",
         "BNB-USD": "BNB",
     }
     return mapping.get(ticker, ticker.replace("-USD", ""))
@@ -135,6 +198,8 @@ def convert_ticker_finnhub(ticker: str) -> str:
         "BTC-USD": "BINANCE:BTCUSDT",
         "ETH-USD": "BINANCE:ETHUSDT",
         "SOL-USD": "BINANCE:SOLUSDT",
+        "XRP-USD": "BINANCE:XRPUSDT",
+        "DOGE-USD": "BINANCE:DOGEUSDT",
     }
     return crypto_map.get(ticker, ticker)
 
@@ -602,10 +667,7 @@ class NewsScraper:
         self, tickers: list[str] | None = None, days_back: int = 2,
     ) -> dict:
         if tickers is None:
-            tickers = [
-                "AAPL", "TSLA", "NVDA", "MSFT",
-                "XOM", "GLD", "BTC-USD", "ETH-USD",
-            ]
+            tickers = MONITORED_TICKERS
         results = {}
         for ticker in tickers:
             articles = await self.fetch_by_ticker(ticker, days_back)

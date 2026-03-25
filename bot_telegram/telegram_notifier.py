@@ -6,6 +6,27 @@ from datetime import datetime
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 
+MAX_MSG_LEN = 4096
+
+
+def _split_message(text: str, limit: int = MAX_MSG_LEN) -> list[str]:
+    """Split a long message into chunks that fit Telegram's limit."""
+    if len(text) <= limit:
+        return [text]
+    chunks = []
+    while text:
+        if len(text) <= limit:
+            chunks.append(text)
+            break
+        # Find last newline before the limit
+        cut = text.rfind('\n', 0, limit)
+        if cut <= 0:
+            cut = limit
+        chunks.append(text[:cut])
+        text = text[cut:].lstrip('\n')
+    return chunks
+
+
 async def send_message(text: str, parse_mode: str = 'HTML') -> None:
     if not TELEGRAM_TOKEN:
         print("Telegram non configurato, skip notifica")
@@ -24,13 +45,15 @@ async def send_message(text: str, parse_mode: str = 'HTML') -> None:
 
     try:
         bot = Bot(token=TELEGRAM_TOKEN)
+        parts = _split_message(text)
         for chat_id in chat_ids:
-            await bot.send_message(
-                chat_id=int(chat_id),
-                text=text,
-                parse_mode=parse_mode,
-            )
-        print(f"Telegram: messaggio inviato a {len(chat_ids)} utenti")
+            for part in parts:
+                await bot.send_message(
+                    chat_id=int(chat_id),
+                    text=part,
+                    parse_mode=parse_mode,
+                )
+        print(f"Telegram: messaggio inviato a {len(chat_ids)} utenti ({len(parts)} parte/i)")
     except Exception as e:
         print(f"Telegram error: {e}")
 

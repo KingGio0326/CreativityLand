@@ -102,14 +102,27 @@ interface EquityPoint {
 type EquityCurveData = Record<string, Record<string, EquityPoint[]>>;
 
 const TICKER_COLORS: Record<string, string> = {
-  AAPL: "#3b82f6",
-  TSLA: "#ef4444",
-  NVDA: "#10b981",
-  "BTC-USD": "#f59e0b",
-  "ETH-USD": "#8b5cf6",
-  MSFT: "#06b6d4",
-  XOM: "#f97316",
-  GLD: "#eab308",
+  // Mega cap
+  AAPL: "#3b82f6", TSLA: "#ef4444", NVDA: "#10b981", MSFT: "#06b6d4",
+  AMZN: "#ff9900", GOOG: "#4285f4", META: "#1877f2",
+  // Semiconduttori
+  AMD: "#ed1c24", INTC: "#0071c5", AVGO: "#cc0000", TSM: "#e60012", MU: "#003da5",
+  // Finanziari
+  JPM: "#0c2340", GS: "#7399c6", BAC: "#012169", V: "#1a1f71", MA: "#eb001b",
+  // Energia
+  XOM: "#f97316", CVX: "#0066b2", COP: "#c41230", OXY: "#cf202e",
+  // Difesa
+  LMT: "#003366", RTX: "#00205b", NOC: "#003b71",
+  // Healthcare
+  JNJ: "#d51900", PFE: "#0093d0", LLY: "#d52b1e",
+  // Retail / Consumer
+  WMT: "#0071ce", COST: "#e31837", DIS: "#113ccf",
+  // ETF macro
+  GLD: "#eab308", SPY: "#78909c", QQQ: "#9575cd", XLE: "#ff8f00",
+  XLF: "#5c6bc0", SLV: "#90a4ae", USO: "#6d4c41", TLT: "#26a69a",
+  // Crypto
+  "BTC-USD": "#f59e0b", "ETH-USD": "#8b5cf6",
+  "SOL-USD": "#9945ff", "XRP-USD": "#00aae4", "DOGE-USD": "#c2a633",
 };
 
 /* ── helpers ──────────────────────────────────────────── */

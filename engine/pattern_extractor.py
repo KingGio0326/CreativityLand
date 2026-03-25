@@ -16,22 +16,58 @@ logger = logging.getLogger("pattern_extractor")
 
 # --- CONFIGURAZIONE TICKER ---
 TICKER_START_DATES = {
-    # Benchmark di mercato (storia massima)
+    # Benchmark / ETF macro
     "SPY": "1993-01-29",
     "QQQ": "1999-03-10",
+    "XLF": "1998-12-22",
+    "XLE": "2006-01-01",
+    "SLV": "2006-01-01",
+    "USO": "2006-01-01",
+    "TLT": "2002-07-30",
+    "GLD": "2004-11-18",
     # Mega cap US
     "AAPL": "1980-12-12",
     "MSFT": "1986-03-13",
     "NVDA": "1999-01-22",
     "TSLA": "2010-06-29",
     "AMZN": "1997-05-15",
-    # Settoriali per regime detection
-    "XLF": "1998-12-22",  # Financial (2008 crisis)
-    "GLD": "2004-11-18",  # Gold (safe haven)
-    "TLT": "2002-07-30",  # Long bonds (rate crisis)
+    "GOOG": "2004-08-19",
+    "META": "2012-06-01",
+    # Semiconduttori
+    "AMD": "2005-01-01",
+    "INTC": "2000-01-01",
+    "AVGO": "2005-01-01",
+    "TSM": "2005-01-01",
+    "MU": "2005-01-01",
+    # Finanziari
+    "JPM": "2000-01-01",
+    "GS": "2000-01-01",
+    "BAC": "2000-01-01",
+    "V": "2008-03-19",
+    "MA": "2006-05-25",
+    # Energia
+    "XOM": "2000-01-01",
+    "CVX": "2000-01-01",
+    "COP": "2000-01-01",
+    "OXY": "2005-01-01",
+    # Difesa
+    "LMT": "2005-01-01",
+    "RTX": "2005-01-01",
+    "NOC": "2005-01-01",
+    # Healthcare
+    "JNJ": "2000-01-01",
+    "PFE": "2000-01-01",
+    "LLY": "2005-01-01",
+    # Retail / Consumer
+    "WMT": "2000-01-01",
+    "COST": "2005-01-01",
+    "DIS": "2000-01-01",
     # Crypto
     "BTC-USD": "2014-09-17",
     "ETH-USD": "2017-11-09",
+    "SOL-USD": "2020-04-01",
+    "XRP-USD": "2017-01-01",
+    "DOGE-USD": "2017-07-01",
 }
 
 # --- CRISI STORICHE DA OVERSAMPLIARE ---

@@ -253,14 +253,17 @@ jobs:
         if: github.event.schedule == '0 2 * * 0'
         run: |
           python -c "
+          import os
           from agents.ml_prediction_agent import MLPredictionAgent
           from engine.utils import safe_json_dumps
 
           agent = MLPredictionAgent()
-          tickers = ['AAPL','TSLA','NVDA','BTC-USD','ETH-USD','MSFT','XOM','GLD']
+          tickers = os.getenv('INPUT_TICKERS',
+              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD').split(',')
 
           results = {}
           for ticker in tickers:
+              ticker = ticker.strip()
               print(f'Retraining {ticker}...')
               try:
                   agent.train(ticker)
@@ -299,7 +302,9 @@ jobs:
               os.getenv('SUPABASE_KEY')
           )
 
-          tickers = ['AAPL','TSLA','NVDA','BTC-USD','ETH-USD','MSFT','XOM','GLD']
+          tickers = os.getenv('INPUT_TICKERS',
+              'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD').split(',')
+          tickers = [t.strip() for t in tickers]
           ticker_stats = {}
           total_signals = 0
           best_ticker = 'N/A'
@@ -396,7 +401,7 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
       REDDIT_USER_AGENT: "trading-bot/1.0"
-      INPUT_TICKERS: ${{ inputs.tickers || 'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD' }}
+      INPUT_TICKERS: ${{ inputs.tickers || 'AAPL,TSLA,NVDA,BTC-USD,ETH-USD,MSFT,XOM,GLD,AMZN,GOOG,META,AMD,INTC,AVGO,TSM,MU,JPM,GS,BAC,V,MA,CVX,COP,OXY,LMT,RTX,NOC,JNJ,PFE,LLY,WMT,COST,DIS,SPY,QQQ,XLE,XLF,SLV,USO,TLT,SOL-USD,XRP-USD,DOGE-USD' }}
 
   build-patterns:
     needs: run-bot

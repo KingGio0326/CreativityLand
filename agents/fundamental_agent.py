@@ -1,7 +1,7 @@
 import yfinance as yf
 from agents import TradingState
 
-CRYPTO_TICKERS = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"]
+CRYPTO_TICKERS = ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "DOGE-USD", "BNB-USD"]
 
 
 class FundamentalAgent:
