@@ -268,6 +268,7 @@ export default function PerformancePage() {
   const [error, setError] = useState<string | null>(null);
   const [horizon, setHorizon] = useState<Horizon>("168h");
   const [equityData, setEquityData] = useState<EquityCurveData | null>(null);
+  const [equityPeriod, setEquityPeriod] = useState<"7d" | "30d" | "90d" | "all">("30d");
 
   useEffect(() => {
     fetch("/api/equity-curve")
@@ -961,9 +962,36 @@ export default function PerformancePage() {
       )}
 
       {/* ── EQUITY CURVES ──────────────────────────────────── */}
-      {equityData && (
+      {equityData && (() => {
+        // Compute cutoff date for the selected period
+        const cutoffDate = equityPeriod === "all"
+          ? null
+          : (() => {
+              const d = new Date();
+              d.setDate(d.getDate() - ({ "7d": 7, "30d": 30, "90d": 90 } as const)[equityPeriod]);
+              return d.toISOString().slice(0, 10);
+            })();
+
+        return (
         <div className="space-y-6">
-          <h2 className="text-xl font-bold tracking-tight mt-4">Equity Curves</h2>
+          <div className="flex items-center justify-between flex-wrap gap-3 mt-4">
+            <h2 className="text-xl font-bold tracking-tight">Equity Curves</h2>
+            <div className="flex gap-1.5">
+              {([["7d", "7g"], ["30d", "30g"], ["90d", "90g"], ["all", "Tutto"]] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setEquityPeriod(val)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full border transition-all ${
+                    equityPeriod === val
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {(["6h", "24h", "72h", "168h"] as const).map((h) => {
               const horizonTickers = equityData[h] ?? {};
@@ -971,10 +999,26 @@ export default function PerformancePage() {
                 (t) => horizonTickers[t]?.length > 0,
               );
 
+              // Filter by period and recalculate cumulative from $0
+              const filteredByTicker: Record<string, EquityPoint[]> = {};
+              for (const t of activeTickers) {
+                const points = horizonTickers[t].filter(
+                  (pt) => cutoffDate === null || pt.date >= cutoffDate,
+                );
+                if (points.length === 0) continue;
+                let cum = 0;
+                filteredByTicker[t] = points.map((pt) => {
+                  cum += pt.pnl;
+                  return { ...pt, cumulative_pnl: Math.round(cum * 100) / 100 };
+                });
+              }
+
+              const filteredTickers = Object.keys(filteredByTicker);
+
               // Merge all ticker series into unified date-indexed array
               const dateMap = new Map<string, Record<string, number>>();
-              for (const t of activeTickers) {
-                for (const pt of horizonTickers[t]) {
+              for (const t of filteredTickers) {
+                for (const pt of filteredByTicker[t]) {
                   if (!dateMap.has(pt.date)) dateMap.set(pt.date, {});
                   dateMap.get(pt.date)![t] = pt.cumulative_pnl;
                 }
@@ -985,7 +1029,7 @@ export default function PerformancePage() {
               const lastVal: Record<string, number> = {};
               const merged = sortedDates.map((date) => {
                 const row: Record<string, unknown> = { date };
-                for (const t of activeTickers) {
+                for (const t of filteredTickers) {
                   if (dateMap.get(date)![t] !== undefined) {
                     lastVal[t] = dateMap.get(date)![t];
                   }
@@ -994,14 +1038,6 @@ export default function PerformancePage() {
                 return row;
               });
 
-              // Build tooltip lookup for signal details
-              const tooltipLookup = new Map<string, EquityPoint>();
-              for (const t of activeTickers) {
-                for (const pt of horizonTickers[t]) {
-                  tooltipLookup.set(`${pt.date}_${t}`, pt);
-                }
-              }
-
               return (
                 <div
                   key={h}
@@ -1009,7 +1045,7 @@ export default function PerformancePage() {
                 >
                   <p className="text-sm font-semibold mb-4">
                     Equity Curve &mdash; {HORIZON_LABELS[h]}
-                    {activeTickers.length === 0 && (
+                    {filteredTickers.length === 0 && (
                       <span className="text-muted-foreground font-normal ml-2">
                         (in attesa di dati)
                       </span>
@@ -1049,7 +1085,7 @@ export default function PerformancePage() {
                         <Legend
                           wrapperStyle={{ fontSize: 11 }}
                         />
-                        {activeTickers.map((t) => (
+                        {filteredTickers.map((t) => (
                           <Line
                             key={t}
                             type="monotone"
@@ -1083,7 +1119,8 @@ export default function PerformancePage() {
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
