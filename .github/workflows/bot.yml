@@ -236,6 +236,19 @@ jobs:
           else:
               print('Correlation matrix: nessun dato')
           "
+      - name: Cleanup old articles
+        run: |
+          python -c "
+          from supabase import create_client
+          import os
+          from datetime import datetime, timedelta
+
+          supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
+          cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+          result = supabase.table('articles').delete().lt('published_at', cutoff).execute()
+          deleted = len(result.data) if result.data else 0
+          print(f'Articoli >7 giorni rimossi: {deleted}')
+          "
       - name: Retrain ML (domenica)
         if: github.event.schedule == '0 2 * * 0'
         run: |
