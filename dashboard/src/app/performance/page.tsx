@@ -994,48 +994,30 @@ export default function PerformancePage() {
               const allPoints = horizonData.portfolio ?? [];
               const byTicker = horizonData.by_ticker ?? {};
 
-              // Build full chart series from API data (portfolio_value is already cumulative)
-              const allTickers = Object.keys(byTicker);
-              const fullTickerCum: Record<string, number> = {};
-              const fullSeries = allPoints.map((pt) => {
-                fullTickerCum[pt.ticker] = (fullTickerCum[pt.ticker] ?? 0) + pt.pnl;
-                const row: Record<string, unknown> = {
-                  date: pt.date,
-                  portfolio: pt.portfolio_value,
-                  _ticker: pt.ticker,
-                  _signal: pt.signal,
-                  _pnl: pt.pnl,
-                  _allocated: pt.allocated,
-                  _position_size_pct: pt.position_size_pct,
-                };
-                for (const t of Object.keys(fullTickerCum)) {
-                  row[t] = Math.round(fullTickerCum[t] * 100) / 100;
-                }
-                return row;
-              });
-
-              // Forward-fill ticker keys across all points
-              const lastTicker: Record<string, number> = {};
-              for (const pt of fullSeries) {
-                for (const t of allTickers) {
-                  if (pt[t] !== undefined) lastTicker[t] = pt[t] as number;
-                  else pt[t] = lastTicker[t] ?? 0;
-                }
-              }
+              // Build full chart series (portfolio only, no per-ticker lines)
+              const fullSeries = allPoints.map((pt) => ({
+                date: pt.date,
+                portfolio: pt.portfolio_value,
+                _ticker: pt.ticker,
+                _signal: pt.signal,
+                _pnl: pt.pnl,
+                _allocated: pt.allocated,
+                _position_size_pct: pt.position_size_pct,
+              }));
 
               // Filter display points by period (portfolio values stay correct)
               const chartPoints = cutoffDate
-                ? fullSeries.filter((pt) => (pt.date as string) >= cutoffDate)
+                ? fullSeries.filter((pt) => pt.date >= cutoffDate)
                 : fullSeries;
 
               // Always show final portfolio value from the FULL series
               const finalValue = fullSeries.length > 0
-                ? (fullSeries[fullSeries.length - 1].portfolio as number)
+                ? fullSeries[fullSeries.length - 1].portfolio
                 : INITIAL_PORTFOLIO;
               const returnPct = ((finalValue - INITIAL_PORTFOLIO) / INITIAL_PORTFOLIO) * 100;
 
-              // Sort tickers by absolute contribution for legend (always from full data)
-              const sortedTickers = allTickers
+              // Sort tickers by absolute contribution for tags
+              const sortedTickers = Object.keys(byTicker)
                 .filter((t) => (byTicker[t] ?? 0) !== 0)
                 .sort((a, b) => Math.abs(byTicker[b] ?? 0) - Math.abs(byTicker[a] ?? 0));
 
@@ -1152,7 +1134,6 @@ export default function PerformancePage() {
                             );
                           }}
                         />
-                        {/* Main portfolio line */}
                         <Line
                           type="monotone"
                           dataKey="portfolio"
@@ -1162,20 +1143,6 @@ export default function PerformancePage() {
                           name="Total Portfolio"
                           connectNulls
                         />
-                        {/* Per-ticker contribution lines */}
-                        {sortedTickers.slice(0, 10).map((t) => (
-                          <Line
-                            key={t}
-                            type="monotone"
-                            dataKey={t}
-                            stroke={TICKER_COLORS[t] ?? "#888"}
-                            strokeWidth={1}
-                            strokeOpacity={0.5}
-                            dot={false}
-                            name={t}
-                            connectNulls
-                          />
-                        ))}
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
