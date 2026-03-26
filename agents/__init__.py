@@ -29,3 +29,4 @@ class TradingState(TypedDict):
     rate_direction: str
     market_regime: str
     regime_confidence: float
+    exit_strategy: dict

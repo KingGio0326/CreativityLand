@@ -22,6 +22,7 @@ from agents.seasonal_agent import seasonal_agent
 from agents.institutional_agent import institutional_agent
 from agents.weighted_signal_agent import weighted_signal_node
 from agents.critic_agent import critic_agent
+from agents.exit_strategy_agent import exit_strategy_agent
 
 
 _regime_logger = logging.getLogger("orchestrator")
@@ -49,7 +50,7 @@ def regime_node(state: TradingState) -> TradingState:
 def should_retry(state: TradingState) -> str:
     if not state["final_signal"] and state["retry_count"] < 2:
         return "sentiment"
-    return END
+    return "exit_strategy"
 
 
 def build_graph():
@@ -74,6 +75,7 @@ def build_graph():
     g.add_node("institutional",  institutional_agent)
     g.add_node("weighted",       weighted_signal_node)
     g.add_node("critic",         critic_agent)
+    g.add_node("exit_strategy",  exit_strategy_agent)
     # Edges
     g.set_entry_point("regime")
     g.add_edge("regime",         "scraper")
@@ -95,6 +97,7 @@ def build_graph():
     g.add_edge("institutional",  "weighted")
     g.add_edge("weighted",       "critic")
     g.add_conditional_edges("critic", should_retry)
+    g.add_edge("exit_strategy", END)
     return g.compile()
 
 
@@ -158,6 +161,7 @@ class TradingOrchestrator:
             rate_direction="unknown",
             market_regime=regime,
             regime_confidence=regime_conf,
+            exit_strategy={},
         )
         result = self.graph.invoke(state)
         vb = result.get("vote_breakdown", {})
@@ -187,6 +191,7 @@ class TradingOrchestrator:
             "kelly_fraction": kelly.get("kelly_fraction"),
             "position_size_pct": kelly.get("suggested_pct"),
             "max_position_usd": kelly.get("suggested_capital"),
+            "exit_strategy": result.get("exit_strategy", {}),
             "articles_analyzed": len(result["articles"]),
             "reasoning": result["reasoning"],
             "market_regime": result.get("market_regime", regime),
