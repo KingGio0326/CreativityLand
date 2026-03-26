@@ -96,6 +96,7 @@ jobs:
           for ticker in tickers:
               try:
                   result = bot.decide(ticker)
+                  exit = result.get('exit_strategy', {})
                   signal_dict = {
                       'ticker': ticker,
                       'signal': result['signal'],
@@ -110,6 +111,14 @@ jobs:
                       'dominant_factor': result.get('dominant_factor'),
                       'market_regime': result.get('market_regime'),
                       'vote_breakdown': result.get('vote_breakdown'),
+                      'stop_loss': exit.get('stop_loss'),
+                      'take_profit': exit.get('take_profit'),
+                      'sl_percentage': exit.get('sl_percentage'),
+                      'tp_percentage': exit.get('tp_percentage'),
+                      'risk_reward_ratio': exit.get('risk_reward_ratio'),
+                      'atr_14': exit.get('atr_14'),
+                      'trailing_activation': exit.get('trailing_activation'),
+                      'trailing_level': exit.get('trailing_level'),
                   }
                   signal_id = sig_engine.save_signal(signal_dict)
                   pat_data = result.get('pattern_data', {})

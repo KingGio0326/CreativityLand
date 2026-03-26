@@ -138,6 +138,8 @@ class SignalEngine:
             "kelly_fraction", "position_size_pct", "max_position_usd",
             "consensus_level", "agents_agree", "agents_total",
             "dominant_factor", "market_regime", "vote_breakdown",
+            "stop_loss", "take_profit", "sl_percentage", "tp_percentage",
+            "risk_reward_ratio", "atr_14", "trailing_activation", "trailing_level",
         ]
         for field in optional_fields:
             val = signal.get(field)
