@@ -19,7 +19,6 @@ export async function GET() {
       )
     }
 
-    console.log('Signals found:', data?.length ?? 0)
     return NextResponse.json(data ?? [])
   } catch (err) {
     console.error('API error:', err)

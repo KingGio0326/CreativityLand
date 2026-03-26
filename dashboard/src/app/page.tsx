@@ -12,7 +12,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import AgentChat from "@/components/AgentChat";
+import TickerSelector from "@/components/TickerSelector";
 import { TICKERS } from "@/lib/constants";
+import { signalFilledClasses, signalDotClass } from "@/lib/signal-styles";
+import { TOOLTIP_STYLE, TOOLTIP_LABEL_STYLE, GRID_STROKE } from "@/lib/chart-styles";
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -58,16 +61,6 @@ const QUICK_LINKS = [
 ];
 
 /* ── Helpers ───────────────────────────────────────────── */
-
-const signalColor = (s: string) =>
-  s === "BUY"
-    ? "bg-[var(--green)] text-white"
-    : s === "SELL"
-      ? "bg-[var(--red)] text-white"
-      : "bg-[var(--text-muted)] text-white";
-
-const signalDot = (s: string) =>
-  s === "BUY" ? "bg-[var(--green)]" : s === "SELL" ? "bg-[var(--red)]" : "bg-[var(--yellow)]";
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -160,27 +153,14 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* ── Ticker Selector ─────────────────────────────── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {TICKERS.map((t) => {
+      <TickerSelector
+        value={selectedTicker}
+        onChange={setSelectedTicker}
+        signalDot={(t) => {
           const sig = signals.find((s) => s.ticker === t);
-          return (
-            <button
-              key={t}
-              onClick={() => setSelectedTicker(t)}
-              className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-full font-mono transition-all ${
-                t === selectedTicker
-                  ? "bg-[var(--accent)] text-white border border-[var(--accent-light)] shadow-[0_0_12px_rgba(124,58,237,0.3)]"
-                  : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border border-transparent hover:bg-[rgba(255,255,255,0.08)] hover:text-[var(--text-secondary)]"
-              }`}
-            >
-              {sig && (
-                <span className={`w-1.5 h-1.5 rounded-full ${signalDot(sig.signal)}`} />
-              )}
-              {t}
-            </button>
-          );
-        })}
-      </div>
+          return sig ? signalDotClass(sig.signal) : null;
+        }}
+      />
 
       {/* ── Stat Cards ──────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -232,7 +212,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm data-table" aria-label="Signals by ticker">
               <thead>
                 <tr className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">
                   <th className="text-left px-5 py-2.5 font-medium">Ticker</th>
@@ -266,7 +246,7 @@ export default function DashboardPage() {
                               setSelectedTicker(ticker)
                             }
                           }}
-                          className={`cursor-pointer transition-colors ${
+                          className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent-light)] focus-visible:-outline-offset-2 ${
                             isSelected
                               ? "bg-[rgba(124,58,237,0.1)]"
                               : i % 2 === 0
@@ -281,7 +261,7 @@ export default function DashboardPage() {
                           </td>
                           <td className="px-3 py-2.5">
                             <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold ${signalColor(
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold ${signalFilledClasses(
                                 sig?.signal ?? "HOLD",
                               )}`}
                             >
@@ -357,7 +337,7 @@ export default function DashboardPage() {
                 </defs>
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  stroke="rgba(255,255,255,0.05)"
+                  stroke={GRID_STROKE}
                   vertical={false}
                 />
                 <XAxis
@@ -374,14 +354,8 @@ export default function DashboardPage() {
                   width={30}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#12122a",
-                    border: "1px solid rgba(139,92,246,0.3)",
-                    borderRadius: "8px",
-                    color: "#f0f0ff",
-                    fontSize: "12px",
-                  }}
-                  labelStyle={{ color: "#8b8ba8" }}
+                  contentStyle={TOOLTIP_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
                   formatter={(value: number) => [`${value}%`, "Confidence"]}
                 />
                 <Area
@@ -479,7 +453,7 @@ function StatCard({
       <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">
         {label}
       </p>
-      <p className="text-2xl font-bold text-[var(--text-primary)] font-mono leading-none">
+      <p className="text-2xl font-bold text-[var(--text-primary)] font-mono leading-none tabular-nums">
         {value}
       </p>
       <p className="text-[10px] text-[var(--text-secondary)]">{sub}</p>

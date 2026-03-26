@@ -50,7 +50,6 @@ async function fetchPricesYahoo(
       console.error("Yahoo Finance insufficient data:", last30.length);
       return null;
     }
-    console.log("Yahoo Finance fallback OK:", last30.length, "closes for", ticker);
     return {
       dates: last30.map((d) => d.date),
       prices: last30.map((d) => d.price),
@@ -301,8 +300,6 @@ export async function GET(request: NextRequest) {
     const currentPrice = prices[prices.length - 1];
     const change30d = ((currentPrice - prices[0]) / prices[0]) * 100;
 
-    console.log("Market regime from DB:", regimeData);
-
     // 2. Normalize and search similar patterns via RPC
     const vector = normalizePattern(prices);
 
@@ -335,17 +332,8 @@ export async function GET(request: NextRequest) {
 
     let similar: MatchedPattern[] = matchRes.data ?? [];
 
-    console.log(
-      "RPC attempt 1 (regime:", regimeData.regime,
-      "filter_regimes:", group.regimes,
-      "crisis_only:", group.crisis_only,
-      ") count:", similar.length,
-      "error:", matchRes.error,
-    );
-
     // Attempt 2: fallback to all regimes if too few matches
     if (similar.length < 3) {
-      console.log("Fallback: searching all regimes...");
       const fallbackRes = await supabase.rpc("match_patterns", {
         query_vector: vector,
         match_ticker: ticker,
@@ -357,12 +345,8 @@ export async function GET(request: NextRequest) {
       if (fallbackRes.data && fallbackRes.data.length > 0) {
         similar = fallbackRes.data;
         usedFallback = true;
-        console.log("RPC fallback count:", similar.length);
       }
-      if (fallbackRes.error) console.log("RPC fallback error:", fallbackRes.error);
     }
-
-    console.log("Best match:", similar[0]?.start_date, "similarity:", similar[0]?.similarity);
 
     // 4. Compute outcome stats
     const o5 = similar
@@ -398,13 +382,6 @@ export async function GET(request: NextRequest) {
         const base = extendedPrices[0];
         extendedPrices = extendedPrices.map((p) => (p - base) / base);
       }
-      console.log(
-        "Extended prices for best match:",
-        extendedPrices.length,
-        "points (target:",
-        historicalWindow,
-        ")",
-      );
     }
 
     // 6. Pipeline signal

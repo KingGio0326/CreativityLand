@@ -89,7 +89,7 @@ export default function CorrelationPage() {
 
       {/* Heatmap */}
       <div className="overflow-x-auto">
-        <table className="border-collapse text-sm">
+        <table className="border-collapse text-sm data-table">
           <thead>
             <tr>
               <th className="p-2" />

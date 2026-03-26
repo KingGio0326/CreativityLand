@@ -19,6 +19,8 @@ import {
   ReferenceArea,
 } from "recharts";
 import { TICKERS } from "@/lib/constants";
+import TickerSelector from "@/components/TickerSelector";
+import { signalBadgeClasses, signalDotClass } from "@/lib/signal-styles";
 
 /* ── types ─────────────────────────────────────────────── */
 interface OutcomeStats {
@@ -116,35 +118,11 @@ function regimeLabel(regime: string) {
 }
 
 /* ── parse prices (may arrive as JSON string) ────────── */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parsePrices(prices: any): number[] {
+function parsePrices(prices: string | number[] | null | undefined): number[] {
   if (!prices) return [];
   if (Array.isArray(prices)) return prices;
   try { return JSON.parse(prices); }
   catch { return []; }
-}
-
-/* ── signal color helpers ─────────────────────────────── */
-function signalStyle(signal: string) {
-  switch (signal) {
-    case "STRONG BUY":
-      return "bg-emerald-500 text-white border-emerald-400";
-    case "BUY":
-      return "bg-emerald-500/20 text-emerald-400 border-emerald-500/40";
-    case "STRONG SELL":
-      return "bg-red-500 text-white border-red-400";
-    case "SELL":
-      return "bg-red-500/20 text-red-400 border-red-500/40";
-    default:
-      return "bg-zinc-500/20 text-zinc-400 border-zinc-500/40";
-  }
-}
-
-function signalDot(signal: string | null) {
-  if (!signal) return "bg-zinc-500";
-  if (signal.includes("BUY")) return "bg-emerald-500";
-  if (signal.includes("SELL")) return "bg-red-500";
-  return "bg-zinc-500";
 }
 
 /* ── format date for display ──────────────────────────── */
@@ -296,8 +274,7 @@ function CandlestickChart({
 
         <Bar
           dataKey="close"
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          shape={(props: any) => {
+          shape={(props: Record<string, number>) => {
             const { x, width, index } = props;
             const d = ohlc[index];
             if (!d || !width) return <g />;
@@ -1216,21 +1193,7 @@ export default function PatternsPage() {
             </span>
           )}
         </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {TICKERS.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTicker(t)}
-              className={`px-3 py-1 text-xs font-medium rounded-full border transition-all ${
-                ticker === t
-                  ? "bg-[var(--accent)] text-white border-[var(--accent-light)] shadow-[0_0_12px_rgba(124,58,237,0.3)]"
-                  : "bg-[rgba(255,255,255,0.04)] text-[var(--text-muted)] border-transparent hover:bg-[rgba(255,255,255,0.08)]"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        <TickerSelector value={ticker} onChange={setTicker} />
       </div>
 
       {/* Signal badges + Regime */}
@@ -1248,7 +1211,7 @@ export default function PatternsPage() {
 
             {/* Pipeline signal */}
             <div className="flex items-center gap-2 text-xs">
-              <span className={`w-2 h-2 rounded-full ${signalDot(data?.pipeline_signal?.signal ?? null)}`} />
+              <span className={`w-2 h-2 rounded-full ${signalDotClass(data?.pipeline_signal?.signal ?? null)}`} />
               <span className="text-[var(--text-muted)]">Pipeline:</span>
               <span className="font-bold">
                 {data?.pipeline_signal?.signal ?? "N/A"}
@@ -1262,7 +1225,7 @@ export default function PatternsPage() {
 
             {/* Pattern signal */}
             <div className="flex items-center gap-2 text-xs">
-              <span className={`w-2 h-2 rounded-full ${signalDot(rec?.signal ?? null)}`} />
+              <span className={`w-2 h-2 rounded-full ${signalDotClass(rec?.signal ?? null)}`} />
               <span className="text-[var(--text-muted)]">Pattern:</span>
               <span className="font-bold">{rec?.signal ?? "N/A"}</span>
             </div>
@@ -1270,7 +1233,7 @@ export default function PatternsPage() {
             {/* Combined signal — large badge */}
             <div className="ml-auto">
               <span
-                className={`px-5 py-2 rounded-lg text-sm font-black tracking-wide border shadow-[0_0_16px_rgba(124,58,237,0.2)] ${signalStyle(combined)}`}
+                className={`px-5 py-2 rounded-lg text-sm font-black tracking-wide border shadow-[0_0_16px_rgba(124,58,237,0.2)] ${signalBadgeClasses(combined)}`}
               >
                 {combined}
               </span>
@@ -1678,11 +1641,11 @@ export default function PatternsPage() {
             >
               <div className="flex items-center gap-3 mb-3">
                 <span
-                  className={`w-3 h-3 rounded-full ${signalDot(combined)}`}
+                  className={`w-3 h-3 rounded-full ${signalDotClass(combined)}`}
                 />
                 <p className="text-sm font-bold">Recommendation</p>
                 <span
-                  className={`ml-auto px-3 py-1 rounded-full text-xs font-bold border ${signalStyle(combined)}`}
+                  className={`ml-auto px-3 py-1 rounded-full text-xs font-bold border ${signalBadgeClasses(combined)}`}
                 >
                   {combined}
                 </span>

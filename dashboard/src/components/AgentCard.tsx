@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { VOTE_STYLES } from "@/lib/signal-styles";
 
 export interface TopArticle {
   title: string;
@@ -29,11 +30,7 @@ export interface AgentCardProps {
   researchContext?: string;
 }
 
-const voteConfig = {
-  BUY: { bg: "bg-[rgba(16,185,129,0.15)]", text: "text-[#10b981]" },
-  SELL: { bg: "bg-[rgba(239,68,68,0.15)]", text: "text-[#ef4444]" },
-  HOLD: { bg: "bg-[rgba(245,158,11,0.15)]", text: "text-[#f59e0b]" },
-};
+const voteConfig = VOTE_STYLES;
 
 export default function AgentCard({
   name,

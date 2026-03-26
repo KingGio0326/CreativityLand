@@ -15,6 +15,8 @@ import {
   ReferenceLine,
 } from "recharts";
 import { TICKERS } from "@/lib/constants";
+import TickerSelector from "@/components/TickerSelector";
+import { signalBadgeClasses, returnColor } from "@/lib/signal-styles";
 
 /* ── types ─────────────────────────────────────────────── */
 interface Evaluation {
@@ -126,22 +128,6 @@ const TICKER_COLORS: Record<string, string> = {
 };
 
 /* ── helpers ──────────────────────────────────────────── */
-function signalBadge(signal: string) {
-  switch (signal) {
-    case "BUY":
-      return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
-    case "SELL":
-      return "bg-red-500/15 text-red-400 border-red-500/30";
-    default:
-      return "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
-  }
-}
-
-function returnColor(val: number) {
-  if (val > 0) return "text-emerald-400";
-  if (val < 0) return "text-red-400";
-  return "text-zinc-400";
-}
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-US", {
@@ -339,21 +325,7 @@ export default function PerformancePage() {
       {/* ── HEADER ──────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">Performance</h1>
-        <div className="flex gap-1.5 flex-wrap">
-          {TICKERS.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTicker(t)}
-              className={`px-3 py-1 text-xs font-medium rounded-full border transition-all ${
-                ticker === t
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        <TickerSelector value={ticker} onChange={setTicker} />
       </div>
 
       {/* ── Horizon selector ─────────────────────────────── */}
@@ -739,7 +711,7 @@ export default function PerformancePage() {
                 </p>
               </div>
               <div className="overflow-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs data-table">
                   <thead>
                     <tr className="border-b bg-muted/30">
                       <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
@@ -779,7 +751,7 @@ export default function PerformancePage() {
                         </td>
                         <td className="px-4 py-2.5 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${signalBadge(ev.signal_type)}`}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${signalBadgeClasses(ev.signal_type)}`}
                           >
                             {ev.signal_type}
                           </span>
@@ -919,9 +891,9 @@ export default function PerformancePage() {
               Evaluable signals (BUY/SELL): 0 &mdash; HOLD signals are not counted in performance.
               No BUY/SELL signals evaluated at {HORIZON_LABELS[horizon]}.
               {horizon === "6h" && " Available ~6h after each run."}
-              {horizon === "24h" && " Available from March 20."}
-              {horizon === "72h" && " Available from March 22."}
-              {horizon === "168h" && " Available from March 26."}
+              {horizon === "24h" && " Available ~24h after each run."}
+              {horizon === "72h" && " Available ~3 days after each run."}
+              {horizon === "168h" && " Available ~7 days after each run."}
             </div>
           )}
           {currentStats.count > 0 && currentStats.count < 10 && (

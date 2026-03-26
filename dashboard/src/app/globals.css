@@ -145,6 +145,10 @@
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
+  line-height: 1.6;
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ── Card styles ──────────────────────────────────────── */
@@ -172,7 +176,7 @@ body {
   color: var(--green);
   border-radius: 6px;
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .badge-sell {
@@ -180,7 +184,7 @@ body {
   color: var(--red);
   border-radius: 6px;
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .badge-hold {
@@ -188,7 +192,7 @@ body {
   color: var(--yellow);
   border-radius: 6px;
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -201,7 +205,7 @@ body {
   border-radius: 10px;
   padding: 10px 20px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 4px 20px rgba(124,58,237,0.3);
@@ -209,6 +213,10 @@ body {
 .btn-primary:hover {
   box-shadow: 0 4px 30px rgba(124,58,237,0.5);
   transform: translateY(-1px);
+}
+.btn-primary:focus-visible {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 2px;
 }
 
 /* ── Scrollbar ────────────────────────────────────────── */
@@ -405,6 +413,10 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Tabular numbers for aligned data columns */
+.data-table td { font-variant-numeric: tabular-nums; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
 /* ── Reduced Motion ───────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -425,5 +437,9 @@ body {
   }
   html {
     @apply font-sans;
+  }
+  /* Tighter leading for headings — body's 1.6 is too loose for large text */
+  h1, h2, h3 {
+    line-height: 1.2;
   }
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { signalFilledClasses } from "@/lib/signal-styles";
 
 interface ChatMessage {
   id: string;
@@ -46,9 +47,6 @@ function getAgentStyle(name: string) {
   }
   return AGENTS[name] ?? AGENTS.Orchestrator;
 }
-
-const signalBg = (s: string) =>
-  s === "BUY" ? "bg-green-600" : s === "SELL" ? "bg-red-600" : "bg-gray-500";
 
 export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -199,7 +197,7 @@ export default function AgentChat({ ticker, onSignalReady }: AgentChatProps) {
               {msg.isFinal && msg.signal && (
                 <div className="mt-2 p-2 rounded-md border bg-muted/40">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Badge className={signalBg(msg.signal)}>{msg.signal}</Badge>
+                    <Badge className={signalFilledClasses(msg.signal)}>{msg.signal}</Badge>
                     <span className="text-xs font-mono font-semibold">
                       {Math.round((msg.confidence ?? 0) * 100)}%
                     </span>

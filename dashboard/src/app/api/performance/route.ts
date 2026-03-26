@@ -16,14 +16,16 @@ export async function GET(request: NextRequest) {
       .not("entry_price", "is", null)
       .order("entry_date", { ascending: true });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rawEvals: any[] = evalsRes.data ?? [];
+    type EvalRow = Record<string, number | string | null>;
+    const rawEvals: EvalRow[] = (evalsRes.data as EvalRow[]) ?? [];
 
     // 2. Compute stats per horizon
     const horizons = ["6h", "24h", "72h", "168h"] as const;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const horizonStats: Record<string, any> = {};
+    const horizonStats: Record<string, {
+      count: number; hit_rate: number; avg_score: number | string;
+      avg_return: string; chart_data: object[]; signals: object[];
+    }> = {};
 
     for (const h of horizons) {
       const scoreKey = `score_${h}`;

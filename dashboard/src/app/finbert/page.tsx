@@ -1,12 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-/* ── constants ── */
-const TICKERS = [
-  "AAPL", "TSLA", "NVDA", "BTC-USD",
-  "ETH-USD", "MSFT", "XOM", "GLD",
-];
+import { TICKERS } from "@/lib/constants";
+import { signalFilledClasses } from "@/lib/signal-styles";
 
 const PHASE_LABELS = ["Scraping", "Text Extract", "Sentiment", "Embeddings"] as const;
 type TabId = "scraping" | "text" | "sentiment" | "embedding";
@@ -99,13 +95,6 @@ const labelBg = (l: string | null) =>
     : l === "negative"
       ? "bg-red-500/15 text-red-400 border-red-500/25"
       : "bg-zinc-500/15 text-zinc-400 border-zinc-500/25";
-
-const signalBg = (s: string) =>
-  s === "BUY"
-    ? "bg-emerald-500"
-    : s === "SELL"
-      ? "bg-red-500"
-      : "bg-zinc-500";
 
 function timeAgo(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)}m ago`;
@@ -932,7 +921,7 @@ export default function FinBertDebugPage() {
                         </td>
                         <td className="p-2.5">
                           <span
-                            className={`px-2 py-0.5 rounded text-white text-[10px] font-bold ${signalBg(data.recent_signals[0].signal)}`}
+                            className={`px-2 py-0.5 rounded text-white text-[10px] font-bold ${signalFilledClasses(data.recent_signals[0].signal)}`}
                           >
                             {data.recent_signals[0].signal}
                           </span>
@@ -969,13 +958,13 @@ export default function FinBertDebugPage() {
                         {new Date(run.created_at).toLocaleString("en-US")}
                       </span>
                       <span
-                        className={`px-2 py-0.5 rounded text-white text-[10px] font-bold ${signalBg(run.signal)}`}
+                        className={`px-2 py-0.5 rounded text-white text-[10px] font-bold ${signalFilledClasses(run.signal)}`}
                       >
                         {run.signal}
                       </span>
                       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${signalBg(run.signal)}`}
+                          className={`h-full rounded-full ${signalFilledClasses(run.signal)}`}
                           style={{
                             width: `${(run.confidence ?? 0) * 100}%`,
                           }}
