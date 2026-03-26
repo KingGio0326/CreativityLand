@@ -994,56 +994,50 @@ export default function PerformancePage() {
               const allPoints = horizonData.portfolio ?? [];
               const byTicker = horizonData.by_ticker ?? {};
 
-              // Filter by period and re-simulate portfolio from $1000
-              const filtered = cutoffDate
-                ? allPoints.filter((pt) => pt.date >= cutoffDate)
-                : allPoints;
-
-              // Re-simulate from INITIAL_PORTFOLIO for the filtered window
-              let simPortfolio = INITIAL_PORTFOLIO;
-              const tickerCum: Record<string, number> = {};
-              const chartPoints = filtered.map((pt) => {
-                simPortfolio += pt.pnl;
-                tickerCum[pt.ticker] = (tickerCum[pt.ticker] ?? 0) + pt.pnl;
-
+              // Build full chart series from API data (portfolio_value is already cumulative)
+              const allTickers = Object.keys(byTicker);
+              const fullTickerCum: Record<string, number> = {};
+              const fullSeries = allPoints.map((pt) => {
+                fullTickerCum[pt.ticker] = (fullTickerCum[pt.ticker] ?? 0) + pt.pnl;
                 const row: Record<string, unknown> = {
                   date: pt.date,
-                  portfolio: Math.round(simPortfolio * 100) / 100,
+                  portfolio: pt.portfolio_value,
                   _ticker: pt.ticker,
                   _signal: pt.signal,
                   _pnl: pt.pnl,
                   _allocated: pt.allocated,
                   _position_size_pct: pt.position_size_pct,
                 };
-                // Per-ticker cumulative contribution lines
-                for (const t of Object.keys(tickerCum)) {
-                  row[t] = Math.round(tickerCum[t] * 100) / 100;
+                for (const t of Object.keys(fullTickerCum)) {
+                  row[t] = Math.round(fullTickerCum[t] * 100) / 100;
                 }
                 return row;
               });
 
-              // Forward-fill ticker keys across all chart points
-              const allTickers = Object.keys(
-                cutoffDate ? tickerCum : byTicker,
-              );
+              // Forward-fill ticker keys across all points
               const lastTicker: Record<string, number> = {};
-              for (const pt of chartPoints) {
+              for (const pt of fullSeries) {
                 for (const t of allTickers) {
                   if (pt[t] !== undefined) lastTicker[t] = pt[t] as number;
                   else pt[t] = lastTicker[t] ?? 0;
                 }
               }
 
-              // Current values
-              const finalValue = chartPoints.length > 0
-                ? (chartPoints[chartPoints.length - 1].portfolio as number)
+              // Filter display points by period (portfolio values stay correct)
+              const chartPoints = cutoffDate
+                ? fullSeries.filter((pt) => (pt.date as string) >= cutoffDate)
+                : fullSeries;
+
+              // Always show final portfolio value from the FULL series
+              const finalValue = fullSeries.length > 0
+                ? (fullSeries[fullSeries.length - 1].portfolio as number)
                 : INITIAL_PORTFOLIO;
               const returnPct = ((finalValue - INITIAL_PORTFOLIO) / INITIAL_PORTFOLIO) * 100;
 
-              // Sort tickers by absolute contribution for legend
+              // Sort tickers by absolute contribution for legend (always from full data)
               const sortedTickers = allTickers
-                .filter((t) => (tickerCum[t] ?? 0) !== 0)
-                .sort((a, b) => Math.abs(tickerCum[b] ?? 0) - Math.abs(tickerCum[a] ?? 0));
+                .filter((t) => (byTicker[t] ?? 0) !== 0)
+                .sort((a, b) => Math.abs(byTicker[b] ?? 0) - Math.abs(byTicker[a] ?? 0));
 
               return (
                 <div key={h} className="rounded-xl border bg-card p-5">
@@ -1204,7 +1198,7 @@ export default function PerformancePage() {
                   {sortedTickers.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3">
                       {sortedTickers.slice(0, 8).map((t) => {
-                        const v = tickerCum[t] ?? 0;
+                        const v = byTicker[t] ?? 0;
                         return (
                           <span
                             key={t}
