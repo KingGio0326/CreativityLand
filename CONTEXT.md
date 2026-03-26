@@ -1,7 +1,7 @@
 # CONTEXT.md
 
 Documento di continuità per riprendere lo sviluppo del progetto **CreativityLand Trading Bot** in una nuova sessione.
-Ultimo aggiornamento: 2026-03-23.
+Ultimo aggiornamento: 2026-03-26.
 
 ---
 
@@ -53,11 +53,12 @@ Ultimo aggiornamento: 2026-03-23.
 
 ```
 progetto_stef/
-├── agents/                        # 17 agenti trading
-│   ├── __init__.py                # TradingState TypedDict (28 campi)
+├── agents/                        # 18 agenti trading
+│   ├── __init__.py                # TradingState TypedDict (31 campi)
 │   ├── orchestrator.py            # LangGraph StateGraph + TradingOrchestrator
 │   ├── weighted_signal_agent.py   # Voto pesato + pattern/research modifiers
 │   ├── critic_agent.py            # Validazione qualità, retry condizionale
+│   ├── exit_strategy_agent.py     # SL/TP/trailing stop basati su ATR-14
 │   ├── scraper_agent.py           # Carica articoli da Supabase
 │   ├── sentiment_agent.py         # Aggregazione sentiment FinBERT
 │   ├── social_sentiment_agent.py  # Reddit + social media
@@ -109,8 +110,12 @@ progetto_stef/
 │       │   ├── finbert/page.tsx   # Analisi FinBERT
 │       │   ├── backtest/page.tsx  # Risultati backtest
 │       │   ├── search/page.tsx    # Ricerca semantica
+│       │   ├── trades/page.tsx    # Trading: posizioni, trade history
 │       │   └── api/               # API routes
 │       │       ├── performance/route.ts
+│       │       ├── equity-curve/route.ts          # Portfolio simulation (4 orizzonti)
+│       │       ├── equity-curve-sltp/route.ts     # Portfolio SL/TP managed
+│       │       ├── trades/route.ts                # Posizioni e trade history
 │       │       └── patterns-performance/route.ts  # Pattern matching stats
 │       ├── components/
 │       │   ├── FloatingSidebar.tsx # Sidebar navigazione (collapsible)
@@ -134,15 +139,17 @@ progetto_stef/
 
 ## 3. Agenti e Pesi
 
-### Pipeline LangGraph (ordine di esecuzione — 20 nodi)
+### Pipeline LangGraph (ordine di esecuzione — 21 nodi)
 
 ```
 regime → scraper → social → sentiment → research → fundamental → technical → options
 → momentum → mean_reversion → ml → risk → liquidity → macro → intermarket
-→ seasonal → institutional → weighted → critic (conditional retry)
+→ seasonal → institutional → weighted → critic (conditional retry) → exit_strategy
 ```
 
 `regime` è il primo nodo: classifica il mercato come bull/bear/neutral/crisis usando VIX, SPY 30d trend + SMA50/200, TLT flight-to-safety. Il risultato viene propagato nel `TradingState` e usato dal `WeightedSignalAgent` per aggiustare i pesi.
+
+`exit_strategy` è l'ultimo nodo: per ogni segnale BUY/SELL calcola stop loss, take profit e trailing stop basati su ATR-14. I livelli vengono regolati per regime di mercato (multiplier: crisis 3.0x, bear 2.5x, neutral 2.0x, bull 1.5x) e per confidence (alta confidence → stop più stretti). Il risk-reward ratio varia tra 2.0 e 3.0 in base alla confidence. Il trailing stop si attiva al 50% del TP distance e porta lo stop a break-even. Per crypto usa dati orari (ATR più reattivo), per azioni dati giornalieri.
 
 ### Pesi nel WeightedSignalAgent
 
@@ -213,6 +220,23 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 | reasoning | text | JSON array stringificato |
 | articles_used | text[] | Array URL articoli |
 | created_at | timestamptz | |
+| kelly_fraction | float8 | Kelly criterion fraction |
+| position_size_pct | float8 | % del portafoglio da allocare |
+| max_position_usd | float8 | Max capitale suggerito |
+| consensus_level | text | strong/moderate/weak |
+| agents_agree | int | Agenti concordi |
+| agents_total | int | Agenti totali |
+| dominant_factor | text | Fattore dominante nel voto |
+| market_regime | text | Regime al momento del segnale |
+| vote_breakdown | jsonb | Dettaglio voti per agente |
+| stop_loss | float8 | Prezzo stop loss (ExitStrategyAgent) |
+| take_profit | float8 | Prezzo take profit |
+| sl_percentage | float8 | % distanza SL da entry |
+| tp_percentage | float8 | % distanza TP da entry |
+| risk_reward_ratio | float8 | Rapporto R:R (2.0-3.0) |
+| atr_14 | float8 | ATR-14 al momento del segnale |
+| trailing_activation | float8 | Prezzo attivazione trailing stop |
+| trailing_level | float8 | Livello trailing (break-even) |
 
 ### `signal_evaluations`
 | Colonna | Tipo | Note |
@@ -318,6 +342,34 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 | avg_accuracy / std_accuracy | float8 |
 | fold_accuracies | jsonb |
 | is_reliable | boolean |
+
+### `positions`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| ticker | text | |
+| side | text | long/short |
+| qty | float8 | Numero azioni/unità |
+| entry_price | float8 | Prezzo medio di ingresso |
+| current_price | float8 | Ultimo prezzo noto |
+| market_value | float8 | qty × current_price |
+| unrealized_pl | float8 | P&L non realizzato |
+| signal_id | uuid | FK → signals.id |
+| opened_at | timestamptz | |
+| status | text | open/closed |
+
+### `trades`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| position_id | uuid | FK → positions.id |
+| ticker | text | |
+| side | text | buy/sell |
+| qty | float8 | |
+| price | float8 | Prezzo esecuzione |
+| pnl | float8 | P&L realizzato |
+| close_reason | text | sl/tp/trailing/manual/time |
+| executed_at | timestamptz | |
 
 ---
 

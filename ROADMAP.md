@@ -1,13 +1,13 @@
 # ROADMAP.md
 
 Roadmap di sviluppo del progetto **CreativityLand Trading Bot**.
-Ultimo aggiornamento: 2026-03-23.
+Ultimo aggiornamento: 2026-03-26.
 
 ---
 
 ## COMPLETATO
 
-- [x] 12 agenti attivi + ResearchAgent + RiskAgent (17 nodi totali nel grafo LangGraph)
+- [x] 12 agenti attivi + ResearchAgent + RiskAgent + ExitStrategyAgent (18 agenti, 21 nodi totali nel grafo LangGraph)
 - [x] Pattern matching con 3 livelli di boost (conferma +15%, smentisce -15%, neutro 0%)
 - [x] Walk-forward validation MLAgent (XGBoost con k-fold temporale)
 - [x] Kelly criterion position sizing (nel risk agent)
@@ -31,6 +31,11 @@ Ultimo aggiornamento: 2026-03-23.
 - [x] Pattern Matching performance tracking indipendente (tabella `pattern_evaluations`, API `/api/patterns-performance`, sezione UI in `/patterns`) (2026-03-23)
 - [x] Regime integrato nei messaggi Telegram: header run message, weekly report con regime prevalente + VIX range, dettaglio ticker con regime, bottone `Regime` nel menu bot (2026-03-23)
 - [x] Dashboard Pattern Performance: hit rate totale, breakdown per regime (bar chart), breakdown per prediction type, tabella ultime 20 valutazioni (2026-03-23)
+- [x] ExitStrategyAgent (SL/TP/Trailing): ATR-14 based con regime multiplier (crisis 3.0x, bear 2.5x, neutral 2.0x, bull 1.5x), R:R 2.0-3.0, trailing stop al 50% TP, crypto usa hourly data (2026-03-26)
+- [x] Tabelle `positions` e `trades` + `portfolio_summary` view su Supabase (2026-03-26)
+- [x] Pagina `/trades` con posizioni Alpaca live, trade history, summary cards (2026-03-26)
+- [x] Portfolio SL/TP managed chart (5° grafico equity curve) con trade markers e exit reason badges (2026-03-26)
+- [x] SL/TP colonne nella tabella segnali di `/performance` + notifica Telegram con livelli SL/TP (2026-03-26)
 
 ---
 
@@ -89,7 +94,13 @@ Ultimo aggiornamento: 2026-03-23.
 - Notificare via Telegram quando un ticker sconosciuto ha 5+ articoli
 - **Effort**: ~3 prompt
 
-### 3. Versione locale/VPS
+### 3. Backtest SL/TP optimization
+- Testare diversi multiplier ATR (1.0x, 1.5x, 2.0x, 2.5x, 3.0x) e R:R ratio (1.5, 2.0, 2.5, 3.0)
+- Trovare la combinazione ottimale per massimizzare il portfolio value nel SL/TP managed chart
+- Confrontare win rate e R:R con diversi regime multiplier
+- **Effort**: ~3 prompt
+
+### 4. Versione locale/VPS
 - Quando il sistema mostra edge positivo consistente (hit rate >55% su 168h)
 - Migrare da GitHub Actions a cron locale o VPS
 - Aggiungere paper trading via Alpaca API

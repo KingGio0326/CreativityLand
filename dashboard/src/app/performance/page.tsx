@@ -35,6 +35,9 @@ interface Evaluation {
   score_24h: number;
   score_72h: number;
   score_168h: number;
+  stop_loss: number | null;
+  take_profit: number | null;
+  risk_reward_ratio: number | null;
 }
 
 interface HorizonStats {
@@ -792,6 +795,15 @@ export default function PerformancePage() {
                       <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
                         Score
                       </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        SL
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        TP
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                        R:R
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -847,6 +859,15 @@ export default function PerformancePage() {
                         >
                           {ev.score_168h >= 0 ? "+" : ""}
                           {ev.score_168h}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#ef4444" }}>
+                          {ev.stop_loss != null ? `$${ev.stop_loss.toFixed(2)}` : "-"}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#10b981" }}>
+                          {ev.take_profit != null ? `$${ev.take_profit.toFixed(2)}` : "-"}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-muted-foreground">
+                          {ev.risk_reward_ratio != null ? ev.risk_reward_ratio.toFixed(1) : "-"}
                         </td>
                       </tr>
                     ))}

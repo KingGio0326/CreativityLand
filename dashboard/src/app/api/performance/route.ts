@@ -88,31 +88,62 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // 3. Build legacy evaluations list (for the table) — use all evals
-    const evaluations = rawEvals.map((e: Record<string, unknown>) => ({
-      id: e.id,
-      signal_type: e.signal_type,
-      confidence: e.confidence,
-      entry_date: e.entry_date,
-      entry_price: e.entry_price,
-      return_6h: e.return_6h ?? 0,
-      return_24h: e.return_24h ?? 0,
-      return_72h: e.return_72h ?? 0,
-      return_168h: e.return_168h ?? 0,
-      score_6h: e.score_6h ?? 0,
-      score_24h: e.score_24h ?? 0,
-      score_72h: e.score_72h ?? 0,
-      score_168h: e.score_168h ?? 0,
-    }));
+    // 3. Fetch SL/TP data from signals table for these evaluations
+    const evalSignalIds = [
+      ...new Set(rawEvals.map((e) => e.signal_id as string).filter(Boolean)),
+    ];
+    const sltpMap: Record<string, { stop_loss: number | null; take_profit: number | null; risk_reward_ratio: number | null }> = {};
+    if (evalSignalIds.length > 0) {
+      const chunkSize = 200;
+      for (let i = 0; i < evalSignalIds.length; i += chunkSize) {
+        const chunk = evalSignalIds.slice(i, i + chunkSize);
+        const { data: sigRows } = await supabase
+          .from("signals")
+          .select("id, stop_loss, take_profit, risk_reward_ratio")
+          .in("id", chunk);
+        if (sigRows) {
+          for (const row of sigRows as { id: string; stop_loss: number | null; take_profit: number | null; risk_reward_ratio: number | null }[]) {
+            sltpMap[row.id] = {
+              stop_loss: row.stop_loss,
+              take_profit: row.take_profit,
+              risk_reward_ratio: row.risk_reward_ratio,
+            };
+          }
+        }
+      }
+    }
 
-    // 4. Legacy stats (168h) for backwards compat
+    // 4. Build legacy evaluations list (for the table) — use all evals
+    const evaluations = rawEvals.map((e: Record<string, unknown>) => {
+      const sltp = sltpMap[e.signal_id as string] ?? {};
+      return {
+        id: e.id,
+        signal_type: e.signal_type,
+        confidence: e.confidence,
+        entry_date: e.entry_date,
+        entry_price: e.entry_price,
+        return_6h: e.return_6h ?? 0,
+        return_24h: e.return_24h ?? 0,
+        return_72h: e.return_72h ?? 0,
+        return_168h: e.return_168h ?? 0,
+        score_6h: e.score_6h ?? 0,
+        score_24h: e.score_24h ?? 0,
+        score_72h: e.score_72h ?? 0,
+        score_168h: e.score_168h ?? 0,
+        stop_loss: sltp.stop_loss ?? null,
+        take_profit: sltp.take_profit ?? null,
+        risk_reward_ratio: sltp.risk_reward_ratio ?? null,
+      };
+    });
+
+    // 5. Legacy stats (168h) for backwards compat
     const total = evaluations.length;
     const h168 = horizonStats["168h"];
     const positiveSignals = h168.count > 0
       ? Math.round((h168.hit_rate / 100) * h168.count)
       : 0;
 
-    // 5. Legacy chart data (168h cumulative)
+    // 6. Legacy chart data (168h cumulative)
     const chartData = h168.chart_data ?? [];
 
     // Add SPY proxy to chart data
@@ -127,7 +158,7 @@ export async function GET(request: NextRequest) {
       },
     );
 
-    // 6. ML walk-forward validation
+    // 7. ML walk-forward validation
     let mlValidation = null;
     try {
       const mlRes = await supabase
@@ -140,7 +171,7 @@ export async function GET(request: NextRequest) {
       // table may not exist yet
     }
 
-    // 7. Alpha
+    // 8. Alpha
     const perfRes = await supabase
       .from("agent_performance")
       .select("*")

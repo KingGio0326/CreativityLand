@@ -152,6 +152,25 @@ def format_run_message(
             has_actionable = True
         signal_lines.append(line)
 
+        # SL/TP info for actionable signals
+        # Support both nested exit_strategy dict and flat DB columns
+        exit_data = s.get('exit_strategy') or {}
+        sl = exit_data.get('stop_loss') or s.get('stop_loss')
+        tp = exit_data.get('take_profit') or s.get('take_profit')
+        sl_pct = exit_data.get('sl_percentage') or s.get('sl_percentage')
+        tp_pct = exit_data.get('tp_percentage') or s.get('tp_percentage')
+        rr = exit_data.get('risk_reward_ratio') or s.get('risk_reward_ratio')
+        if signal != 'HOLD' and sl is not None and tp is not None:
+            sl_str = f"${sl:.2f}"
+            tp_str = f"${tp:.2f}"
+            sl_pct_str = f"-{sl_pct:.1f}%" if sl_pct else ""
+            tp_pct_str = f"+{tp_pct:.1f}%" if tp_pct else ""
+            rr_str = f"{rr:.1f}" if rr else "?"
+            signal_lines.append(
+                f"\U0001f4cd SL: {sl_str} ({sl_pct_str}) | "
+                f"TP: {tp_str} ({tp_pct_str}) | R:R {rr_str}"
+            )
+
     signals_text = '\n'.join(signal_lines)
 
     alert = (
