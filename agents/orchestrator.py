@@ -170,6 +170,8 @@ class TradingOrchestrator:
         else:
             pat_prediction = "neutral"
 
+        kelly = result.get("kelly_sizing", {})
+
         return sanitize_for_json({
             "ticker": ticker,
             "signal": result["final_signal"] or "HOLD",
@@ -182,6 +184,9 @@ class TradingOrchestrator:
             "risk_level": result["risk_assessment"].get(
                 "risk_level", "?"
             ),
+            "kelly_fraction": kelly.get("kelly_fraction"),
+            "position_size_pct": kelly.get("suggested_pct"),
+            "max_position_usd": kelly.get("suggested_capital"),
             "articles_analyzed": len(result["articles"]),
             "reasoning": result["reasoning"],
             "market_regime": result.get("market_regime", regime),

@@ -133,6 +133,16 @@ class SignalEngine:
             "articles_used": [],
             "created_at": signal.get("created_at", datetime.now(timezone.utc).isoformat()),
         }
+        # Add optional rich fields (only if present and not None)
+        optional_fields = [
+            "kelly_fraction", "position_size_pct", "max_position_usd",
+            "consensus_level", "agents_agree", "agents_total",
+            "dominant_factor", "market_regime", "vote_breakdown",
+        ]
+        for field in optional_fields:
+            val = signal.get(field)
+            if val is not None:
+                row[field] = val
         result = self.supabase.table("signals").insert(row).execute()
         signal_id = result.data[0]["id"] if result.data else None
         logger.info("Saved signal for %s to Supabase (id=%s)", ticker, signal_id)

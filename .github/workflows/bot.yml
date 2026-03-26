@@ -101,6 +101,15 @@ jobs:
                       'signal': result['signal'],
                       'confidence': result['confidence'],
                       'reasoning': safe_json_dumps(result['reasoning']),
+                      'kelly_fraction': result.get('kelly_fraction'),
+                      'position_size_pct': result.get('position_size_pct'),
+                      'max_position_usd': result.get('max_position_usd'),
+                      'consensus_level': result.get('consensus_level'),
+                      'agents_agree': result.get('agents_agree'),
+                      'agents_total': result.get('agents_total'),
+                      'dominant_factor': result.get('dominant_factor'),
+                      'market_regime': result.get('market_regime'),
+                      'vote_breakdown': result.get('vote_breakdown'),
                   }
                   signal_id = sig_engine.save_signal(signal_dict)
                   pat_data = result.get('pattern_data', {})

@@ -4,13 +4,16 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
 const HORIZONS = ["6h", "24h", "72h", "168h"] as const;
+const PORTFOLIO_CAPITAL = 100_000;
+const DEFAULT_POSITION = 1_000;
 
 export async function GET() {
   try {
+    // Fetch evaluations with position sizing from signals table
     const { data: rawEvals, error } = await supabase
       .from("signal_evaluations")
       .select(
-        "ticker, signal_type, entry_date, entry_price, confidence, " +
+        "signal_id, ticker, signal_type, entry_date, entry_price, confidence, " +
         "price_6h, price_24h, price_72h, price_168h, " +
         "score_6h, score_24h, score_72h, score_168h"
       )
@@ -22,8 +25,36 @@ export async function GET() {
 
     const evals = rawEvals ?? [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: Record<string, Record<string, any[]>> = {};
+    // Batch-fetch position sizing from signals table
+    const signalIds = [
+      ...new Set(
+        evals
+          .map((e: Record<string, unknown>) => e.signal_id as string)
+          .filter(Boolean),
+      ),
+    ];
+
+    const sizingMap: Record<string, number> = {};
+    if (signalIds.length > 0) {
+      // Supabase IN filter has a limit, fetch in chunks
+      const chunkSize = 200;
+      for (let i = 0; i < signalIds.length; i += chunkSize) {
+        const chunk = signalIds.slice(i, i + chunkSize);
+        const { data: sigRows } = await supabase
+          .from("signals")
+          .select("id, position_size_pct")
+          .in("id", chunk);
+        if (sigRows) {
+          for (const row of sigRows) {
+            if (row.position_size_pct != null) {
+              sizingMap[row.id] = row.position_size_pct as number;
+            }
+          }
+        }
+      }
+    }
+
+    const result: Record<string, Record<string, unknown[]>> = {};
 
     for (const h of HORIZONS) {
       const priceKey = `price_${h}` as string;
@@ -55,12 +86,22 @@ export async function GET() {
           const entryPrice = e.entry_price as number;
           const exitPrice = e[priceKey] as number;
           const signal = e.signal_type as string;
+          const sigId = e.signal_id as string;
 
-          const pnl =
+          // Use Kelly position sizing if available, else $1000 flat
+          const posPct = sigId ? sizingMap[sigId] : undefined;
+          const positionUsd =
+            posPct != null
+              ? (posPct / 100) * PORTFOLIO_CAPITAL
+              : DEFAULT_POSITION;
+
+          // P&L = return% * position size
+          const returnPct =
             signal === "BUY"
-              ? exitPrice - entryPrice
-              : entryPrice - exitPrice;
+              ? (exitPrice - entryPrice) / entryPrice
+              : (entryPrice - exitPrice) / entryPrice;
 
+          const pnl = returnPct * positionUsd;
           cumulative += pnl;
 
           return {
@@ -70,6 +111,7 @@ export async function GET() {
             pnl: Math.round(pnl * 100) / 100,
             entry_price: entryPrice,
             exit_price: exitPrice,
+            position_usd: Math.round(positionUsd),
           };
         });
       }
