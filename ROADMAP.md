@@ -36,6 +36,7 @@ Ultimo aggiornamento: 2026-03-26.
 - [x] Pagina `/trades` con posizioni Alpaca live, trade history, summary cards (2026-03-26)
 - [x] Portfolio SL/TP managed chart (5° grafico equity curve) con trade markers e exit reason badges (2026-03-26)
 - [x] SL/TP colonne nella tabella segnali di `/performance` + notifica Telegram con livelli SL/TP (2026-03-26)
+- [x] Fase 3 Execution Engine: `engine/executor.py` (TradeExecutor) + `engine/broker_alpaca.py` (Alpaca REST adapter). Safety checks: confidence/consensus gate, max positions, daily loss circuit breaker, market hours, cooldown. Bracket orders con SL/TP automatici. DB tracking in positions/trades (2026-03-26)
 
 ---
 

@@ -84,6 +84,8 @@ progetto_stef/
 │   ├── pattern_matcher.py         # pgvector cosine similarity
 │   ├── pattern_extractor.py       # Estrazione pattern storici
 │   ├── correlation_engine.py      # Matrice correlazione ticker
+│   ├── executor.py                # TradeExecutor: esecuzione ordini + safety checks
+│   ├── broker_alpaca.py           # Alpaca REST adapter (paper/live)
 │   └── arxiv_search.py            # Ricerca paper arXiv
 │
 ├── scraper/
