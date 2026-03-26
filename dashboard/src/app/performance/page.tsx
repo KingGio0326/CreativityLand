@@ -92,16 +92,26 @@ const HORIZON_LABELS: Record<Horizon, string> = {
   "168h": "7 days",
 };
 
-interface EquityPoint {
+interface PortfolioPoint {
   date: string;
-  cumulative_pnl: number;
+  portfolio_value: number;
+  ticker: string;
   signal: string;
   pnl: number;
+  allocated: number;
+  position_size_pct: number;
   entry_price: number;
   exit_price: number;
 }
 
-type EquityCurveData = Record<string, Record<string, EquityPoint[]>>;
+interface EquityHorizon {
+  portfolio: PortfolioPoint[];
+  by_ticker: Record<string, number>;
+}
+
+type EquityCurveData = Record<string, EquityHorizon>;
+
+const INITIAL_PORTFOLIO = 1000;
 
 const TICKER_COLORS: Record<string, string> = {
   // Mega cap
@@ -948,7 +958,6 @@ export default function PerformancePage() {
 
       {/* ── EQUITY CURVES ──────────────────────────────────── */}
       {equityData && (() => {
-        // Compute cutoff date for the selected period
         const cutoffDate = equityPeriod === "all"
           ? null
           : (() => {
@@ -960,7 +969,7 @@ export default function PerformancePage() {
         return (
         <div className="space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-3 mt-4">
-            <h2 className="text-xl font-bold tracking-tight">Equity Curves</h2>
+            <h2 className="text-xl font-bold tracking-tight">Portfolio Simulation</h2>
             <div className="flex gap-1.5">
               {([["7d", "7d"], ["30d", "30d"], ["90d", "90d"], ["all", "All"]] as const).map(([val, label]) => (
                 <button
@@ -979,66 +988,102 @@ export default function PerformancePage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {(["6h", "24h", "72h", "168h"] as const).map((h) => {
-              const horizonTickers = equityData[h] ?? {};
-              const activeTickers = Object.keys(horizonTickers).filter(
-                (t) => horizonTickers[t]?.length > 0,
-              );
+              const horizonData = equityData[h];
+              if (!horizonData) return null;
 
-              // Filter by period and recalculate cumulative from $0
-              const filteredByTicker: Record<string, EquityPoint[]> = {};
-              for (const t of activeTickers) {
-                const points = horizonTickers[t].filter(
-                  (pt) => cutoffDate === null || pt.date >= cutoffDate,
-                );
-                if (points.length === 0) continue;
-                let cum = 0;
-                filteredByTicker[t] = points.map((pt) => {
-                  cum += pt.pnl;
-                  return { ...pt, cumulative_pnl: Math.round(cum * 100) / 100 };
-                });
-              }
+              const allPoints = horizonData.portfolio ?? [];
+              const byTicker = horizonData.by_ticker ?? {};
 
-              const filteredTickers = Object.keys(filteredByTicker);
+              // Filter by period and re-simulate portfolio from $1000
+              const filtered = cutoffDate
+                ? allPoints.filter((pt) => pt.date >= cutoffDate)
+                : allPoints;
 
-              // Merge all ticker series into unified date-indexed array
-              const dateMap = new Map<string, Record<string, number>>();
-              for (const t of filteredTickers) {
-                for (const pt of filteredByTicker[t]) {
-                  if (!dateMap.has(pt.date)) dateMap.set(pt.date, {});
-                  dateMap.get(pt.date)![t] = pt.cumulative_pnl;
-                }
-              }
+              // Re-simulate from INITIAL_PORTFOLIO for the filtered window
+              let simPortfolio = INITIAL_PORTFOLIO;
+              const tickerCum: Record<string, number> = {};
+              const chartPoints = filtered.map((pt) => {
+                simPortfolio += pt.pnl;
+                tickerCum[pt.ticker] = (tickerCum[pt.ticker] ?? 0) + pt.pnl;
 
-              // Sort by date, forward-fill missing values
-              const sortedDates = [...dateMap.keys()].sort();
-              const lastVal: Record<string, number> = {};
-              const merged = sortedDates.map((date) => {
-                const row: Record<string, unknown> = { date };
-                for (const t of filteredTickers) {
-                  if (dateMap.get(date)![t] !== undefined) {
-                    lastVal[t] = dateMap.get(date)![t];
-                  }
-                  row[t] = lastVal[t] ?? 0;
+                const row: Record<string, unknown> = {
+                  date: pt.date,
+                  portfolio: Math.round(simPortfolio * 100) / 100,
+                  _ticker: pt.ticker,
+                  _signal: pt.signal,
+                  _pnl: pt.pnl,
+                  _allocated: pt.allocated,
+                  _position_size_pct: pt.position_size_pct,
+                };
+                // Per-ticker cumulative contribution lines
+                for (const t of Object.keys(tickerCum)) {
+                  row[t] = Math.round(tickerCum[t] * 100) / 100;
                 }
                 return row;
               });
 
+              // Forward-fill ticker keys across all chart points
+              const allTickers = Object.keys(
+                cutoffDate ? tickerCum : byTicker,
+              );
+              const lastTicker: Record<string, number> = {};
+              for (const pt of chartPoints) {
+                for (const t of allTickers) {
+                  if (pt[t] !== undefined) lastTicker[t] = pt[t] as number;
+                  else pt[t] = lastTicker[t] ?? 0;
+                }
+              }
+
+              // Current values
+              const finalValue = chartPoints.length > 0
+                ? (chartPoints[chartPoints.length - 1].portfolio as number)
+                : INITIAL_PORTFOLIO;
+              const returnPct = ((finalValue - INITIAL_PORTFOLIO) / INITIAL_PORTFOLIO) * 100;
+
+              // Sort tickers by absolute contribution for legend
+              const sortedTickers = allTickers
+                .filter((t) => (tickerCum[t] ?? 0) !== 0)
+                .sort((a, b) => Math.abs(tickerCum[b] ?? 0) - Math.abs(tickerCum[a] ?? 0));
+
               return (
-                <div
-                  key={h}
-                  className="rounded-xl border bg-card p-5"
-                >
-                  <p className="text-sm font-semibold mb-4">
-                    Equity Curve &mdash; {HORIZON_LABELS[h]}
-                    {filteredTickers.length === 0 && (
-                      <span className="text-muted-foreground font-normal ml-2">
-                        (waiting for data)
-                      </span>
+                <div key={h} className="rounded-xl border bg-card p-5">
+                  {/* Header with portfolio value */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        Portfolio &mdash; {HORIZON_LABELS[h]}
+                      </p>
+                      {chartPoints.length === 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          (waiting for data)
+                        </span>
+                      )}
+                    </div>
+                    {chartPoints.length > 0 && (
+                      <div className="text-right">
+                        <div
+                          className="text-lg font-bold font-mono"
+                          style={{
+                            color: returnPct >= 0 ? "#10b981" : "#ef4444",
+                          }}
+                        >
+                          ${finalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div
+                          className="text-xs font-mono"
+                          style={{
+                            color: returnPct >= 0 ? "#10b981" : "#ef4444",
+                          }}
+                        >
+                          {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(2)}%
+                        </div>
+                      </div>
                     )}
-                  </p>
-                  {merged.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={240}>
-                      <LineChart data={merged}>
+                  </div>
+
+                  {chartPoints.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={chartPoints}>
                         <CartesianGrid
                           strokeDasharray="3 3"
                           stroke="rgba(255,255,255,0.06)"
@@ -1046,37 +1091,92 @@ export default function PerformancePage() {
                         <XAxis
                           dataKey="date"
                           tick={{ fontSize: 10, fill: "#6b6b85" }}
-                          interval={Math.max(0, Math.floor(merged.length / 6))}
+                          interval={Math.max(0, Math.floor(chartPoints.length / 6))}
                         />
                         <YAxis
                           tick={{ fontSize: 10, fill: "#6b6b85" }}
-                          tickFormatter={(v: number) =>
-                            `$${v >= 0 ? "+" : ""}${v.toFixed(0)}`
-                          }
+                          tickFormatter={(v: number) => `$${v.toFixed(0)}`}
+                          domain={["dataMin - 10", "dataMax + 10"]}
                         />
-                        <ReferenceLine y={0} stroke="#4a4a6a" strokeDasharray="4 4" />
+                        <ReferenceLine
+                          y={INITIAL_PORTFOLIO}
+                          stroke="#4a4a6a"
+                          strokeDasharray="4 4"
+                          label={{
+                            value: "$1,000",
+                            position: "left",
+                            fill: "#4a4a6a",
+                            fontSize: 10,
+                          }}
+                        />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: "#12122a",
-                            border: "1px solid rgba(255,255,255,0.1)",
+                            border: "1px solid rgba(139,92,246,0.3)",
                             borderRadius: 10,
                             fontSize: 11,
+                            color: "#f0f0ff",
                           }}
-                          formatter={(value: number, name: string) => {
-                            return [`$${value >= 0 ? "+" : ""}${value.toFixed(2)}`, name];
+                          content={({ active, payload, label }) => {
+                            if (!active || !payload?.length) return null;
+                            const portfolioEntry = payload.find((p) => p.dataKey === "portfolio");
+                            const pt = portfolioEntry?.payload;
+                            if (!pt) return null;
+                            return (
+                              <div
+                                style={{
+                                  backgroundColor: "#12122a",
+                                  border: "1px solid rgba(139,92,246,0.3)",
+                                  borderRadius: 10,
+                                  padding: "10px 14px",
+                                  fontSize: 11,
+                                  color: "#f0f0ff",
+                                  lineHeight: 1.8,
+                                }}
+                              >
+                                <div style={{ fontWeight: 700, marginBottom: 4, color: "#8b8ba8" }}>
+                                  {label}
+                                </div>
+                                <div style={{ fontWeight: 700, fontSize: 14 }}>
+                                  Portfolio: ${(pt.portfolio as number).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                </div>
+                                <div>
+                                  Ticker: <span style={{ fontWeight: 600 }}>{pt._ticker}</span>
+                                  {" "}&middot;{" "}
+                                  <span style={{ color: pt._signal === "BUY" ? "#10b981" : "#ef4444", fontWeight: 600 }}>
+                                    {pt._signal}
+                                  </span>
+                                </div>
+                                <div>
+                                  Allocated: ${(pt._allocated as number).toFixed(2)}
+                                  {" "}({(pt._position_size_pct as number).toFixed(1)}%)
+                                </div>
+                                <div style={{ color: (pt._pnl as number) >= 0 ? "#10b981" : "#ef4444" }}>
+                                  P&L: {(pt._pnl as number) >= 0 ? "+" : ""}${(pt._pnl as number).toFixed(2)}
+                                </div>
+                              </div>
+                            );
                           }}
-                          labelFormatter={(label: string) => `Date: ${label}`}
                         />
-                        <Legend
-                          wrapperStyle={{ fontSize: 11 }}
+                        {/* Main portfolio line */}
+                        <Line
+                          type="monotone"
+                          dataKey="portfolio"
+                          stroke="#a855f7"
+                          strokeWidth={3}
+                          dot={false}
+                          name="Total Portfolio"
+                          connectNulls
                         />
-                        {filteredTickers.map((t) => (
+                        {/* Per-ticker contribution lines */}
+                        {sortedTickers.slice(0, 10).map((t) => (
                           <Line
                             key={t}
                             type="monotone"
                             dataKey={t}
                             stroke={TICKER_COLORS[t] ?? "#888"}
-                            strokeWidth={2}
+                            strokeWidth={1}
+                            strokeOpacity={0.5}
                             dot={false}
                             name={t}
                             connectNulls
@@ -1087,7 +1187,7 @@ export default function PerformancePage() {
                   ) : (
                     <div
                       style={{
-                        height: 240,
+                        height: 260,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -1097,6 +1197,28 @@ export default function PerformancePage() {
                       }}
                     >
                       No signals evaluated at {HORIZON_LABELS[h]}
+                    </div>
+                  )}
+
+                  {/* Top contributors */}
+                  {sortedTickers.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {sortedTickers.slice(0, 8).map((t) => {
+                        const v = tickerCum[t] ?? 0;
+                        return (
+                          <span
+                            key={t}
+                            className="text-[10px] font-mono px-2 py-0.5 rounded border"
+                            style={{
+                              color: v >= 0 ? "#10b981" : "#ef4444",
+                              borderColor: v >= 0 ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)",
+                              background: v >= 0 ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)",
+                            }}
+                          >
+                            {t} {v >= 0 ? "+" : ""}${v.toFixed(2)}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
