@@ -165,8 +165,19 @@ export default function TradesPage() {
   const trades = data?.trades ?? [];
   const alpacaPositions = alpaca ?? [];
 
-  // Merge: if Alpaca is connected show live data, otherwise show DB positions
   const hasAlpaca = alpacaPositions.length > 0;
+
+  // Compute live stats from Alpaca when available, fallback to Supabase view
+  const liveInvested = hasAlpaca
+    ? alpacaPositions.reduce((s, p) => s + Math.abs(p.market_value), 0)
+    : summary.capitale_investito;
+  const livePositions = hasAlpaca ? alpacaPositions.length : summary.posizioni_aperte;
+  const livePnl = hasAlpaca
+    ? alpacaPositions.reduce((s, p) => s + p.unrealized_pl, 0)
+    : summary.pnl_totale;
+  const liveDayPnl = hasAlpaca
+    ? alpacaPositions.reduce((s, p) => s + p.change_today * Math.abs(p.market_value), 0)
+    : summary.pnl_giornaliero;
 
   return (
     <div className="space-y-6">
@@ -177,19 +188,19 @@ export default function TradesPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SummaryCard
           title="INVESTED"
-          value={fmtUsd(summary.capitale_investito)}
-          sub={`${summary.posizioni_aperte} open position${summary.posizioni_aperte !== 1 ? "s" : ""}`}
+          value={fmtUsd(liveInvested)}
+          sub={`${livePositions} open position${livePositions !== 1 ? "s" : ""}`}
         />
         <SummaryCard
-          title="TOTAL P&L"
-          value={`${summary.pnl_totale >= 0 ? "+" : ""}${fmtUsd(summary.pnl_totale)}`}
-          color={summary.pnl_totale >= 0 ? "#10b981" : "#ef4444"}
-          sub={`${summary.trade_totali} trades`}
+          title="UNREALIZED P&L"
+          value={`${livePnl >= 0 ? "+" : ""}${fmtUsd(livePnl)}`}
+          color={livePnl >= 0 ? "#10b981" : "#ef4444"}
+          sub={hasAlpaca ? "Live from Alpaca" : `${summary.trade_totali} trades`}
         />
         <SummaryCard
           title="24H P&L"
-          value={`${summary.pnl_giornaliero >= 0 ? "+" : ""}${fmtUsd(summary.pnl_giornaliero)}`}
-          color={summary.pnl_giornaliero >= 0 ? "#10b981" : "#ef4444"}
+          value={`${liveDayPnl >= 0 ? "+" : ""}${fmtUsd(liveDayPnl)}`}
+          color={liveDayPnl >= 0 ? "#10b981" : "#ef4444"}
         />
         <SummaryCard
           title="WIN RATE"
