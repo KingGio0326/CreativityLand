@@ -351,16 +351,19 @@ class ScoringEngine:
 
             (
                 self.supabase.table("agent_performance")
-                .upsert({
-                    "agent_name": "pipeline",
-                    "ticker": ticker,
-                    "date": today,
-                    "signals_total": data["total"],
-                    "signals_correct": data["correct"],
-                    "hit_rate": round(hit_rate, 4),
-                    "avg_score": round(float(avg), 4),
-                    "cumulative_score": round(float(cumulative), 4),
-                })
+                .upsert(
+                    {
+                        "agent_name": "pipeline",
+                        "ticker": ticker,
+                        "date": today,
+                        "signals_total": data["total"],
+                        "signals_correct": data["correct"],
+                        "hit_rate": round(hit_rate, 4),
+                        "avg_score": round(float(avg), 4),
+                        "cumulative_score": round(float(cumulative), 4),
+                    },
+                    on_conflict="agent_name,ticker,date",
+                )
                 .execute()
             )
 
