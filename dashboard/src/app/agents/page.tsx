@@ -30,6 +30,7 @@ const AGENTS: AgentMeta[] = [
   { name: "ML Prediction Agent",  initials: "ML", avatarBg: "#eab308", avatarColor: "#000", weightLabel: "w 11%", prefix: "MLAgent" },
   { name: "Research Agent",       initials: "RE", avatarBg: "#64748b", avatarColor: "#fff", weightLabel: "context", prefix: "ResearchAgent" },
   { name: "Risk Agent",           initials: "RI", avatarBg: "#dc2626", avatarColor: "#fff", weightLabel: "gate",   prefix: "RiskAgent" },
+  { name: "Exit Strategy Agent",  initials: "ES", avatarBg: "#059669", avatarColor: "#fff", weightLabel: "exit",   prefix: "ExitStrategyAgent" },
 ];
 
 /* ── helpers ───────────────────────────────────────────── */

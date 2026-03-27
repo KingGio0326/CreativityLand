@@ -297,10 +297,31 @@ const agents = [
     ],
     tip: 'The Kelly Criterion says: if you have a statistical edge, how much should you risk to maximize capital growth? Usually: less than you think.',
   },
+  {
+    id: 'exit_strategy', name: 'ExitStrategyAgent', abbr: 'ES',
+    color: '#059669', bg: 'rgba(5,150,105,0.1)', weight: '0%',
+    tagline: 'The exit planner: calculates SL, TP and trailing stops',
+    category: ['support'],
+    analogy: 'Like a co-pilot who sets the altitude limits before takeoff. The pilot (WeightedSignalAgent) decides where to fly, the co-pilot decides when to eject if something goes wrong — or when to land if the destination is reached.',
+    desc: 'Calculates ATR-14 based stop loss, take profit, and trailing stop levels for every BUY/SELL signal. Adjusts distances by market regime (crisis = wider stops) and confidence (high confidence = tighter stops). Risk-reward ratio ranges from 2.0 to 3.0.',
+    stats: [{ label: 'Method', val: 'ATR-14' }, { label: 'R:R', val: '2.0-3.0' }, { label: 'Role', val: 'Exit levels' }],
+    meters: [{ label: 'Regime sensitivity', val: 80 }, { label: 'Precision', val: 70 }],
+    signals: [
+      { type: 'buy', text: 'BUY signal: SL below entry (ATR x regime multiplier), TP above at R:R ratio' },
+      { type: 'sell', text: 'SELL signal: SL above entry, TP below — inverted logic for short positions' },
+      { type: 'hold', text: 'HOLD: no exit levels calculated (not an actionable signal)' },
+    ],
+    interpret: [
+      { color: '#ef4444', text: '"SL $245.30 (-2.5%)" = if price drops to $245.30, close position to limit loss' },
+      { color: '#10b981', text: '"TP $263.70 (+5.0%)" = if price reaches $263.70, take profit and close' },
+      { color: '#f59e0b', text: '"Trailing at $255" = once price hits 50% of TP, stop moves to break-even' },
+    ],
+    tip: 'Regime multipliers: crisis 3.0x (very wide stops), bear 2.5x, neutral 2.0x, bull 1.5x (tight stops). Crypto uses hourly ATR for faster reactivity.',
+  },
 ]
 
 const FILTERS = [
-  { key: 'all', label: 'All (14)' },
+  { key: 'all', label: 'All (15)' },
   { key: 'active', label: 'Active' },
   { key: 'support', label: 'Support' },
   { key: 'news', label: 'News' },
