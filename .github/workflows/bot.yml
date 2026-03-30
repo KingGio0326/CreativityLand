@@ -169,32 +169,37 @@ jobs:
 
               executed = 0
               skipped = 0
+              errors = 0
               for sig in signals:
-                  sig_dict = {
-                      'ticker': sig['ticker'],
-                      'signal': sig['signal'],
-                      'confidence': sig.get('confidence', 0),
-                      'consensus_level': sig.get('consensus_level', 'weak'),
-                      'signal_id': sig.get('id'),
-                      'entry_price': sig.get('entry_price'),
-                      'exit_strategy': {
-                          'stop_loss': sig.get('stop_loss'),
-                          'take_profit': sig.get('take_profit'),
+                  try:
+                      sig_dict = {
+                          'ticker': sig['ticker'],
+                          'signal': sig['signal'],
+                          'confidence': sig.get('confidence', 0),
+                          'consensus_level': sig.get('consensus_level', 'weak'),
+                          'signal_id': sig.get('id'),
                           'entry_price': sig.get('entry_price'),
-                      },
-                      'position_size_pct': sig.get('position_size_pct'),
-                      'kelly_fraction': sig.get('kelly_fraction'),
-                  }
-                  res = executor.execute_signal(sig_dict)
-                  action = res.get('action', 'skip')
-                  if action in ('opened', 'closed'):
-                      executed += 1
-                      print(f'  {sig[\"ticker\"]}: {action} - {res[\"reason\"]}')
-                  else:
-                      skipped += 1
-                      print(f'  {sig[\"ticker\"]}: skip - {res[\"reason\"]}')
+                          'exit_strategy': {
+                              'stop_loss': sig.get('stop_loss'),
+                              'take_profit': sig.get('take_profit'),
+                              'entry_price': sig.get('entry_price'),
+                          },
+                          'position_size_pct': sig.get('position_size_pct'),
+                          'kelly_fraction': sig.get('kelly_fraction'),
+                      }
+                      res = executor.execute_signal(sig_dict)
+                      action = res.get('action', 'skip')
+                      if action in ('opened', 'closed'):
+                          executed += 1
+                          print(f'  {sig[\"ticker\"]}: {action} - {res[\"reason\"]}')
+                      else:
+                          skipped += 1
+                          print(f'  {sig[\"ticker\"]}: skip - {res[\"reason\"]}')
+                  except Exception as e:
+                      errors += 1
+                      print(f'  {sig[\"ticker\"]}: ERRORE - {e}')
 
-              print(f'Eseguiti: {executed}, Saltati: {skipped}')
+              print(f'Eseguiti: {executed}, Saltati: {skipped}, Errori: {errors}')
           "
       - name: Evaluate pending signals + register new
         run: |

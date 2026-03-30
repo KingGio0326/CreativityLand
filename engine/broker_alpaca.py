@@ -19,8 +19,8 @@ class AlpacaBroker:
     """Thin wrapper around Alpaca REST API for order management."""
 
     def __init__(self, paper: bool = True):
-        self.api_key = os.getenv("ALPACA_API_KEY", "")
-        self.secret_key = os.getenv("ALPACA_SECRET_KEY", "")
+        self.api_key = os.getenv("ALPACA_API_KEY", "").strip()
+        self.secret_key = os.getenv("ALPACA_SECRET_KEY", "").strip()
         self.base_url = PAPER_URL if paper else LIVE_URL
         self._client = httpx.Client(
             base_url=self.base_url,
