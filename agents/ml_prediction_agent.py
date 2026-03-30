@@ -16,6 +16,7 @@ from supabase import create_client
 
 from agents import TradingState
 from engine.fractional_diff import frac_diff_ffd, find_optimal_d
+from engine.purged_kfold import PurgedKFoldCV
 
 load_dotenv()
 logger = logging.getLogger("ml_prediction_agent")
@@ -198,43 +199,82 @@ class MLPredictionAgent:
         print(f"  Model {ticker}: accuracy={acc:.1%}")
         return acc
 
+    # ── LEGACY: walk-forward validation (replaced by purged_kfold_validate) ──
+    # Kept as reference. Uses TimeSeriesSplit without purging/embargo,
+    # which allows label leakage between train and test folds.
+    # def walk_forward_validate(self, ticker, n_splits=5, min_train_size=252,
+    #                           test_size=63):
+    #     df = self.build_features(ticker)
+    #     X = df.drop(columns=["target"]).values
+    #     y = df["target"].values
+    #     tscv = TimeSeriesSplit(n_splits=n_splits, test_size=test_size)
+    #     accuracies = []
+    #     for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
+    #         if len(train_idx) < min_train_size:
+    #             continue
+    #         model_fold = GradientBoostingClassifier(
+    #             n_estimators=100, max_depth=4, learning_rate=0.05,
+    #             subsample=0.8, random_state=42)
+    #         model_fold.fit(X[train_idx], y[train_idx])
+    #         acc = accuracy_score(y[test_idx], model_fold.predict(X[test_idx]))
+    #         accuracies.append(acc)
+    #     if not accuracies:
+    #         return {"avg_accuracy": 0.5, "std_accuracy": 0.0,
+    #                 "is_reliable": False}
+    #     return {"avg_accuracy": np.mean(accuracies),
+    #             "std_accuracy": np.std(accuracies),
+    #             "fold_accuracies": accuracies,
+    #             "is_reliable": np.std(accuracies) < 0.10
+    #                            and np.mean(accuracies) > 0.52}
+
     def walk_forward_validate(
         self,
         ticker: str,
         n_splits: int = 5,
-        min_train_size: int = 252,
-        test_size: int = 63,
+        embargo_pct: float = 0.01,
     ) -> dict:
-        """
-        Walk-forward validation: divide dati in finestre temporali
-        sequenziali, allena su passato, testa su futuro.
+        """Purged K-Fold Cross-Validation (López de Prado, AFML cap. 7).
+
+        Replaces the old TimeSeriesSplit walk-forward. Uses purging to
+        remove training samples whose label period overlaps the test set,
+        and an embargo buffer after each test fold.
         """
         try:
             df = self.build_features(ticker)
-            if len(df) < min_train_size + test_size:
+            if len(df) < n_splits * 10:
                 return {
                     "avg_accuracy": 0.5, "std_accuracy": 0.0,
                     "min_accuracy": 0.5, "max_accuracy": 0.5,
                     "n_splits": 0, "fold_accuracies": [],
                     "is_reliable": False,
+                    "n_purged": 0,
+                    "cv_method": "purged_kfold",
+                    "embargo_pct": embargo_pct,
                     "error": "Dati insufficienti",
                 }
 
-            X = df.drop(columns=["target"]).values
-            y = df["target"].values
+            X = df.drop(columns=["target"])
+            y = df["target"]
 
-            tscv = TimeSeriesSplit(
-                n_splits=n_splits,
-                test_size=test_size,
+            # pred_times: when each sample was observed (the date index)
+            pred_times = pd.Series(
+                pd.to_datetime(df.index), index=range(len(df))
             )
+            # eval_times: when the label is determined
+            # Target uses close.shift(-5) → 5 trading days ≈ 7 calendar days
+            eval_times = pred_times + pd.offsets.BDay(5)
+
+            cv = PurgedKFoldCV(n_splits=n_splits, embargo_pct=embargo_pct)
+            avg_purged = cv.compute_purge_count(X, pred_times, eval_times)
 
             accuracies = []
-            for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
-                if len(train_idx) < min_train_size:
-                    continue
-
-                X_train, X_test = X[train_idx], X[test_idx]
-                y_train, y_test = y[train_idx], y[test_idx]
+            for fold, (train_idx, test_idx) in enumerate(
+                cv.split(X, pred_times=pred_times, eval_times=eval_times)
+            ):
+                X_train = X.iloc[train_idx].values
+                X_test = X.iloc[test_idx].values
+                y_train = y.iloc[train_idx].values
+                y_test = y.iloc[test_idx].values
 
                 model_fold = GradientBoostingClassifier(
                     n_estimators=100, max_depth=4,
@@ -247,7 +287,7 @@ class MLPredictionAgent:
                 accuracies.append(acc)
 
                 logger.info(
-                    "Walk-forward %s fold %d/%d: acc=%.3f "
+                    "Purged K-Fold %s fold %d/%d: acc=%.3f "
                     "(train=%d, test=%d)",
                     ticker, fold + 1, n_splits,
                     acc, len(train_idx), len(test_idx),
@@ -259,6 +299,9 @@ class MLPredictionAgent:
                     "min_accuracy": 0.5, "max_accuracy": 0.5,
                     "n_splits": 0, "fold_accuracies": [],
                     "is_reliable": False,
+                    "n_purged": 0,
+                    "cv_method": "purged_kfold",
+                    "embargo_pct": embargo_pct,
                     "error": "Nessun fold valido",
                 }
 
@@ -273,15 +316,21 @@ class MLPredictionAgent:
                 "n_splits": len(accuracies),
                 "fold_accuracies": [round(a, 4) for a in accuracies],
                 "is_reliable": std_acc < 0.10 and avg_acc > 0.52,
+                "n_purged": int(round(avg_purged)),
+                "cv_method": "purged_kfold",
+                "embargo_pct": embargo_pct,
             }
 
         except Exception as e:
-            logger.warning("Walk-forward error %s: %s", ticker, e)
+            logger.warning("Purged K-Fold error %s: %s", ticker, e)
             return {
                 "avg_accuracy": 0.5, "std_accuracy": 0.0,
                 "min_accuracy": 0.5, "max_accuracy": 0.5,
                 "n_splits": 0, "fold_accuracies": [],
                 "is_reliable": False,
+                "n_purged": 0,
+                "cv_method": "purged_kfold",
+                "embargo_pct": embargo_pct,
                 "error": str(e),
             }
 
@@ -370,12 +419,13 @@ class MLPredictionAgent:
                 acc = self.train(t)
                 print(f"  {t} retrained: acc={acc:.1%}")
 
-                # Walk-forward validation
+                # Purged K-Fold Cross-Validation (López de Prado AFML cap. 7)
                 wf = self.walk_forward_validate(t)
-                logger.info(
-                    "Walk-forward %s: avg_acc=%.3f ± %.3f | reliable=%s",
-                    t, wf["avg_accuracy"], wf["std_accuracy"],
-                    wf["is_reliable"],
+                print(
+                    f"  Purged K-Fold: acc={wf['avg_accuracy']:.3f} "
+                    f"\u00b1 {wf['std_accuracy']:.3f} "
+                    f"({wf.get('n_purged', 0)} samples purged avg) | "
+                    f"reliable={wf['is_reliable']}"
                 )
 
                 try:
@@ -388,6 +438,9 @@ class MLPredictionAgent:
                         "n_splits": wf["n_splits"],
                         "fold_accuracies": wf.get("fold_accuracies", []),
                         "is_reliable": wf["is_reliable"],
+                        "cv_method": wf.get("cv_method", "purged_kfold"),
+                        "embargo_pct": wf.get("embargo_pct"),
+                        "n_purged": wf.get("n_purged", 0),
                         "updated_at": datetime.now().isoformat(),
                     }).execute()
                 except Exception as e:

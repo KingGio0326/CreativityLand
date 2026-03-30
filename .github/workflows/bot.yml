@@ -362,10 +362,13 @@ jobs:
                   'avg_acc': wf['avg_accuracy'],
                   'std_acc': wf['std_accuracy'],
                   'reliable': wf['is_reliable'],
+                  'n_purged': wf.get('n_purged', 0),
+                  'cv_method': wf.get('cv_method', 'purged_kfold'),
               }
               print(
-                  f'{ticker}: avg_acc={wf[\"avg_accuracy\"]:.3f} +/- '
+                  f'{ticker}: Purged K-Fold acc={wf[\"avg_accuracy\"]:.3f} +/- '
                   f'{wf[\"std_accuracy\"]:.3f} | '
+                  f'purged={wf.get(\"n_purged\", 0)} | '
                   f'reliable={wf[\"is_reliable\"]}'
               )
 
