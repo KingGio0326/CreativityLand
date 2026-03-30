@@ -8,6 +8,7 @@ import Image from 'next/image'
 const NAV_ITEMS = [
   { href: '/',            label: 'DASHBOARD',    icon: '/icons/dashboard.png'   },
   { href: '/agents',      label: 'AGENTS',       icon: '/icons/agents.png'      },
+  { href: '/portfolio',   label: 'PORTFOLIO',    icon: '/icons/performance.png' },
   { href: '/trades',      label: 'TRADING',      icon: '/icons/backtest.png'    },
   { href: '/patterns',    label: 'PATTERNS',     icon: '/icons/patterns.png'    },
   { href: '/performance', label: 'PERFORMANCE',  icon: '/icons/performance.png' },
