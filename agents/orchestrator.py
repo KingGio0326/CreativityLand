@@ -21,6 +21,7 @@ from agents.intermarket_agent import intermarket_agent
 from agents.seasonal_agent import seasonal_agent
 from agents.institutional_agent import institutional_agent
 from agents.weighted_signal_agent import weighted_signal_node
+from agents.meta_labeling_agent import meta_labeling_node
 from agents.critic_agent import critic_agent
 from agents.exit_strategy_agent import exit_strategy_agent
 
@@ -74,6 +75,7 @@ def build_graph():
     g.add_node("seasonal",       seasonal_agent)
     g.add_node("institutional",  institutional_agent)
     g.add_node("weighted",       weighted_signal_node)
+    g.add_node("meta_labeling",  meta_labeling_node)
     g.add_node("critic",         critic_agent)
     g.add_node("exit_strategy",  exit_strategy_agent)
     # Edges
@@ -95,7 +97,8 @@ def build_graph():
     g.add_edge("intermarket",    "seasonal")
     g.add_edge("seasonal",       "institutional")
     g.add_edge("institutional",  "weighted")
-    g.add_edge("weighted",       "critic")
+    g.add_edge("weighted",       "meta_labeling")
+    g.add_edge("meta_labeling",  "critic")
     g.add_conditional_edges("critic", should_retry)
     g.add_edge("exit_strategy", END)
     return g.compile()
@@ -162,6 +165,9 @@ class TradingOrchestrator:
             market_regime=regime,
             regime_confidence=regime_conf,
             exit_strategy={},
+            meta_probability=0.0,
+            meta_confidence=0.0,
+            meta_model_available=False,
         )
         result = self.graph.invoke(state)
         vb = result.get("vote_breakdown", {})
@@ -196,6 +202,9 @@ class TradingOrchestrator:
             "reasoning": result["reasoning"],
             "market_regime": result.get("market_regime", regime),
             "regime_confidence": result.get("regime_confidence", regime_conf),
+            "meta_probability": result.get("meta_probability", 0.0),
+            "meta_confidence": result.get("meta_confidence", 0.0),
+            "meta_model_available": result.get("meta_model_available", False),
             "pattern_data": {
                 "prediction": pat_prediction,
                 "boost": result.get("pattern_boost", 0.0),

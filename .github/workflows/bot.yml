@@ -376,6 +376,22 @@ jobs:
           print('Riepilogo walk-forward:')
           print(safe_json_dumps(results, indent=2))
           "
+      - name: Train Meta-Labeling model
+        if: github.event.schedule == '0 2 * * 0'
+        run: |
+          python -c "
+          from agents.meta_labeling_agent import MetaLabelingAgent
+          agent = MetaLabelingAgent()
+          result = agent.train()
+          if result.get('error'):
+              print(f'Meta-model: {result[\"error\"]}')
+          else:
+              print(f'Meta-model trained: accuracy={result[\"accuracy\"]:.2%}, '
+                    f'precision={result[\"precision\"]:.2%}, '
+                    f'recall={result[\"recall\"]:.2%}, '
+                    f'samples={result[\"n_samples\"]} '
+                    f'(correct={result[\"n_correct\"]}, incorrect={result[\"n_incorrect\"]})')
+          "
       - name: Weekly Telegram Report
         if: github.event.schedule == '0 2 * * 0'
         run: |

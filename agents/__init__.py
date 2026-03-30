@@ -30,3 +30,6 @@ class TradingState(TypedDict):
     market_regime: str
     regime_confidence: float
     exit_strategy: dict
+    meta_probability: float
+    meta_confidence: float
+    meta_model_available: bool

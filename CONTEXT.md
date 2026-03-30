@@ -53,10 +53,11 @@ Ultimo aggiornamento: 2026-03-30.
 
 ```
 progetto_stef/
-├── agents/                        # 18 agenti trading
-│   ├── __init__.py                # TradingState TypedDict (31 campi)
+├── agents/                        # 19 agenti trading
+│   ├── __init__.py                # TradingState TypedDict (34 campi)
 │   ├── orchestrator.py            # LangGraph StateGraph + TradingOrchestrator
 │   ├── weighted_signal_agent.py   # Voto pesato + pattern/research modifiers
+│   ├── meta_labeling_agent.py     # Meta-model XGBoost per calibrazione confidence
 │   ├── critic_agent.py            # Validazione qualità, retry condizionale
 │   ├── exit_strategy_agent.py     # SL/TP/trailing stop basati su ATR-14
 │   ├── scraper_agent.py           # Carica articoli da Supabase
@@ -146,12 +147,12 @@ progetto_stef/
 
 ## 3. Agenti e Pesi
 
-### Pipeline LangGraph (ordine di esecuzione — 21 nodi)
+### Pipeline LangGraph (ordine di esecuzione — 22 nodi)
 
 ```
 regime → scraper → social → sentiment → research → fundamental → technical → options
 → momentum → mean_reversion → ml → risk → liquidity → macro → intermarket
-→ seasonal → institutional → weighted → critic (conditional retry) → exit_strategy
+→ seasonal → institutional → weighted → meta_labeling → critic (conditional retry) → exit_strategy
 ```
 
 `regime` è il primo nodo: classifica il mercato come bull/bear/neutral/crisis usando VIX, SPY 30d trend + SMA50/200, TLT flight-to-safety. Il risultato viene propagato nel `TradingState` e usato dal `WeightedSignalAgent` per aggiustare i pesi.
@@ -368,6 +369,17 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 | adf_pvalue | float8 | p-value ADF test |
 | computed_at | timestamptz | Default now() |
 | | | UNIQUE(ticker, feature_name) |
+
+### `ml_models`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | serial | PK |
+| model_name | text | UNIQUE (es. 'meta_labeling_global') |
+| model_data | jsonb | XGBoost model serializzato in JSON |
+| feature_names | text[] | Nomi features usate dal modello |
+| metrics | jsonb | accuracy, precision, recall, n_samples |
+| trained_at | timestamptz | Default now() |
+| n_samples | integer | Campioni usati per training |
 
 ### `positions`
 | Colonna | Tipo | Note |
@@ -616,6 +628,9 @@ Feed generici (CNBC, Motley Fool, Investopedia) non sono ticker-specific. `detec
 
 ### Perché Triple Barrier Labeling
 Il sistema originale usa soglie fisse (±0.15) per generare segnali, e valuta il risultato solo guardando il return a 168h. Il **Triple Barrier Labeling** (López de Prado, "Advances in Financial Machine Learning", cap. 3) è più sofisticato: definisce 3 barriere per ogni segnale (upper=TP, lower=SL, vertical=tempo) calibrate sulla volatilità (ATR-14) e regime di mercato. La **prima barriera toccata** determina il label reale. Questo produce label di qualità superiore per il training di modelli ML perché incorpora volatilità, regime e time-to-hit. Le colonne `barrier_label`, `barrier_hit`, `barrier_hit_hours`, `max_favorable_pct` (MFE), `max_adverse_pct` (MAE) vengono calcolate automaticamente in `evaluate_pending()` quando un segnale diventa `fully_evaluated`. Il backfill dei segnali storici si fa con `scripts/backfill_triple_barrier.py`.
+
+### Perché Meta-Labeling come nodo separato nel grafo
+Il sistema produce una confidence basata sulla media ponderata dei voti agenti, ma questa non è una probabilità calibrata. Il **Meta-Labeling** (López de Prado, AFML cap. 3.6) separa la decisione di direzione (side: BUY/SELL, già fatta dal weighted vote) dalla valutazione di qualità (size: quanto fidarsi). Un meta-model XGBoost addestrato sui risultati storici del triple barrier predice P(segnale corretto), calibrando la confidence. Se il modello dice 73% di probabilità di successo per un segnale con confidence 65%, la `meta_confidence = 0.65 × 0.73 = 0.47`. Questo impatta position sizing, exit levels e soglie del critic. Il nodo è posizionato dopo `weighted` e prima di `critic` nel grafo (22 nodi totali). Graceful degradation: senza modello trainato, `meta_confidence = confidence` (pass-through). Il modello viene ri-trainato ogni domenica e persistito come JSON in Supabase (`ml_models` table).
 
 ### Perché Purged K-Fold Cross-Validation nel MLAgent
 Il walk-forward validation standard (sklearn `TimeSeriesSplit`) non gestisce il leakage informativo nelle serie finanziarie: se il training set finisce al giorno X e il test inizia al giorno X+1, ma i label del training usano returns fino a X+5 giorni, il modello "vede" informazione dal test set. La **Purged K-Fold CV** (López de Prado, AFML cap. 7) risolve con due meccanismi: **purging** (rimuove dal training i sample il cui eval_time ricade nel test period) e **embargo** (buffer temporale aggiuntivo dopo il test set, default 1%). Il risultato è una stima dell'accuracy più conservativa ma realistica. L'accuracy stimata tipicamente scende rispetto al walk-forward naive — questo è corretto e indica che la stima precedente era ottimisticamente biased. Le metriche `cv_method`, `embargo_pct` e `n_purged` vengono salvate in `ml_validation`.
