@@ -1,3 +1,4 @@
+// DEPRECATED: SL/TP chart removed from /performance — use /api/portfolio for live data
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";

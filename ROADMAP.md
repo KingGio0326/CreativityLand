@@ -1,7 +1,7 @@
 # ROADMAP.md
 
 Roadmap di sviluppo del progetto **CreativityLand Trading Bot**.
-Ultimo aggiornamento: 2026-03-26.
+Ultimo aggiornamento: 2026-03-30.
 
 ---
 
@@ -39,6 +39,8 @@ Ultimo aggiornamento: 2026-03-26.
 - [x] Fase 3 Execution Engine: `engine/executor.py` (TradeExecutor) + `engine/broker_alpaca.py` (Alpaca REST adapter). Safety checks: confidence/consensus gate, max positions, daily loss circuit breaker, market hours, cooldown. Bracket orders con SL/TP automatici. DB tracking in positions/trades (2026-03-26)
 - [x] Fase 4 Safety Layer: 9 pre-flight checks (+ price staleness, max drawdown 15% da picco). Notifiche Telegram per ordini aperti/chiusi, circuit breaker, emergency close, max drawdown. Kill switch `/stop_trading` + `/start_trading` nel bot Telegram. Bottone "Trading" nel menu con status portafoglio e posizioni live. Tabella `portfolio_peak` per tracking picco equity (2026-03-27)
 - [x] Fase 5 Integrazione Pipeline: step "Execute trades" in `bot.yml` dopo save_signal(). Env vars `TRADING_ENABLED` (default false) e `PAPER_TRADING` (default true) come GitHub Secrets. TradeExecutor legge `PAPER_TRADING` da env. Flusso: scrape → agenti → save_signal → execute_signal → evaluate → notify (2026-03-27)
+- [x] Portfolio page `/portfolio`: pagina dedicata con equity curve live (Alpaca), stat cards (equity, cash, daily/total P&L), tabella posizioni con SL/TP, trade history. API route `/api/portfolio` chiama 5 endpoint Alpaca in parallelo + lookup SL/TP da Supabase. SCALE_FACTOR=100 per simulare budget $1k su account $100k. Auto-refresh 60s quando mercato aperto (2026-03-30)
+- [x] Cleanup: rimosso grafico SL/TP Managed da `/performance`, deprecato `/trades` (redirect a `/portfolio`), deprecate API routes `/api/equity-curve-sltp` e `/api/trades`, rimosso TRADING dalla sidebar (2026-03-30)
 
 ---
 
@@ -106,8 +108,8 @@ Ultimo aggiornamento: 2026-03-26.
 ### 4. Versione locale/VPS
 - Quando il sistema mostra edge positivo consistente (hit rate >55% su 168h)
 - Migrare da GitHub Actions a cron locale o VPS
-- Aggiungere paper trading via Alpaca API
-- **Effort**: ~5 prompt
+- Paper trading via Alpaca già implementato (Fase 3-5)
+- **Effort**: ~3 prompt
 
 ---
 

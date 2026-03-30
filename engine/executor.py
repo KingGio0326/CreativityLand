@@ -27,6 +27,8 @@ logger = logging.getLogger("engine.executor")
 
 
 # ── Configuration (overridable via env vars) ─────────────
+# Budget virtuale: Alpaca ha $100k, noi ragioniamo su $1k (SCALE_FACTOR=100)
+SCALE_FACTOR = 100
 DEFAULT_CAPITAL = 1000.0
 MAX_OPEN_POSITIONS = 10
 MAX_DAILY_LOSS_PCT = 5.0        # % of portfolio — circuit breaker
@@ -119,8 +121,8 @@ class TradeExecutor:
             logger.info("BUY %s skipped: %s", ticker, checks)
             return result
 
-        # ── Calculate position size ──
-        equity = self.broker.get_equity()
+        # ── Calculate position size (on virtual $1k budget) ──
+        equity = self.broker.get_equity() / SCALE_FACTOR  # Budget virtuale $1k
         if equity <= 0:
             result["reason"] = "no equity available"
             return result
@@ -302,11 +304,12 @@ class TradeExecutor:
         if len(positions) >= MAX_OPEN_POSITIONS:
             return f"max positions reached ({len(positions)}/{MAX_OPEN_POSITIONS})"
 
-        # 5. Daily loss circuit breaker?
+        # 5. Daily loss circuit breaker? (scaled to virtual $1k)
         try:
             acct = self.broker.get_account()
-            equity = float(acct.get("equity", 0))
-            last_equity = float(acct.get("last_equity", equity))
+            raw_eq = acct.get("equity", "0")
+            equity = float(raw_eq) / SCALE_FACTOR
+            last_equity = float(acct.get("last_equity", raw_eq)) / SCALE_FACTOR
             if last_equity > 0:
                 daily_change = ((equity - last_equity) / last_equity) * 100
                 if daily_change < -MAX_DAILY_LOSS_PCT:
@@ -357,11 +360,10 @@ class TradeExecutor:
                     )
 
         # 9. Max drawdown — close all if equity dropped > X% from peak
+        #    Uses scaled equity (virtual $1k budget)
         try:
             acct = self.broker.get_account()
-            equity = float(acct.get("equity", 0))
-            # Use initial_margin + equity as rough peak proxy,
-            # or track peak in DB/memory
+            equity = float(acct.get("equity", 0)) / SCALE_FACTOR
             peak = self._get_peak_equity(equity)
             if peak > 0 and equity < peak:
                 dd = ((peak - equity) / peak) * 100
@@ -520,16 +522,18 @@ class TradeExecutor:
         return self.broker.get_buying_power()
 
     def get_portfolio_summary(self) -> dict:
-        """Return a summary of the current portfolio state."""
+        """Return a summary of the current portfolio state (scaled to $1k)."""
         try:
             acct = self.broker.get_account()
             positions = self.broker.get_positions()
+            equity = float(acct.get("equity", 0)) / SCALE_FACTOR
+            last_eq = float(acct.get("last_equity", 0)) / SCALE_FACTOR
             return {
-                "equity": float(acct.get("equity", 0)),
-                "buying_power": float(acct.get("buying_power", 0)),
-                "cash": float(acct.get("cash", 0)),
+                "equity": equity,
+                "buying_power": float(acct.get("buying_power", 0)) / SCALE_FACTOR,
+                "cash": float(acct.get("cash", 0)) / SCALE_FACTOR,
                 "positions_count": len(positions),
-                "daily_pnl": float(acct.get("equity", 0)) - float(acct.get("last_equity", 0)),
+                "daily_pnl": equity - last_eq,
                 "paper": self.paper,
                 "trading_enabled": self._trading_enabled,
             }

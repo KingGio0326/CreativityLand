@@ -1,9 +1,14 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 
 const ALPACA_BASE = "https://paper-api.alpaca.markets";
+
+// Alpaca paper = $100k fissi. Scaliamo tutto a $1k (SCALE_FACTOR=100) per simulazione realistica
+// Il portafoglio parte dal 30 marzo 2026, tutto ciò che è prima va scartato
+const SCALE_FACTOR = 100;
+const PORTFOLIO_START_TS = new Date("2026-03-30T00:00:00Z").getTime() / 1000;
 
 function alpacaHeaders(): Record<string, string> {
   return {
@@ -88,15 +93,18 @@ interface PortfolioHistory {
 
 // ── Main handler ─────────────────────────────────────
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const period = request.nextUrl.searchParams.get("period") || "1M";
+    const timeframe = request.nextUrl.searchParams.get("timeframe") || "1H";
+
     // Fire all Alpaca requests in parallel
     const [acctRaw, positionsRaw, historyRaw, ordersRaw, clockRaw] =
       await Promise.all([
         alpacaFetch<AlpacaAccount | null>("/v2/account", null),
         alpacaFetch<AlpacaPosition[]>("/v2/positions", []),
         alpacaFetch<PortfolioHistory | null>(
-          "/v2/account/portfolio/history?period=1M&timeframe=1H",
+          `/v2/account/portfolio/history?period=${period}&timeframe=${timeframe}`,
           null,
         ),
         alpacaFetch<AlpacaOrder[]>(
@@ -128,25 +136,22 @@ export async function GET() {
       );
     }
 
-    // ── Account summary ──
-    const equity = parseFloat(acctRaw.equity || "0");
-    const cash = parseFloat(acctRaw.cash || "0");
-    const buyingPower = parseFloat(acctRaw.buying_power || "0");
-    const lastEquity = parseFloat(acctRaw.last_equity || "0");
-    const dailyPl = lastEquity > 0 ? equity - lastEquity : 0;
-    const dailyPlPct = lastEquity > 0 ? (dailyPl / lastEquity) * 100 : 0;
-    // Total P&L: assume initial deposit = last_equity on day 0
-    // Use portfolio_value vs initial to approximate total P&L
-    const portfolioValue = parseFloat(acctRaw.portfolio_value || "0");
-    const initialValue = parseFloat(acctRaw.last_equity || "0");
-    const totalPl = portfolioValue - initialValue;
+    // ── Account summary (scaled to $1k virtual budget) ──
+    const equityRaw = parseFloat(acctRaw.equity || "0");
+    const cashRaw = parseFloat(acctRaw.cash || "0");
+    const buyingPowerRaw = parseFloat(acctRaw.buying_power || "0");
+    const lastEquityRaw = parseFloat(acctRaw.last_equity || "0");
+    const dailyPl = lastEquityRaw > 0 ? (equityRaw - lastEquityRaw) / SCALE_FACTOR : 0;
+    const dailyPlPct = lastEquityRaw > 0 ? ((equityRaw - lastEquityRaw) / lastEquityRaw) * 100 : 0;
+    const portfolioValueRaw = parseFloat(acctRaw.portfolio_value || "0");
+    const totalPl = (portfolioValueRaw - lastEquityRaw) / SCALE_FACTOR;
     const totalPlPct =
-      initialValue > 0 ? (totalPl / initialValue) * 100 : 0;
+      lastEquityRaw > 0 ? ((portfolioValueRaw - lastEquityRaw) / lastEquityRaw) * 100 : 0;
 
     const account = {
-      equity,
-      cash,
-      buying_power: buyingPower,
+      equity: Math.round((equityRaw / SCALE_FACTOR) * 100) / 100,
+      cash: Math.round((cashRaw / SCALE_FACTOR) * 100) / 100,
+      buying_power: Math.round((buyingPowerRaw / SCALE_FACTOR) * 100) / 100,
       daily_pl: Math.round(dailyPl * 100) / 100,
       daily_pl_pct: Math.round(dailyPlPct * 100) / 100,
       total_pl: Math.round(totalPl * 100) / 100,
@@ -208,8 +213,8 @@ export async function GET() {
         side: p.side,
         entry_price: parseFloat(p.avg_entry_price),
         current_price: parseFloat(p.current_price),
-        market_value: parseFloat(p.market_value),
-        unrealized_pl: parseFloat(p.unrealized_pl),
+        market_value: parseFloat(p.market_value) / SCALE_FACTOR,
+        unrealized_pl: parseFloat(p.unrealized_pl) / SCALE_FACTOR,
         unrealized_pl_pct: parseFloat(p.unrealized_plpc) * 100,
         stop_loss: dbData?.stop_loss ?? null,
         take_profit: dbData?.take_profit ?? null,
@@ -217,10 +222,20 @@ export async function GET() {
       };
     });
 
-    // ── Equity history ──
+    // ── Equity history (filtered by start date + scaled) ──
+    const rawTs = historyRaw?.timestamp ?? [];
+    const rawEq = historyRaw?.equity ?? [];
+    const filteredTs: number[] = [];
+    const filteredEq: number[] = [];
+    for (let i = 0; i < rawTs.length; i++) {
+      if (rawTs[i] >= PORTFOLIO_START_TS) {
+        filteredTs.push(rawTs[i]);
+        filteredEq.push(rawEq[i] / SCALE_FACTOR);
+      }
+    }
     const equityHistory = {
-      timestamps: historyRaw?.timestamp ?? [],
-      equity: historyRaw?.equity ?? [],
+      timestamps: filteredTs,
+      equity: filteredEq,
     };
 
     // ── Trades (closed orders) ──
@@ -230,7 +245,7 @@ export async function GET() {
         id: o.id,
         ticker: o.symbol,
         side: o.side,
-        qty: parseFloat(o.filled_qty || o.qty),
+        qty: parseFloat(o.filled_qty || o.qty) / SCALE_FACTOR,
         filled_price: parseFloat(o.filled_avg_price || "0"),
         filled_at: o.filled_at,
         type: o.type,

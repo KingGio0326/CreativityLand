@@ -1,3 +1,4 @@
+// DEPRECATED: Trades page redirects to /portfolio — use /api/portfolio for live data
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";

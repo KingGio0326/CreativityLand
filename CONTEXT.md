@@ -1,7 +1,7 @@
 # CONTEXT.md
 
 Documento di continuità per riprendere lo sviluppo del progetto **CreativityLand Trading Bot** in una nuova sessione.
-Ultimo aggiornamento: 2026-03-27.
+Ultimo aggiornamento: 2026-03-30.
 
 ---
 
@@ -112,12 +112,14 @@ progetto_stef/
 │       │   ├── finbert/page.tsx   # Analisi FinBERT
 │       │   ├── backtest/page.tsx  # Risultati backtest
 │       │   ├── search/page.tsx    # Ricerca semantica
-│       │   ├── trades/page.tsx    # Trading: posizioni, trade history
+│       │   ├── portfolio/page.tsx # Portfolio live (Alpaca) — equity curve, posizioni, trades
+│       │   ├── trades/page.tsx    # DEPRECATED: redirect a /portfolio
 │       │   └── api/               # API routes
 │       │       ├── performance/route.ts
+│       │       ├── portfolio/route.ts             # Live Alpaca data (account, positions, history, trades)
 │       │       ├── equity-curve/route.ts          # Portfolio simulation (4 orizzonti)
-│       │       ├── equity-curve-sltp/route.ts     # Portfolio SL/TP managed
-│       │       ├── trades/route.ts                # Posizioni e trade history
+│       │       ├── equity-curve-sltp/route.ts     # DEPRECATED: SL/TP chart rimosso
+│       │       ├── trades/route.ts                # DEPRECATED: redirect a /api/portfolio
 │       │       └── patterns-performance/route.ts  # Pattern matching stats
 │       ├── components/
 │       │   ├── FloatingSidebar.tsx # Sidebar navigazione (collapsible)
@@ -440,6 +442,7 @@ ANTHROPIC_API_KEY=         # non usato direttamente, legacy
 ALPACA_API_KEY=            # paper trading
 ALPACA_SECRET_KEY=
 TRADING_ENABLED=false      # Kill switch globale (default: false)
+PAPER_TRADING=true         # true = paper, false = live (default: true)
 
 # Social
 REDDIT_CLIENT_ID=          # praw
@@ -567,6 +570,21 @@ La dashboard ha 10 pagine. Una sidebar fissa mangerebbe troppo spazio. La **Floa
 
 ### Perché lazy Supabase init nel bot Telegram
 `create_client()` a livello di modulo causava crash per incompatibilità httpx/supabase durante l'import. Risolto con pattern `get_supabase()` che inizializza al primo uso.
+
+### Perché SCALE_FACTOR=100 per simulare $1k
+Alpaca paper trading ha un balance fisso di $100k che non può essere resettato via API. Per simulare un budget realistico di $1k, tutti i valori monetari vengono divisi per `SCALE_FACTOR=100`:
+- **API route** (`/api/portfolio`): equity, cash, buying_power, market_value, unrealized_pl, qty, equity_history
+- **Executor** (`engine/executor.py`): position sizing usa `virtual_equity = equity / SCALE_FACTOR`, drawdown check su equity scalata, portfolio summary scalato
+- **Percentuali** (P&L %, drawdown %): invarianti alla scala, non richiedono aggiustamento
+- **Dashboard** (`/portfolio`): mostra valori già scalati dall'API, reference line a $1,000
+
+Se il balance Alpaca viene resettato manualmente (es. a $10k), il SCALE_FACTOR deve essere aggiornato di conseguenza (es. 10).
+
+### Perché il Portfolio è su pagina dedicata e non in Performance
+La pagina `/performance` mostra stats degli agenti e equity curve simulata basata sui segnali storici. La pagina `/portfolio` mostra dati **live** da Alpaca: posizioni reali, equity reale, trade eseguiti. Sono due prospettive diverse: una retrospettiva (performance agenti) e una operativa (stato del portafoglio). La vecchia pagina `/trades` è stata deprecata e redirige a `/portfolio`.
+
+### Perché Alpaca env vars su Vercel
+Le variabili `ALPACA_API_KEY` e `ALPACA_SECRET_KEY` devono essere configurate nelle Environment Variables di Vercel per il progetto dashboard, oltre che nei GitHub Actions secrets. Senza queste variabili, l'API `/api/portfolio` restituisce 503.
 
 ### Perché inline keyboard nel bot Telegram
 Il bot è usato da mobile dove digitare comandi è scomodo. Con **inline keyboard** l'interazione è tutta a bottoni: menu → scegli ticker → vedi dettaglio → torna indietro. Zero typing richiesto.
