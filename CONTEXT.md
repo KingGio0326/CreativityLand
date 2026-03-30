@@ -86,6 +86,7 @@ progetto_stef/
 │   ├── correlation_engine.py      # Matrice correlazione ticker
 │   ├── executor.py                # TradeExecutor: esecuzione ordini + safety checks
 │   ├── broker_alpaca.py           # Alpaca REST adapter (paper/live)
+│   ├── triple_barrier.py          # TripleBarrierLabeler (López de Prado AFML cap.3)
 │   └── arxiv_search.py            # Ricerca paper arXiv
 │
 ├── scraper/
@@ -258,6 +259,11 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 | agent_scores | jsonb | Score per agente |
 | fully_evaluated | boolean | true quando tutti gli orizzonti sono compilati |
 | evaluated_at | timestamptz | |
+| barrier_label | integer | Triple Barrier: 1=TP hit, -1=SL hit, 0=neutro |
+| barrier_hit | text | Quale barriera toccata: upper, lower, vertical |
+| barrier_hit_hours | float8 | Ore dall'entry al barrier hit |
+| max_favorable_pct | float8 | Max Favorable Excursion (MFE) in % |
+| max_adverse_pct | float8 | Max Adverse Excursion (MAE) in % |
 
 ### `agent_performance`
 | Colonna | Tipo | Note |
@@ -591,6 +597,9 @@ Il bot è usato da mobile dove digitare comandi è scomodo. Con **inline keyboar
 
 ### Perché detect_ticker() nello scraper
 Feed generici (CNBC, Motley Fool, Investopedia) non sono ticker-specific. `detect_ticker()` usa keyword matching (es. "apple", "tim cook", "cupertino" → AAPL) per filtrare solo articoli rilevanti ai ticker monitorati, evitando di salvare articoli irrilevanti.
+
+### Perché Triple Barrier Labeling
+Il sistema originale usa soglie fisse (±0.15) per generare segnali, e valuta il risultato solo guardando il return a 168h. Il **Triple Barrier Labeling** (López de Prado, "Advances in Financial Machine Learning", cap. 3) è più sofisticato: definisce 3 barriere per ogni segnale (upper=TP, lower=SL, vertical=tempo) calibrate sulla volatilità (ATR-14) e regime di mercato. La **prima barriera toccata** determina il label reale. Questo produce label di qualità superiore per il training di modelli ML perché incorpora volatilità, regime e time-to-hit. Le colonne `barrier_label`, `barrier_hit`, `barrier_hit_hours`, `max_favorable_pct` (MFE), `max_adverse_pct` (MAE) vengono calcolate automaticamente in `evaluate_pending()` quando un segnale diventa `fully_evaluated`. Il backfill dei segnali storici si fa con `scripts/backfill_triple_barrier.py`.
 
 ### Perché extract_content_safe() con fallback
 Trafilatura fallisce su ~15% delle pagine (paywall, JS rendering, 403). `extract_content_safe()` prova: trafilatura full-text → RSS summary → stringa vuota. Questo garantisce che anche se l'estrazione fallisce, almeno il summary RSS viene conservato.

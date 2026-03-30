@@ -41,6 +41,7 @@ Ultimo aggiornamento: 2026-03-30.
 - [x] Fase 5 Integrazione Pipeline: step "Execute trades" in `bot.yml` dopo save_signal(). Env vars `TRADING_ENABLED` (default false) e `PAPER_TRADING` (default true) come GitHub Secrets. TradeExecutor legge `PAPER_TRADING` da env. Flusso: scrape → agenti → save_signal → execute_signal → evaluate → notify (2026-03-27)
 - [x] Portfolio page `/portfolio`: pagina dedicata con equity curve live (Alpaca), stat cards (equity, cash, daily/total P&L), tabella posizioni con SL/TP, trade history. API route `/api/portfolio` chiama 5 endpoint Alpaca in parallelo + lookup SL/TP da Supabase. SCALE_FACTOR=100 per simulare budget $1k su account $100k. Auto-refresh 60s quando mercato aperto (2026-03-30)
 - [x] Cleanup: rimosso grafico SL/TP Managed da `/performance`, deprecato `/trades` (redirect a `/portfolio`), deprecate API routes `/api/equity-curve-sltp` e `/api/trades`, rimosso TRADING dalla sidebar (2026-03-30)
+- [x] Triple Barrier Labeling (López de Prado AFML cap. 3): `engine/triple_barrier.py` con barriere ATR-based per regime (crisis 3.0x, bear 2.5x, neutral 2.0x, bull 1.5x). Integrato in `scoring_engine.py` evaluate_pending(). Colonne `barrier_label`, `barrier_hit`, `barrier_hit_hours`, `max_favorable_pct`, `max_adverse_pct` in `signal_evaluations`. Backfill script `scripts/backfill_triple_barrier.py` (2026-03-30)
 
 ---
 

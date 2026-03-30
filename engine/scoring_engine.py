@@ -8,6 +8,8 @@ import yfinance as yf
 from dotenv import load_dotenv
 from supabase import create_client
 
+from engine.triple_barrier import TripleBarrierLabeler
+
 load_dotenv()
 logger = logging.getLogger("scoring_engine")
 
@@ -210,6 +212,52 @@ class ScoringEngine:
                         f"    {label}: NOT READY age={diff_hours:.1f}h < {hours_needed}h"
                     )
                     all_done = False
+
+            # ── Triple Barrier evaluation (once fully evaluated) ──
+            if all_done and ev.get("barrier_label") is None:
+                sig_type = ev.get("signal_type", "HOLD")
+                if sig_type in ("BUY", "SELL"):
+                    try:
+                        tb = TripleBarrierLabeler()
+                        # Fetch ATR and regime from signals table
+                        sig_row = (
+                            self.supabase.table("signals")
+                            .select("atr_14, market_regime")
+                            .eq("id", ev.get("signal_id", ""))
+                            .limit(1)
+                            .execute()
+                        )
+                        sig_data = sig_row.data[0] if sig_row.data else {}
+                        atr_14 = sig_data.get("atr_14")
+                        regime = sig_data.get("market_regime", "neutral")
+
+                        barriers = tb.compute_barriers(
+                            ticker=ev["ticker"],
+                            entry_price=entry_price,
+                            entry_date=entry_date,
+                            atr_14=atr_14,
+                            regime=regime,
+                        )
+                        tb_result = tb.evaluate_signal(
+                            ticker=ev["ticker"],
+                            entry_price=entry_price,
+                            entry_date=entry_date,
+                            barriers=barriers,
+                        )
+                        updates["barrier_label"] = tb_result["label"]
+                        updates["barrier_hit"] = tb_result["barrier_hit"]
+                        updates["barrier_hit_hours"] = tb_result["time_to_hit_hours"]
+                        updates["max_favorable_pct"] = tb_result["max_favorable"]
+                        updates["max_adverse_pct"] = tb_result["max_adverse"]
+                        print(
+                            f"    [TB] label={tb_result['label']} "
+                            f"hit={tb_result['barrier_hit']} "
+                            f"hours={tb_result['time_to_hit_hours']} "
+                            f"MFE={tb_result['max_favorable']:.2f}% "
+                            f"MAE={tb_result['max_adverse']:.2f}%"
+                        )
+                    except Exception as e:
+                        logger.warning("Triple barrier failed for %s: %s", ev["ticker"], e)
 
             if updates:
                 if all_done:
