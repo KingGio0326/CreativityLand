@@ -495,17 +495,11 @@ Step finale `Notify Telegram Error` con `if: failure()` per notificare errori.
 
 ---
 
-## 7. Stato Attuale del Sistema (2026-03-23)
+## 7. Stato Attuale del Sistema (2026-03-30)
 
 | Metrica | Valore |
 |---------|--------|
-| Segnali totali generati | 255 |
-| Valutazioni registrate | 201 |
-| Valutazioni completate (168h) | 0 (primi score 168h disponibili ~25 marzo) |
-| Articoli nel database | 4.776 |
-| Pattern storici | 37.953 |
-| Ultimo segnale generato | 2026-03-23 08:52 UTC |
-| Ticker monitorati | AAPL, TSLA, NVDA, BTC-USD, ETH-USD, MSFT, XOM, GLD |
+| Ticker monitorati | 43 (AAPL, TSLA, NVDA, MSFT, AMZN, GOOG, META, AMD, INTC, AVGO, TSM, MU, JPM, GS, BAC, V, MA, XOM, CVX, COP, OXY, LMT, RTX, NOC, JNJ, PFE, LLY, WMT, COST, DIS, GLD, SPY, QQQ, XLE, XLF, SLV, USO, TLT, BTC-USD, ETH-USD, SOL-USD, XRP-USD, DOGE-USD) |
 
 ### Fonti Scraper Attive
 **Stocks:** CNBC, Motley Fool, AP News (via Google RSS), NewsAPI, Finnhub, Alpha Vantage

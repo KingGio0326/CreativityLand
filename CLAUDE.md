@@ -86,7 +86,7 @@ Supabase client initialized in `dashboard/src/lib/supabase.ts`.
 ## Key Conventions
 
 - Python return values in `signal_evaluations` are stored as percentages (e.g., -2.58 means -2.58%). Do not multiply by 100 again in the API.
-- Tickers tracked: AAPL, TSLA, NVDA, BTC-USD, ETH-USD, MSFT, XOM, GLD.
+- Tickers tracked: 43 ticker tra azioni USA (tech, finance, energy, defense, pharma, consumer), ETF (SPY, QQQ, GLD, SLV, XLE, XLF, USO, TLT) e crypto (BTC-USD, ETH-USD, SOL-USD, XRP-USD, DOGE-USD). Lista completa in `bot_telegram/telegram_bot.py` TICKERS.
 - UI uses dark crypto theme with purple accent (#7c3aed, #a855f7), Barlow Condensed font for labels.
 - `.env` must be loaded before Supabase client creation (use `load_dotenv()` at top of entry points).
 - The `.env` file is gitignored. All secrets are in GitHub Actions secrets.
