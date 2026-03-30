@@ -15,9 +15,13 @@ from sklearn.model_selection import TimeSeriesSplit
 from supabase import create_client
 
 from agents import TradingState
+from engine.fractional_diff import frac_diff_ffd, find_optimal_d
 
 load_dotenv()
 logger = logging.getLogger("ml_prediction_agent")
+
+# Default d for FFD when no cached value is available
+DEFAULT_FFD_D = 0.4
 
 MODEL_DIR = "models/"
 
@@ -40,7 +44,43 @@ def encode_rate_direction(direction: str) -> float:
 
 
 class MLPredictionAgent:
-    def build_features(self, ticker: str) -> pd.DataFrame:
+    def _get_cached_d(self, ticker: str) -> dict[str, float]:
+        """Load cached optimal d values from Supabase. Returns dict feature->d."""
+        defaults = {
+            "close": DEFAULT_FFD_D, "high": DEFAULT_FFD_D,
+            "low": DEFAULT_FFD_D, "volume": DEFAULT_FFD_D,
+        }
+        try:
+            sb = _get_supabase()
+            result = (
+                sb.table("ml_feature_params")
+                .select("feature_name, optimal_d")
+                .eq("ticker", ticker)
+                .execute()
+            )
+            if result.data:
+                for row in result.data:
+                    name = row["feature_name"]
+                    if name in defaults and row["optimal_d"] is not None:
+                        defaults[name] = row["optimal_d"]
+        except Exception:
+            pass  # table may not exist yet
+        return defaults
+
+    def _save_cached_d(self, ticker: str, feature: str, d: float, pvalue: float):
+        """Save optimal d to Supabase cache."""
+        try:
+            sb = _get_supabase()
+            sb.table("ml_feature_params").upsert({
+                "ticker": ticker,
+                "feature_name": feature,
+                "optimal_d": round(d, 2),
+                "adf_pvalue": round(pvalue, 6),
+            }, on_conflict="ticker,feature_name").execute()
+        except Exception as e:
+            logger.warning("Failed to cache d for %s/%s: %s", ticker, feature, e)
+
+    def build_features(self, ticker: str, compute_d: bool = False) -> pd.DataFrame:
         df = yf.download(
             ticker, period="2y",
             interval="1d", progress=False
@@ -92,6 +132,26 @@ class MLPredictionAgent:
         # Rate direction (default stable for training data)
         feat["rate_dir"] = 0.0
 
+        # ── Fractional Differentiation (López de Prado AFML cap. 5) ──
+        # FFD features preserve memory while achieving stationarity
+        if compute_d:
+            d_values = {}
+            for name, series in [("close", close), ("high", high),
+                                 ("low", low), ("volume", volume)]:
+                d = find_optimal_d(series)
+                d_values[name] = d
+                logger.info("FFD %s/%s: optimal d=%.2f", ticker, name, d)
+            self._ffd_d_cache = d_values
+        else:
+            d_values = self._get_cached_d(ticker)
+
+        for name, series in [("close", close), ("high", high),
+                             ("low", low), ("volume", volume)]:
+            d = d_values.get(name, DEFAULT_FFD_D)
+            if d > 0:
+                # threshold=1e-3 keeps window manageable for ~500 daily bars
+                feat[f"{name}_ffd"] = frac_diff_ffd(series, d, threshold=1e-3)
+
         # Target: sale > 1% nei prossimi 5 giorni?
         feat["target"] = (
             close.shift(-5) / close - 1 > 0.01
@@ -101,7 +161,23 @@ class MLPredictionAgent:
         return feat
 
     def train(self, ticker: str) -> float:
-        df = self.build_features(ticker)
+        df = self.build_features(ticker, compute_d=True)
+
+        # Save computed d values to Supabase cache
+        if hasattr(self, "_ffd_d_cache"):
+            from statsmodels.tsa.stattools import adfuller
+            for name, d in self._ffd_d_cache.items():
+                pvalue = 0.0
+                try:
+                    col = f"{name}_ffd"
+                    if col in df.columns:
+                        clean = df[col].dropna()
+                        if len(clean) >= 20:
+                            pvalue = adfuller(clean, maxlag=1, regression="c", autolag=None)[1]
+                except Exception:
+                    pass
+                self._save_cached_d(ticker, name, d, pvalue)
+
         if len(df) < 50:
             raise ValueError("Dati insufficienti per training")
         X = df.drop(columns=["target"])

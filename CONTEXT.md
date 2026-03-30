@@ -87,6 +87,7 @@ progetto_stef/
 │   ├── executor.py                # TradeExecutor: esecuzione ordini + safety checks
 │   ├── broker_alpaca.py           # Alpaca REST adapter (paper/live)
 │   ├── triple_barrier.py          # TripleBarrierLabeler (López de Prado AFML cap.3)
+│   ├── fractional_diff.py         # FFD: Fractional Differentiation (López de Prado AFML cap.5)
 │   └── arxiv_search.py            # Ricerca paper arXiv
 │
 ├── scraper/
@@ -353,6 +354,17 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 | fold_accuracies | jsonb |
 | is_reliable | boolean |
 
+### `ml_feature_params`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | serial | PK |
+| ticker | text | |
+| feature_name | text | close/high/low/volume |
+| optimal_d | float8 | d ottimale FFD (0.0-1.0) |
+| adf_pvalue | float8 | p-value ADF test |
+| computed_at | timestamptz | Default now() |
+| | | UNIQUE(ticker, feature_name) |
+
 ### `positions`
 | Colonna | Tipo | Note |
 |---------|------|------|
@@ -600,6 +612,9 @@ Feed generici (CNBC, Motley Fool, Investopedia) non sono ticker-specific. `detec
 
 ### Perché Triple Barrier Labeling
 Il sistema originale usa soglie fisse (±0.15) per generare segnali, e valuta il risultato solo guardando il return a 168h. Il **Triple Barrier Labeling** (López de Prado, "Advances in Financial Machine Learning", cap. 3) è più sofisticato: definisce 3 barriere per ogni segnale (upper=TP, lower=SL, vertical=tempo) calibrate sulla volatilità (ATR-14) e regime di mercato. La **prima barriera toccata** determina il label reale. Questo produce label di qualità superiore per il training di modelli ML perché incorpora volatilità, regime e time-to-hit. Le colonne `barrier_label`, `barrier_hit`, `barrier_hit_hours`, `max_favorable_pct` (MFE), `max_adverse_pct` (MAE) vengono calcolate automaticamente in `evaluate_pending()` quando un segnale diventa `fully_evaluated`. Il backfill dei segnali storici si fa con `scripts/backfill_triple_barrier.py`.
+
+### Perché Fractional Differentiation (FFD) nel MLAgent
+Le serie di prezzi sono non-stazionarie (unit root), il che viola le assunzioni dei modelli ML. La differenziazione intera (returns) rende la serie stazionaria ma **distrugge tutta la memoria** (autocorrelazione). La **Fractional Differentiation** (López de Prado, AFML cap. 5) trova il minimo ordine frazionario `d` (tipicamente 0.3-0.5) che rende la serie stazionaria preservando il massimo di memoria. L'implementazione usa il metodo FFD (Fixed-Width Window) con pesi ricorsivi troncati a threshold=1e-3 (~27 pesi per 504 daily bars). Il `find_optimal_d()` testa d da 0.0 a 1.0 in step di 0.05 e sceglie il minimo d per cui il test ADF ha p-value < 0.05. I valori ottimali di d vengono cachati in Supabase (`ml_feature_params`) durante il retraining domenicale e letti durante i run 6h, evitando il costo computazionale di ricalcolarli ogni volta. Features FFD: `close_ffd`, `high_ffd`, `low_ffd`, `volume_ffd`.
 
 ### Perché extract_content_safe() con fallback
 Trafilatura fallisce su ~15% delle pagine (paywall, JS rendering, 403). `extract_content_safe()` prova: trafilatura full-text → RSS summary → stringa vuota. Questo garantisce che anche se l'estrazione fallisce, almeno il summary RSS viene conservato.

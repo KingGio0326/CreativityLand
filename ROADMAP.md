@@ -42,6 +42,7 @@ Ultimo aggiornamento: 2026-03-30.
 - [x] Portfolio page `/portfolio`: pagina dedicata con equity curve live (Alpaca), stat cards (equity, cash, daily/total P&L), tabella posizioni con SL/TP, trade history. API route `/api/portfolio` chiama 5 endpoint Alpaca in parallelo + lookup SL/TP da Supabase. SCALE_FACTOR=100 per simulare budget $1k su account $100k. Auto-refresh 60s quando mercato aperto (2026-03-30)
 - [x] Cleanup: rimosso grafico SL/TP Managed da `/performance`, deprecato `/trades` (redirect a `/portfolio`), deprecate API routes `/api/equity-curve-sltp` e `/api/trades`, rimosso TRADING dalla sidebar (2026-03-30)
 - [x] Triple Barrier Labeling (López de Prado AFML cap. 3): `engine/triple_barrier.py` con barriere ATR-based per regime (crisis 3.0x, bear 2.5x, neutral 2.0x, bull 1.5x). Integrato in `scoring_engine.py` evaluate_pending(). Colonne `barrier_label`, `barrier_hit`, `barrier_hit_hours`, `max_favorable_pct`, `max_adverse_pct` in `signal_evaluations`. Backfill script `scripts/backfill_triple_barrier.py` (2026-03-30)
+- [x] Fractional Differentiation (López de Prado AFML cap. 5): FFD features per MLAgent (`close_ffd`, `high_ffd`, `low_ffd`, `volume_ffd`), d ottimale con ADF test (min d per p<0.05), caching in Supabase `ml_feature_params`. `engine/fractional_diff.py` con `get_weights_ffd()`, `frac_diff_ffd()`, `find_optimal_d()`. Threshold=1e-3 per finestra ~27 pesi su 504 daily bars. 12 test unitari. (2026-03-30)
 
 ---
 
