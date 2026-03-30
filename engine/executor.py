@@ -13,6 +13,13 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 from engine.broker_alpaca import AlpacaBroker
+from bot_telegram.telegram_notifier import (
+    notify_order_opened,
+    notify_order_closed,
+    notify_circuit_breaker,
+    notify_emergency_close,
+    notify_drawdown,
+)
 
 load_dotenv()
 
@@ -27,12 +34,15 @@ MIN_CONFIDENCE = 0.55           # Skip signals below this
 MIN_CONSENSUS = "moderate"      # Skip "weak" consensus
 STALE_PRICE_PCT = 5.0           # Skip if price moved > 5% since signal
 ORDER_COOLDOWN_HOURS = 6        # Max 1 order per ticker every N hours
+MAX_DRAWDOWN_PCT = 15.0         # Close all if equity drops > 15% from peak
 
 
 class TradeExecutor:
     """Executes BUY/SELL signals with safety checks and position tracking."""
 
-    def __init__(self, paper: bool = True):
+    def __init__(self, paper: bool | None = None):
+        if paper is None:
+            paper = os.getenv("PAPER_TRADING", "true").lower() == "true"
         self.broker = AlpacaBroker(paper=paper)
         self.supabase = create_client(
             os.getenv("SUPABASE_URL", ""),
@@ -170,6 +180,16 @@ class TradeExecutor:
             )
             result["position_id"] = pos_id
 
+            # ── Telegram notification ──
+            try:
+                notify_order_opened(
+                    ticker=ticker, side="buy", shares=shares,
+                    price=price, allocated=allocated,
+                    sl=sl, tp=tp, paper=self.paper,
+                )
+            except Exception:
+                pass
+
         except Exception as e:
             result["reason"] = f"order failed: {e}"
             logger.error("BUY %s failed: %s", ticker, e)
@@ -213,6 +233,17 @@ class TradeExecutor:
                 close_reason="signal",
                 signal_id_close=signal.get("signal_id"),
             )
+
+            # ── Telegram notification ──
+            try:
+                notify_order_closed(
+                    ticker=ticker, side="long",
+                    entry_price=entry_price, exit_price=current_price,
+                    shares=qty, pnl=pnl,
+                    close_reason="signal", paper=self.paper,
+                )
+            except Exception:
+                pass
 
         except Exception as e:
             result["reason"] = f"close failed: {e}"
@@ -279,6 +310,10 @@ class TradeExecutor:
             if last_equity > 0:
                 daily_change = ((equity - last_equity) / last_equity) * 100
                 if daily_change < -MAX_DAILY_LOSS_PCT:
+                    try:
+                        notify_circuit_breaker(daily_change, "ordini bloccati")
+                    except Exception:
+                        pass
                     return (
                         f"circuit breaker: daily loss {daily_change:.1f}% "
                         f"exceeds -{MAX_DAILY_LOSS_PCT}%"
@@ -307,7 +342,76 @@ class TradeExecutor:
         if not is_crypto and not self.broker.is_market_open():
             return "market closed (US stocks)"
 
+        # 8. Price staleness — skip if price moved > X% since signal
+        entry_price = signal.get("entry_price") or (
+            signal.get("exit_strategy", {}).get("entry_price")
+        )
+        if entry_price and entry_price > 0:
+            current_price = self.broker.get_latest_price(ticker)
+            if current_price and current_price > 0:
+                price_change = abs((current_price - entry_price) / entry_price) * 100
+                if price_change > STALE_PRICE_PCT:
+                    return (
+                        f"price stale: moved {price_change:.1f}% since signal "
+                        f"(entry=${entry_price:.2f}, now=${current_price:.2f})"
+                    )
+
+        # 9. Max drawdown — close all if equity dropped > X% from peak
+        try:
+            acct = self.broker.get_account()
+            equity = float(acct.get("equity", 0))
+            # Use initial_margin + equity as rough peak proxy,
+            # or track peak in DB/memory
+            peak = self._get_peak_equity(equity)
+            if peak > 0 and equity < peak:
+                dd = ((peak - equity) / peak) * 100
+                if dd > MAX_DRAWDOWN_PCT:
+                    logger.warning(
+                        "MAX DRAWDOWN %.1f%% — closing all positions", dd
+                    )
+                    result = self.emergency_close_all()
+                    try:
+                        notify_drawdown(equity, peak, dd, result["positions_closed"])
+                    except Exception:
+                        pass
+                    return (
+                        f"max drawdown: {dd:.1f}% from peak "
+                        f"(peak=${peak:,.2f}, now=${equity:,.2f}) — "
+                        f"all positions closed"
+                    )
+        except Exception as e:
+            logger.warning("Could not check drawdown: %s", e)
+
         return None  # all checks passed
+
+    # ── Peak equity tracking ─────────────────────────────
+
+    def _get_peak_equity(self, current_equity: float) -> float:
+        """Get historical peak equity from DB, update if current is higher."""
+        try:
+            result = (
+                self.supabase.table("portfolio_peak")
+                .select("peak_equity")
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                peak = float(result.data[0]["peak_equity"])
+                if current_equity > peak:
+                    self.supabase.table("portfolio_peak").update(
+                        {"peak_equity": round(current_equity, 2)}
+                    ).eq("id", result.data[0].get("id", 1)).execute()
+                    return current_equity
+                return peak
+            else:
+                # First run — seed with current equity
+                self.supabase.table("portfolio_peak").insert(
+                    {"peak_equity": round(current_equity, 2)}
+                ).execute()
+                return current_equity
+        except Exception:
+            # Table may not exist yet — just use current as peak
+            return current_equity
 
     # ── DB persistence ───────────────────────────────────
 
@@ -453,6 +557,12 @@ class TradeExecutor:
             ).eq("status", "open").execute()
         except Exception as e:
             logger.error("Failed to update DB positions: %s", e)
+
+        # Telegram notification
+        try:
+            notify_emergency_close(len(closed), "kill switch")
+        except Exception:
+            pass
 
         return {
             "action": "emergency_close",

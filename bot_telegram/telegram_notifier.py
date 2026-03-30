@@ -203,6 +203,116 @@ def format_run_message(
     return msg
 
 
+def notify_order_opened(
+    ticker: str,
+    side: str,
+    shares: float,
+    price: float,
+    allocated: float,
+    sl: float | None,
+    tp: float | None,
+    paper: bool = True,
+) -> None:
+    """Send Telegram notification when an order is executed."""
+    mode = "PAPER" if paper else "LIVE"
+    emoji = "\U0001f7e2" if side == "buy" else "\U0001f534"
+    sl_str = f"${sl:.2f}" if sl else "N/A"
+    tp_str = f"${tp:.2f}" if tp else "N/A"
+    msg = (
+        f"{emoji} <b>ORDINE {side.upper()}</b> [{mode}]\n\n"
+        f"\U0001f4b9 <b>{ticker}</b>\n"
+        f"\u2022 Shares: {shares:.4f}\n"
+        f"\u2022 Prezzo: ${price:.2f}\n"
+        f"\u2022 Allocato: ${allocated:.2f}\n"
+        f"\u2022 SL: {sl_str} | TP: {tp_str}\n"
+        f"\n\u23f0 {datetime.utcnow().strftime('%d/%m %H:%M UTC')}"
+    )
+    notify(msg)
+
+
+def notify_order_closed(
+    ticker: str,
+    side: str,
+    entry_price: float,
+    exit_price: float,
+    shares: float,
+    pnl: float,
+    close_reason: str,
+    paper: bool = True,
+) -> None:
+    """Send Telegram notification when a position is closed."""
+    mode = "PAPER" if paper else "LIVE"
+    emoji = "\U0001f7e2" if pnl >= 0 else "\U0001f534"
+    pnl_pct = ((exit_price - entry_price) / entry_price * 100) if entry_price else 0
+    if side == "short":
+        pnl_pct = -pnl_pct
+    reason_labels = {
+        "signal": "\U0001f4ca Segnale SELL",
+        "sl": "\U0001f6d1 Stop Loss",
+        "tp": "\U0001f3af Take Profit",
+        "trailing": "\U0001f4c9 Trailing Stop",
+        "emergency": "\U0001f6a8 Emergency Close",
+        "drawdown": "\U0001f4c9 Max Drawdown",
+    }
+    reason_str = reason_labels.get(close_reason, close_reason)
+    msg = (
+        f"{emoji} <b>POSIZIONE CHIUSA</b> [{mode}]\n\n"
+        f"\U0001f4b9 <b>{ticker}</b>\n"
+        f"\u2022 Entry: ${entry_price:.2f} \u2192 Exit: ${exit_price:.2f}\n"
+        f"\u2022 Shares: {shares:.4f}\n"
+        f"\u2022 P&L: <b>${pnl:+.2f}</b> ({pnl_pct:+.1f}%)\n"
+        f"\u2022 Motivo: {reason_str}\n"
+        f"\n\u23f0 {datetime.utcnow().strftime('%d/%m %H:%M UTC')}"
+    )
+    notify(msg)
+
+
+def notify_circuit_breaker(daily_loss_pct: float, action: str = "blocked") -> None:
+    """Send Telegram notification when circuit breaker activates."""
+    msg = (
+        f"\U0001f6a8\U0001f6a8 <b>CIRCUIT BREAKER ATTIVATO</b>\n\n"
+        f"\u2022 Perdita giornaliera: <b>{daily_loss_pct:+.1f}%</b>\n"
+        f"\u2022 Azione: <b>{action}</b>\n"
+        f"\u2022 Nuovi ordini: <b>BLOCCATI</b>\n\n"
+        f"\u26a0\ufe0f Il trading resta bloccato fino a domani o reset manuale.\n"
+        f"\n\u23f0 {datetime.utcnow().strftime('%d/%m %H:%M UTC')}"
+    )
+    notify(msg)
+
+
+def notify_emergency_close(positions_closed: int, reason: str = "kill switch") -> None:
+    """Send Telegram notification when emergency close is triggered."""
+    msg = (
+        f"\U0001f6a8 <b>EMERGENCY CLOSE</b>\n\n"
+        f"\u2022 Posizioni chiuse: <b>{positions_closed}</b>\n"
+        f"\u2022 Motivo: <b>{reason}</b>\n"
+        f"\u2022 Trading: <b>DISABILITATO</b>\n\n"
+        f"\u26a0\ufe0f Tutti gli ordini cancellati. "
+        f"Riabilitare con /start_trading o env TRADING_ENABLED=true.\n"
+        f"\n\u23f0 {datetime.utcnow().strftime('%d/%m %H:%M UTC')}"
+    )
+    notify(msg)
+
+
+def notify_drawdown(
+    current_equity: float,
+    peak_equity: float,
+    drawdown_pct: float,
+    positions_closed: int,
+) -> None:
+    """Send Telegram notification when max drawdown protection triggers."""
+    msg = (
+        f"\U0001f4c9\U0001f6a8 <b>MAX DRAWDOWN RAGGIUNTO</b>\n\n"
+        f"\u2022 Equity attuale: <b>${current_equity:,.2f}</b>\n"
+        f"\u2022 Picco equity: <b>${peak_equity:,.2f}</b>\n"
+        f"\u2022 Drawdown: <b>{drawdown_pct:.1f}%</b>\n"
+        f"\u2022 Posizioni chiuse: <b>{positions_closed}</b>\n\n"
+        f"\u26a0\ufe0f Trading disabilitato automaticamente.\n"
+        f"\n\u23f0 {datetime.utcnow().strftime('%d/%m %H:%M UTC')}"
+    )
+    notify(msg)
+
+
 def format_error_message(error: str, step: str) -> str:
     now = datetime.utcnow().strftime('%d/%m %H:%M UTC')
     return (

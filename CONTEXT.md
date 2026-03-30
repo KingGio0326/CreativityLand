@@ -1,7 +1,7 @@
 # CONTEXT.md
 
 Documento di continuità per riprendere lo sviluppo del progetto **CreativityLand Trading Bot** in una nuova sessione.
-Ultimo aggiornamento: 2026-03-26.
+Ultimo aggiornamento: 2026-03-27.
 
 ---
 
@@ -373,6 +373,50 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 | close_reason | text | sl/tp/trailing/manual/time |
 | executed_at | timestamptz | |
 
+### `portfolio_peak`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | serial | PK |
+| peak_equity | numeric(12,2) | Massimo storico equity |
+| updated_at | timestamptz | Auto-updated via trigger |
+
+---
+
+## 4b. Execution Engine — Safety Layer
+
+### TradeExecutor (`engine/executor.py`)
+Esegue segnali BUY/SELL tramite Alpaca REST. **Trading disabilitato per default** (`TRADING_ENABLED=false`).
+
+### Pre-flight checks (9 controlli)
+| # | Check | Soglia | Azione |
+|---|-------|--------|--------|
+| 1 | Posizione già aperta | - | Skip |
+| 2 | Confidence troppo bassa | < 55% | Skip |
+| 3 | Consensus troppo debole | weak | Skip (richiede moderate+) |
+| 4 | Troppe posizioni aperte | >= 10 | Skip |
+| 5 | **Circuit breaker** | daily loss > -5% | Blocca + notifica Telegram |
+| 6 | Cooldown | ordine < 6h fa | Skip |
+| 7 | Mercato chiuso | US stocks only | Skip (crypto 24/7) |
+| 8 | **Price staleness** | prezzo mosso > 5% da entry | Skip |
+| 9 | **Max drawdown** | equity -15% da picco | Chiude tutto + notifica Telegram |
+
+### Notifiche Telegram trading
+| Evento | Funzione | Messaggio |
+|--------|----------|-----------|
+| Ordine aperto | `notify_order_opened()` | Ticker, shares, prezzo, SL/TP |
+| Posizione chiusa | `notify_order_closed()` | Entry→Exit, P&L, motivo |
+| Circuit breaker | `notify_circuit_breaker()` | % perdita, ordini bloccati |
+| Emergency close | `notify_emergency_close()` | N posizioni chiuse |
+| Max drawdown | `notify_drawdown()` | Equity, picco, % drawdown |
+
+### Comandi Telegram trading
+| Comando | Azione |
+|---------|--------|
+| `/stop_trading` | Kill switch: chiude tutte le posizioni, disabilita trading |
+| `/start_trading` | Riabilita trading |
+| Bottone "Trading" | Mostra status portafoglio + posizioni aperte |
+| Bottone "STOP Trading" | Kill switch inline |
+
 ---
 
 ## 5. Variabili d'Ambiente
@@ -393,8 +437,9 @@ OPENROUTER_API_KEY=        # openrouter.ai (per Gemini Flash + Llama fallback)
 ANTHROPIC_API_KEY=         # non usato direttamente, legacy
 
 # Trading Data
-ALPACA_API_KEY=            # paper trading (non attivo)
+ALPACA_API_KEY=            # paper trading
 ALPACA_SECRET_KEY=
+TRADING_ENABLED=false      # Kill switch globale (default: false)
 
 # Social
 REDDIT_CLIENT_ID=          # praw
@@ -427,6 +472,7 @@ schedule:
 | 3. Process Embeddings | `EmbeddingEngine().process_unembedded()` | MiniLM 384-dim |
 | 4. Run multi-agent | `TradingOrchestrator().decide(ticker)` | 8 ticker × 20 nodi (regime → ... → critic) |
 | 4b. Save pattern evals | `save_pattern_evaluation()` | Solo se patterns_matched > 0 |
+| 4c. Execute trades | `TradeExecutor().execute_signal()` | Solo se `TRADING_ENABLED=true`. Paper/live via `PAPER_TRADING` |
 | 5. Evaluate signals | `ScoringEngine().evaluate_pending()` | 6h/24h/72h/168h |
 | 6. Register new signals | Inserisce in `signal_evaluations` | |
 | 7. Update performance | `ScoringEngine().update_agent_performance()` | Aggregate stats |

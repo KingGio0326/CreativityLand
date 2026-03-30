@@ -70,6 +70,10 @@ def main_menu_keyboard():
             InlineKeyboardButton(
                 "\U0001f30d Regime", callback_data="menu_regime"),
             InlineKeyboardButton(
+                "\U0001f4b0 Trading", callback_data="menu_trading"),
+        ],
+        [
+            InlineKeyboardButton(
                 "\U0001f517 Dashboard",
                 url="https://creativity-land.vercel.app"),
         ],
@@ -396,6 +400,62 @@ def format_regime_text() -> str:
         return f"\u274c Errore regime: {str(e)[:200]}"
 
 
+def format_trading_text() -> str:
+    """Build trading status text with positions and account info."""
+    try:
+        from engine.executor import TradeExecutor
+        executor = TradeExecutor(paper=True)
+        summary = executor.get_portfolio_summary()
+
+        if "error" in summary:
+            return f"\u274c Errore trading: {summary['error']}"
+
+        equity = summary.get("equity", 0)
+        buying_power = summary.get("buying_power", 0)
+        cash = summary.get("cash", 0)
+        daily_pnl = summary.get("daily_pnl", 0)
+        n_pos = summary.get("positions_count", 0)
+        enabled = summary.get("trading_enabled", False)
+        paper = summary.get("paper", True)
+
+        mode = "PAPER" if paper else "\U0001f534 LIVE"
+        status_emoji = "\U0001f7e2" if enabled else "\U0001f534"
+        status_text = "ATTIVO" if enabled else "DISATTIVO"
+        pnl_emoji = "\U0001f7e2" if daily_pnl >= 0 else "\U0001f534"
+
+        lines = [
+            f"\U0001f4b0 <b>Trading Status</b> [{mode}]",
+            f"",
+            f"{status_emoji} Stato: <b>{status_text}</b>",
+            f"\u2022 Equity: <b>${equity:,.2f}</b>",
+            f"\u2022 Cash: ${cash:,.2f}",
+            f"\u2022 Buying Power: ${buying_power:,.2f}",
+            f"{pnl_emoji} P&L giornaliero: <b>${daily_pnl:+,.2f}</b>",
+            f"\u2022 Posizioni aperte: <b>{n_pos}</b>",
+        ]
+
+        # Fetch open positions detail
+        if n_pos > 0:
+            positions = executor.get_open_positions()
+            lines.append("")
+            lines.append("<b>Posizioni:</b>")
+            for p in positions[:10]:
+                t = p.get("symbol", "?")
+                qty = float(p.get("qty", 0))
+                entry = float(p.get("avg_entry_price", 0))
+                current = float(p.get("current_price", 0))
+                upl = float(p.get("unrealized_pl", 0))
+                e = "\U0001f7e2" if upl >= 0 else "\U0001f534"
+                lines.append(
+                    f"{e} <b>{t}</b>: {qty:.4f} @ ${entry:.2f} "
+                    f"\u2192 ${current:.2f} (${upl:+.2f})"
+                )
+
+        return "\n".join(lines)
+    except Exception as e:
+        return f"\u274c Errore trading: {str(e)[:200]}"
+
+
 def format_agents_text() -> str:
     agents = [
         ('SentimentAgent', '22%'), ('FundamentalAgent', '18%'),
@@ -423,6 +483,53 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await cmd_start(update, ctx)
+
+
+async def cmd_stop_trading(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Kill switch: close all positions and disable trading."""
+    if not check_auth(update):
+        return
+    try:
+        from engine.executor import TradeExecutor
+        executor = TradeExecutor(paper=True)
+        result = executor.emergency_close_all()
+        n = result.get("positions_closed", 0)
+        await update.message.reply_text(
+            f"\U0001f6a8 <b>EMERGENCY CLOSE</b>\n\n"
+            f"\u2022 Posizioni chiuse: <b>{n}</b>\n"
+            f"\u2022 Trading: <b>DISABILITATO</b>\n\n"
+            f"Usa /start_trading per riabilitare.",
+            parse_mode="HTML",
+            reply_markup=back_keyboard(),
+        )
+    except Exception as e:
+        await update.message.reply_text(
+            f"\u274c Errore: {str(e)[:300]}",
+            parse_mode="HTML",
+            reply_markup=back_keyboard(),
+        )
+
+
+async def cmd_start_trading(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Re-enable trading after emergency stop."""
+    if not check_auth(update):
+        return
+    try:
+        from engine.executor import TradeExecutor
+        executor = TradeExecutor(paper=True)
+        executor.enable_trading()
+        await update.message.reply_text(
+            "\U0001f7e2 <b>Trading RIABILITATO</b>\n\n"
+            "Il bot eseguira\u0300 i prossimi segnali.",
+            parse_mode="HTML",
+            reply_markup=back_keyboard(),
+        )
+    except Exception as e:
+        await update.message.reply_text(
+            f"\u274c Errore: {str(e)[:300]}",
+            parse_mode="HTML",
+            reply_markup=back_keyboard(),
+        )
 
 
 async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -544,6 +651,41 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             reply_markup=back_keyboard(),
         )
 
+    # -- TRADING STATUS
+    elif data == 'menu_trading':
+        text = format_trading_text()
+        kb = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "\U0001f534 STOP Trading",
+                    callback_data="trading_stop"),
+                InlineKeyboardButton(
+                    "\U0001f504 Aggiorna",
+                    callback_data="menu_trading"),
+            ],
+            [InlineKeyboardButton(
+                "\u2b05\ufe0f Menu", callback_data="menu_main")],
+        ])
+        await query.edit_message_text(
+            text, parse_mode='HTML', reply_markup=kb)
+
+    # -- EMERGENCY STOP (inline button)
+    elif data == 'trading_stop':
+        try:
+            from engine.executor import TradeExecutor
+            executor = TradeExecutor(paper=True)
+            result = executor.emergency_close_all()
+            n = result.get("positions_closed", 0)
+            text = (
+                f"\U0001f6a8 <b>EMERGENCY CLOSE</b>\n\n"
+                f"\u2022 Posizioni chiuse: <b>{n}</b>\n"
+                f"\u2022 Trading: <b>DISABILITATO</b>"
+            )
+        except Exception as e:
+            text = f"\u274c Errore: {str(e)[:200]}"
+        await query.edit_message_text(
+            text, parse_mode='HTML', reply_markup=back_keyboard())
+
 
 # -- MAIN ----------------------------------------------------------
 
@@ -551,6 +693,8 @@ def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler('start', cmd_start))
     app.add_handler(CommandHandler('help', cmd_help))
+    app.add_handler(CommandHandler('stop_trading', cmd_stop_trading))
+    app.add_handler(CommandHandler('start_trading', cmd_start_trading))
     app.add_handler(CallbackQueryHandler(handle_callback))
     print("Bot Telegram avviato con bottoni inline...")
     app.run_polling(drop_pending_updates=True)
