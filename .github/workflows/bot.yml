@@ -155,12 +155,17 @@ jobs:
                   os.getenv('SUPABASE_URL', ''),
                   os.getenv('SUPABASE_KEY', ''),
               )
-              cutoff = (datetime.now() - timedelta(hours=1)).isoformat()
+              # Finestra 6h: il pipeline puo' impiegare 2-3h per 43 ticker
+              cutoff = (datetime.now() - timedelta(hours=6)).isoformat()
               result = supabase.table('signals') \
                   .select('*') \
                   .gte('created_at', cutoff) \
+                  .neq('signal', 'HOLD') \
                   .execute()
               signals = result.data or []
+              print(f'Segnali BUY/SELL trovati nelle ultime 6h: {len(signals)}')
+              for s in signals:
+                  print(f'  -> {s[\"ticker\"]} {s[\"signal\"]} conf={s.get(\"confidence\",0)} consensus={s.get(\"consensus_level\",\"?\")} created={s.get(\"created_at\",\"?\")}')
 
               executed = 0
               skipped = 0
@@ -171,9 +176,11 @@ jobs:
                       'confidence': sig.get('confidence', 0),
                       'consensus_level': sig.get('consensus_level', 'weak'),
                       'signal_id': sig.get('id'),
+                      'entry_price': sig.get('entry_price'),
                       'exit_strategy': {
                           'stop_loss': sig.get('stop_loss'),
                           'take_profit': sig.get('take_profit'),
+                          'entry_price': sig.get('entry_price'),
                       },
                       'position_size_pct': sig.get('position_size_pct'),
                       'kelly_fraction': sig.get('kelly_fraction'),
