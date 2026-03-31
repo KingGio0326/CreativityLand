@@ -497,16 +497,26 @@ TELEGRAM_CHAT_IDS=         # Comma-separated: 584291386,543687292
 
 ---
 
-## 6. GitHub Actions Workflow (`bot.yml`)
+## 6. GitHub Actions Workflows
 
-### Schedule
+### Timing
+| Workflow | Cron | Minuto | Frequenza |
+|----------|------|--------|-----------|
+| `bot.yml` | `0 */2 * * *` | `:00` | Ogni 2h (00:00, 02:00, …, 22:00 UTC) |
+| `position_manager.yml` | `30 * * * *` | `:30` | Ogni 1h |
+| `bot.yml` domenica | `0 2 * * 0` | `:00` | Domenica 02:00 UTC |
+
+I due workflow non si sovrappongono: `bot.yml` dura ~12 min e finisce prima del `:30` di `position_manager.yml`. Il position manager gira sempre al `:30`, anche nelle ore pari in cui gira bot.yml.
+
+### `bot.yml` — Pipeline principale (ogni 2h)
+
 ```yaml
 schedule:
-  - cron: "0 */6 * * *"   # Ogni 6 ore (00:00, 06:00, 12:00, 18:00 UTC)
+  - cron: "0 */2 * * *"   # Ogni 2 ore
   - cron: "0 2 * * 0"     # Domenica alle 02:00 UTC
 ```
 
-### Job `run-bot` (ogni 6h)
+### Job `run-bot` (ogni 2h)
 | Step | Comando | Note |
 |------|---------|------|
 | 1. Scrape news | `python -m scraper.news_scraper` | Multi-source RSS + API |
@@ -534,6 +544,23 @@ Ricostruisce i pattern storici per tutti i ticker da Alpha Vantage.
 
 ### Error handling
 Step finale `Notify Telegram Error` con `if: failure()` per notificare errori.
+
+### `position_manager.yml` — Gestione posizioni (ogni ora al :30)
+
+```yaml
+schedule:
+  - cron: "30 * * * *"   # Ogni ora al minuto 30
+```
+
+| Step | Operazione | Note |
+|------|-----------|------|
+| 1. Conflict guard | Controlla se ci sono posizioni aperte < 10 min | Se sì: skip ratchet (evita conflitti con executor) |
+| 2. Ratchet SL/TP | `RatchetManager().check_all_positions()` | Saltato se conflict guard attivo |
+| 3. Trailing stop | Per posizioni con `trailing_activation` raggiunta e nessun bracket leg | Chiude la posizione manualmente come safety net |
+| 4. Orphan check | Confronta Alpaca vs Supabase | Logga + notifica Telegram se mismatch, NON chiude automaticamente |
+| 5. Error notify | `if: failure()` | Notifica Telegram se un step fallisce |
+
+**Env vars**: `SUPABASE_URL`, `SUPABASE_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS`, `PAPER_TRADING` (default `true`).
 
 ---
 

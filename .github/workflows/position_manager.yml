@@ -1,0 +1,251 @@
+name: Position Manager
+
+on:
+  schedule:
+    - cron: "30 * * * *"   # Ogni ora al :30 (sfalsato rispetto a bot.yml al :00)
+  workflow_dispatch:        # Trigger manuale
+
+jobs:
+  manage-positions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+
+      - name: Conflict guard — check posizioni recenti
+        id: conflict_check
+        run: |
+          python -c "
+          import os
+          from supabase import create_client
+          from datetime import datetime, timedelta
+
+          supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
+
+          # Se una posizione è stata aperta negli ultimi 10 min, i livelli SL/TP
+          # appena impostati dall'executor non vanno toccati subito.
+          cutoff = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
+          result = supabase.table('positions') \
+              .select('ticker, opened_at') \
+              .eq('status', 'open') \
+              .gte('opened_at', cutoff) \
+              .execute()
+          recent = result.data or []
+
+          if recent:
+              tickers = [r['ticker'] for r in recent]
+              print(f'Posizioni aperte < 10 min fa: {tickers}')
+              print('Skip ratchet check per evitare conflitti con execute_signal')
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write('skip_ratchet=true\n')
+          else:
+              print('Nessuna posizione recente — ratchet check attivo')
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write('skip_ratchet=false\n')
+          "
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+      - name: Ratchet SL/TP check
+        if: steps.conflict_check.outputs.skip_ratchet == 'false'
+        run: |
+          python -c "
+          from engine.ratchet_manager import RatchetManager
+
+          manager = RatchetManager()
+          results = manager.check_all_positions()
+
+          ratcheted = 0
+          for r in results:
+              action  = r.get('action', 'skip')
+              ticker  = r.get('ticker', '?')
+              reason  = r.get('reason', '')
+              if action == 'ratcheted':
+                  ratcheted += 1
+                  print(f'{ticker}: RATCHETED — {reason}')
+              elif action in ('ratcheted_tp_only', 'ratcheted_db_only'):
+                  ratcheted += 1
+                  print(f'{ticker}: {action.upper()} — {reason}')
+              else:
+                  print(f'{ticker}: no action — {reason}')
+
+          print(f'Totale ratchet eseguiti: {ratcheted}/{len(results)}')
+          "
+
+      - name: Trailing stop check
+        run: |
+          python -c "
+          import os
+          from supabase import create_client
+          from engine.broker_alpaca import AlpacaBroker
+          from bot_telegram.telegram_notifier import notify
+
+          supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
+          paper   = os.getenv('PAPER_TRADING', 'true').lower() == 'true'
+          broker  = AlpacaBroker(paper=paper)
+
+          # Posizioni aperte
+          result = supabase.table('positions') \
+              .select('id, ticker, signal_id, entry_price, stop_loss') \
+              .eq('status', 'open') \
+              .execute()
+          positions = result.data or []
+          print(f'Posizioni aperte da controllare: {len(positions)}')
+
+          for pos in positions:
+              ticker    = pos.get('ticker', '')
+              signal_id = pos.get('signal_id')
+              pos_id    = pos.get('id')
+
+              if not signal_id:
+                  continue
+
+              # Recupera trailing_activation dal segnale collegato
+              try:
+                  sig = supabase.table('signals') \
+                      .select('trailing_activation, trailing_level') \
+                      .eq('id', signal_id) \
+                      .single() \
+                      .execute()
+                  if not sig.data:
+                      continue
+                  trailing_activation = sig.data.get('trailing_activation')
+                  trailing_level      = sig.data.get('trailing_level')
+              except Exception as e:
+                  print(f'{ticker}: errore fetch signal: {e}')
+                  continue
+
+              if trailing_activation is None:
+                  continue
+
+              current_price = broker.get_latest_price(ticker)
+              if not current_price:
+                  print(f'{ticker}: prezzo non disponibile, skip')
+                  continue
+
+              if current_price < trailing_activation:
+                  continue
+
+              # Prezzo >= trailing_activation: verifica se c'è un bracket leg attivo
+              legs = broker.get_bracket_legs(ticker)
+              if legs:
+                  # Alpaca gestisce il bracket — nessun intervento necessario
+                  print(f'{ticker}: trailing activation {trailing_activation:.4f} raggiunta, '
+                        f'bracket leg attivo — Alpaca gestisce')
+                  continue
+
+              # Nessun bracket leg: chiusura manuale come safety net
+              print(f'{ticker}: trailing activation {trailing_activation:.4f} raggiunta, '
+                    f'nessun bracket leg — chiusura manuale')
+              try:
+                  close_result = broker.close_position(ticker)
+                  if close_result:
+                      supabase.table('positions').update({
+                          'status': 'closed',
+                      }).eq('id', pos_id).execute()
+                      mode = 'PAPER' if paper else 'LIVE'
+                      notify(
+                          f'\U0001f4cc <b>TRAILING STOP [{mode}]</b>\n\n'
+                          f'\U0001f4b9 <b>{ticker}</b>\n'
+                          f'\u2022 Prezzo \${current_price:.4f} \u2265 '
+                          f'attivazione \${trailing_activation:.4f}\n'
+                          f'\u2022 Nessun bracket order \u2014 posizione chiusa manualmente\n'
+                          f'\u2022 Trailing level: \${trailing_level:.4f if trailing_level else \"N/A\"}'
+                      )
+                      print(f'{ticker}: chiuso, DB aggiornato, Telegram inviato')
+                  else:
+                      print(f'{ticker}: close_position ha restituito None '
+                            f'(posizione gia chiusa su Alpaca?)')
+              except Exception as e:
+                  print(f'{ticker}: errore chiusura: {e}')
+          "
+
+      - name: Orphan position check
+        run: |
+          python -c "
+          import os
+          from supabase import create_client
+          from engine.broker_alpaca import AlpacaBroker
+          from bot_telegram.telegram_notifier import notify
+
+          supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
+          paper  = os.getenv('PAPER_TRADING', 'true').lower() == 'true'
+          broker = AlpacaBroker(paper=paper)
+
+          # Posizioni su Alpaca (es. BTCUSD, AAPL)
+          try:
+              alpaca_pos    = broker.get_positions()
+              alpaca_tickers = {p['symbol'] for p in alpaca_pos}
+          except Exception as e:
+              print(f'Alpaca positions fetch fallito: {e}')
+              alpaca_tickers = set()
+
+          # Posizioni su Supabase (status=open), normalizzate senza '-'
+          db_result = supabase.table('positions') \
+              .select('ticker, opened_at') \
+              .eq('status', 'open') \
+              .execute()
+          db_positions   = db_result.data or []
+          db_tickers_raw = {p['ticker'] for p in db_positions}
+          db_tickers     = {t.replace('-', '') for t in db_tickers_raw}
+
+          print(f'Alpaca:   {sorted(alpaca_tickers)}')
+          print(f'Supabase: {sorted(db_tickers_raw)}')
+
+          # Tipo 1: Alpaca ha posizione ma Supabase non la traccia
+          only_alpaca = alpaca_tickers - db_tickers
+          if only_alpaca:
+              msg = (
+                  f'\u26a0\ufe0f <b>POSIZIONI ORFANE</b>\n'
+                  f'Presenti su Alpaca ma NON in Supabase: {sorted(only_alpaca)}\n'
+                  f'Nessuna azione automatica — verificare manualmente.'
+              )
+              print(msg)
+              notify(msg)
+          else:
+              print('Nessuna posizione orfana Alpaca-only')
+
+          # Tipo 2: Supabase mostra open ma Alpaca non ha la posizione
+          only_db = db_tickers - alpaca_tickers
+          if only_db:
+              msg = (
+                  f'\u26a0\ufe0f <b>POSIZIONI ORFANE</b>\n'
+                  f'Aperte in Supabase ma NON su Alpaca: {sorted(only_db)}\n'
+                  f'Probabile chiusura TP/SL non registrata. Verificare e aggiornare DB.'
+              )
+              print(msg)
+              notify(msg)
+          else:
+              print('Nessuna posizione orfana DB-only')
+
+          if not only_alpaca and not only_db:
+              print(f'Posizioni sincronizzate \u2713 '
+                    f'({len(alpaca_tickers)} Alpaca = {len(db_tickers)} Supabase)')
+          "
+
+      - name: Notify Telegram Error
+        if: failure()
+        run: |
+          python -c "
+          import os
+          from bot_telegram.telegram_notifier import notify, format_error_message
+          msg = format_error_message(
+              error='Step fallito \u2014 controlla i log',
+              step='GitHub Actions position-manager'
+          )
+          notify(msg)
+          "
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+      ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
+      PAPER_TRADING: ${{ secrets.PAPER_TRADING || 'true' }}
