@@ -318,10 +318,31 @@ const agents = [
     ],
     tip: 'Regime multipliers: crisis 3.0x (very wide stops), bear 2.5x, neutral 2.0x, bull 1.5x (tight stops). Crypto uses hourly ATR for faster reactivity.',
   },
+  {
+    id: 'meta_labeling', name: 'MetaLabelingAgent', abbr: 'MC',
+    color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', weight: '0%',
+    tagline: 'Calibrates confidence with a second XGBoost model',
+    category: ['support'],
+    analogy: 'Like a second opinion from a specialist doctor. The first doctor (WeightedVote) says "I think it\'s bullish". The specialist (MetaLabeling) replies "given your track record on similar cases, I\'d put 73% confidence on that diagnosis".',
+    desc: 'Implements Meta-Labeling (López de Prado, AFML cap. 3.6): separates the direction decision (made by WeightedVote) from confidence calibration. An XGBoost model trained on historical Triple Barrier outcomes predicts P(signal is correct). Final confidence = original × meta_probability.',
+    stats: [{ label: 'Algorithm', val: 'XGBoost' }, { label: 'Features', val: '23' }, { label: 'Trained', val: 'Weekly' }],
+    meters: [{ label: 'Calibration impact', val: 70 }, { label: 'Data needed to train', val: 85 }],
+    signals: [
+      { type: 'buy', text: 'meta_probability > 0.6: confidence boosted (model trusts this signal type)' },
+      { type: 'sell', text: 'meta_probability < 0.4: confidence reduced (model is skeptical)' },
+      { type: 'hold', text: 'Model not yet trained: pass-through (confidence unchanged)' },
+    ],
+    interpret: [
+      { color: '#8b5cf6', text: '"73% prob. success (confidence 65% → 47%)" = model reduces confidence: be cautious' },
+      { color: '#22d3a0', text: '"73% prob. success (confidence 55% → 70%)" = model boosts confidence: strong signal' },
+      { color: '#f5c842', text: '"modello non disponibile" = not trained yet, needs 50+ barrier-labelled signals (Sundays)' },
+    ],
+    tip: 'Meta-Labeling needs at least one Sunday retraining run with barrier-labelled data. Until then it acts as a pass-through. Features include all 12 agent votes, regime, pattern boost, and consensus level.',
+  },
 ]
 
 const FILTERS = [
-  { key: 'all', label: 'All (15)' },
+  { key: 'all', label: 'All (16)' },
   { key: 'active', label: 'Active' },
   { key: 'support', label: 'Support' },
   { key: 'news', label: 'News' },

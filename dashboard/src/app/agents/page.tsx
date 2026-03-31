@@ -31,6 +31,7 @@ const AGENTS: AgentMeta[] = [
   { name: "Research Agent",       initials: "RE", avatarBg: "#64748b", avatarColor: "#fff", weightLabel: "context", prefix: "ResearchAgent" },
   { name: "Risk Agent",           initials: "RI", avatarBg: "#dc2626", avatarColor: "#fff", weightLabel: "gate",   prefix: "RiskAgent" },
   { name: "Exit Strategy Agent",  initials: "ES", avatarBg: "#059669", avatarColor: "#fff", weightLabel: "exit",   prefix: "ExitStrategyAgent" },
+  { name: "Meta-Labeling",        initials: "MC", avatarBg: "#7c3aed", avatarColor: "#fff", weightLabel: "calib.", prefix: "MetaLabeling" },
 ];
 
 /* ── helpers ───────────────────────────────────────────── */
@@ -106,6 +107,20 @@ function parseML(line: string): Record<string, string | number> {
     "Model Age": extractKV(line, "age") ?? "—",
     Type: "XGBoost",
   };
+}
+
+function parseMetaLabeling(line: string): Record<string, string | number> {
+  // "MetaLabeling: 73% prob. success (confidence 65% → 47% calibrata)"
+  const probMatch = line.match(/(\d+)%\s*prob\. success/);
+  const confMatch = line.match(/confidence (\d+)%\s*.\s*(\d+)%/);
+  if (probMatch) {
+    return {
+      "Prob. Success": `${probMatch[1]}%`,
+      "Confidence": confMatch ? `${confMatch[1]}% → ${confMatch[2]}%` : "—",
+      "Model": "XGBoost",
+    };
+  }
+  return { "Status": "not trained", "Confidence": "unchanged", "Model": "XGBoost" };
 }
 
 function parseResearch(line: string): Record<string, string | number> {
@@ -368,6 +383,7 @@ function buildCards(data: ApiData): AgentCardProps[] {
     InstitutionalAgent: (line: string) => parseInstitutional(line, data),
     ResearchAgent: parseResearch,
     RiskAgent: (line: string) => parseRisk(line, data),
+    MetaLabeling: parseMetaLabeling,
   };
 
   return AGENTS.map((agent) => {
@@ -399,6 +415,9 @@ function buildCards(data: ApiData): AgentCardProps[] {
     }
     if (agent.prefix === "ResearchAgent") {
       vote = "HOLD";
+    }
+    if (agent.prefix === "MetaLabeling") {
+      vote = "HOLD"; // calibrator — no directional vote
     }
 
     return {
