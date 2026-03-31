@@ -107,6 +107,22 @@ class RatchetManager:
                                  "reason": "could not get current price"})
                 continue
 
+            # ── Manual SL/TP enforcement for fractional/bracketless orders ──
+            # Positions opened with fractional qty have no Alpaca bracket order,
+            # so SL/TP are only stored in Supabase.  Close them here if hit.
+            legs = self.broker.get_bracket_legs(ticker)
+            if legs is None and (current_sl > 0 or current_tp > 0):
+                closed = self._enforce_sl_tp(
+                    ticker=ticker,
+                    pos_id=pos_id,
+                    current_price=current_price,
+                    current_sl=current_sl,
+                    current_tp=current_tp,
+                )
+                if closed:
+                    results.append(closed)
+                    continue  # position closed — skip ratchet
+
             # Parse opened_at → naive UTC datetime
             opened_at = None
             raw_ts = pos.get("opened_at")
@@ -502,6 +518,80 @@ class RatchetManager:
             "tp_patched":    tp_patched,
             "sl_patched":    sl_patched,
             "patch_error":   patch_error,
+        }
+
+    # ── Manual SL/TP enforcement (fractional / bracketless orders) ──────
+
+    def _enforce_sl_tp(
+        self,
+        ticker: str,
+        pos_id: str,
+        current_price: float,
+        current_sl: float,
+        current_tp: float,
+    ) -> dict | None:
+        """Close a position if price has violated SL or TP stored in Supabase.
+
+        Used for fractional orders that have no Alpaca bracket leg.
+        Returns a result dict if the position was closed, else None.
+        """
+        sl_hit = current_sl > 0 and current_price <= current_sl
+        tp_hit = current_tp > 0 and current_price >= current_tp
+
+        if not sl_hit and not tp_hit:
+            return None
+
+        reason = "TP hit" if tp_hit else "SL hit"
+        logger.info(
+            "Manual %s enforcement for %s: price=%.4f, SL=%.4f, TP=%.4f",
+            reason, ticker, current_price, current_sl, current_tp,
+        )
+
+        try:
+            close_result = self.broker.close_position(ticker)
+        except Exception as e:
+            logger.error("Failed to close position %s: %s", ticker, e)
+            return {
+                "action": "close_failed",
+                "ticker": ticker,
+                "reason": f"{reason} — close_position error: {e}",
+            }
+
+        if close_result is None:
+            logger.warning(
+                "close_position(%s) returned None — position may already be closed", ticker
+            )
+
+        # Mark position as closed in DB
+        try:
+            self.supabase.table("positions").update({
+                "status": "closed",
+            }).eq("id", pos_id).execute()
+        except Exception as e:
+            logger.error("DB update after manual close failed for %s: %s", ticker, e)
+
+        # Telegram notification
+        try:
+            from bot_telegram.telegram_notifier import notify
+            mode = "PAPER" if self.paper else "LIVE"
+            emoji = "\U0001f3af" if tp_hit else "\U0001f6d1"
+            notify(
+                f"{emoji} <b>{'TAKE PROFIT' if tp_hit else 'STOP LOSS'} MANUALE [{mode}]</b>\n\n"
+                f"\U0001f4b9 <b>{ticker}</b>\n"
+                f"\u2022 Prezzo: <b>${current_price:.4f}</b>\n"
+                f"\u2022 {'TP' if tp_hit else 'SL'}: <b>${current_tp if tp_hit else current_sl:.4f}</b>\n"
+                f"\u2022 Ordine frazionario \u2014 chiusura gestita da position_manager"
+            )
+        except Exception as e:
+            logger.warning("Telegram notify after manual close failed: %s", e)
+
+        return {
+            "action": "closed_manual",
+            "ticker": ticker,
+            "reason": reason,
+            "close_price": current_price,
+            "sl": current_sl,
+            "tp": current_tp,
         }
 
     # ── Helpers (mockable for unit tests) ────────────────

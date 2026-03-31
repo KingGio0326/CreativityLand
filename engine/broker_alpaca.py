@@ -86,34 +86,52 @@ class AlpacaBroker:
     ) -> dict:
         """Submit a market order, optionally with bracket SL/TP.
 
+        Fractional quantities (qty < 1 or non-integer) require TIF=day and
+        do NOT support bracket orders on Alpaca.  SL/TP for fractional orders
+        are managed by position_manager.yml via Supabase.
+
         Args:
             ticker: Symbol (e.g. "AAPL")
             qty: Number of shares (can be fractional)
             side: "buy" or "sell"
-            stop_loss: Stop loss price (for bracket order)
-            take_profit: Take profit price (for bracket order)
+            stop_loss: Stop loss price (ignored for fractional orders)
+            take_profit: Take profit price (ignored for fractional orders)
 
         Returns:
             Alpaca order response dict
         """
         symbol = ticker.replace("-", "")
+
+        # Alpaca: fractional orders must use TIF=day and cannot have brackets
+        is_fractional = (qty % 1 != 0) or qty < 1
+        tif = "day" if is_fractional else "gtc"
+
         body: dict = {
             "symbol": symbol,
             "qty": str(round(qty, 6)),
             "side": side,
             "type": "market",
-            "time_in_force": "gtc",
+            "time_in_force": tif,
         }
 
-        # Use bracket order if SL and TP provided
-        if stop_loss is not None and take_profit is not None:
+        # Bracket order only for whole-share orders
+        has_bracket = False
+        if not is_fractional and stop_loss is not None and take_profit is not None:
             body["order_class"] = "bracket"
             body["stop_loss"] = {"stop_price": str(round(stop_loss, 2))}
             body["take_profit"] = {"limit_price": str(round(take_profit, 2))}
+            has_bracket = True
+
+        if is_fractional:
+            logger.info(
+                "Fractional order %.6f shares — no bracket, TIF=day. "
+                "SL/TP will be managed by position_manager",
+                qty,
+            )
 
         logger.info(
-            "Submitting %s order: %s %s x%.4f (SL=%s, TP=%s)",
-            side, symbol, body["type"], qty, stop_loss, take_profit,
+            "Order %s: qty=%.6f, fractional=%s, tif=%s, bracket=%s (SL=%s, TP=%s)",
+            symbol, qty, is_fractional, tif, has_bracket, stop_loss, take_profit,
         )
 
         r = self._client.post("/v2/orders", json=body)
