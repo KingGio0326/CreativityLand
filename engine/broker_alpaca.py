@@ -216,6 +216,78 @@ class AlpacaBroker:
             pass
         return None
 
+    # ── Orders (read + modify) ───────────────────────────
+
+    def get_open_orders(self, ticker: str | None = None) -> list[dict]:
+        """Return open orders, optionally filtered by ticker.
+
+        Uses nested=true so bracket legs are included inline.
+        """
+        params: dict = {"status": "open", "nested": "true"}
+        if ticker:
+            params["symbols"] = ticker.replace("-", "")
+        r = self._client.get("/v2/orders", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    def replace_order(
+        self,
+        order_id: str,
+        limit_price: float | None = None,
+        stop_price: float | None = None,
+    ) -> dict:
+        """Modify an existing order via PATCH /v2/orders/{order_id}.
+
+        Use limit_price to update a take-profit (limit) leg and
+        stop_price to update a stop-loss (stop) leg.
+        """
+        body: dict = {}
+        if limit_price is not None:
+            body["limit_price"] = str(round(limit_price, 2))
+        if stop_price is not None:
+            body["stop_price"] = str(round(stop_price, 2))
+        if not body:
+            raise ValueError("Must provide limit_price or stop_price")
+        r = self._client.patch(f"/v2/orders/{order_id}", json=body)
+        if not r.is_success:
+            logger.error("replace_order failed: %s %s", r.status_code, r.text)
+        r.raise_for_status()
+        return r.json()
+
+    def get_bracket_legs(self, ticker: str) -> dict | None:
+        """Find the TP and SL order legs for an open bracket position.
+
+        Returns {"tp_order_id", "tp_limit_price", "sl_order_id",
+        "sl_stop_price"} or None if no bracket order is found.
+        """
+        try:
+            orders = self.get_open_orders(ticker)
+        except Exception as e:
+            logger.warning("get_bracket_legs(%s) failed: %s", ticker, e)
+            return None
+
+        for order in orders:
+            if order.get("order_class") != "bracket":
+                continue
+            legs = order.get("legs") or []
+            tp_order = None
+            sl_order = None
+            for leg in legs:
+                leg_type = leg.get("type", "")
+                if leg_type == "limit":
+                    tp_order = leg
+                elif leg_type in ("stop", "stop_limit"):
+                    sl_order = leg
+            if tp_order and sl_order:
+                return {
+                    "tp_order_id": tp_order["id"],
+                    "tp_limit_price": float(tp_order.get("limit_price") or 0),
+                    "sl_order_id": sl_order["id"],
+                    "sl_stop_price": float(sl_order.get("stop_price") or 0),
+                }
+        logger.info("No bracket legs found for %s", ticker)
+        return None
+
     # ── Market hours ─────────────────────────────────────
 
     def is_market_open(self) -> bool:

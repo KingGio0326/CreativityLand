@@ -1,7 +1,7 @@
 # CONTEXT.md
 
 Documento di continuità per riprendere lo sviluppo del progetto **CreativityLand Trading Bot** in una nuova sessione.
-Ultimo aggiornamento: 2026-03-30.
+Ultimo aggiornamento: 2026-03-31.
 
 ---
 
@@ -90,6 +90,7 @@ progetto_stef/
 │   ├── triple_barrier.py          # TripleBarrierLabeler (López de Prado AFML cap.3)
 │   ├── fractional_diff.py         # FFD: Fractional Differentiation (López de Prado AFML cap.5)
 │   ├── purged_kfold.py            # PurgedKFoldCV: Purged K-Fold CV (López de Prado AFML cap.7)
+│   ├── ratchet_manager.py         # RatchetManager: dynamic SL/TP ratcheting su Alpaca
 │   └── arxiv_search.py            # Ricerca paper arXiv
 │
 ├── scraper/
@@ -395,6 +396,9 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 | signal_id | uuid | FK → signals.id |
 | opened_at | timestamptz | |
 | status | text | open/closed |
+| ratchet_count | integer | Numero di ratchet eseguiti (default 0) |
+| last_ratchet_at | timestamptz | Timestamp ultimo ratchet |
+| ratchet_history | jsonb | Array di {ratchet_n, old_sl, old_tp, new_sl, new_tp, timestamp, legs_patched} |
 
 ### `trades`
 | Colonna | Tipo | Note |
@@ -444,6 +448,7 @@ Esegue segnali BUY/SELL tramite Alpaca REST. **Trading disabilitato per default*
 | Circuit breaker | `notify_circuit_breaker()` | % perdita, ordini bloccati |
 | Emergency close | `notify_emergency_close()` | N posizioni chiuse |
 | Max drawdown | `notify_drawdown()` | Equity, picco, % drawdown |
+| Ratchet eseguito | `notify_ratchet()` | Ticker, #ratchet, old→new SL/TP, progress% |
 
 ### Comandi Telegram trading
 | Comando | Azione |
@@ -637,6 +642,18 @@ Il walk-forward validation standard (sklearn `TimeSeriesSplit`) non gestisce il 
 
 ### Perché Fractional Differentiation (FFD) nel MLAgent
 Le serie di prezzi sono non-stazionarie (unit root), il che viola le assunzioni dei modelli ML. La differenziazione intera (returns) rende la serie stazionaria ma **distrugge tutta la memoria** (autocorrelazione). La **Fractional Differentiation** (López de Prado, AFML cap. 5) trova il minimo ordine frazionario `d` (tipicamente 0.3-0.5) che rende la serie stazionaria preservando il massimo di memoria. L'implementazione usa il metodo FFD (Fixed-Width Window) con pesi ricorsivi troncati a threshold=1e-3 (~27 pesi per 504 daily bars). Il `find_optimal_d()` testa d da 0.0 a 1.0 in step di 0.05 e sceglie il minimo d per cui il test ADF ha p-value < 0.05. I valori ottimali di d vengono cachati in Supabase (`ml_feature_params`) durante il retraining domenicale e letti durante i run 6h, evitando il costo computazionale di ricalcolarli ogni volta. Features FFD: `close_ffd`, `high_ffd`, `low_ffd`, `volume_ffd`.
+
+### Perché Ratcheting Take Profit dinamico
+Quando il prezzo si avvicina velocemente al TP con momentum forte, chiudere la posizione è subottimale: il vecchio TP diventa il nuovo SL (profitto garantito a lock-in), e viene calcolato un nuovo TP più alto (vecchio TP + ATR × regime_mult). I due bracket legs vengono PATCHati su Alpaca via `PATCH /v2/orders/{id}` in ordine sicuro: **TP prima** (più sicuro — solo si alza il limit), **SL dopo** (più rischioso — si alza il stop). Il `RatchetManager` in `engine/ratchet_manager.py` esegue `check_all_positions()` a ogni run e valuta 6 condizioni in ordine di costo computazionale crescente:
+
+1. **Max ratchets** (3 max, memoria locale — gratuito)
+2. **Price ≥ TP** (possibile ordine TP non eseguito — warning Telegram + skip)
+3. **Regime** (crisis → skip, Supabase read)
+4. **Proximity** (≥80% in neutral/bull, ≥90% in bear — aritmetica)
+5. **Velocity** (raggiunta proximity in <50% del max holding time 168h)
+6. **Momentum + Volume** (RSI <78 stocks/<82 crypto, volume > 20-bar avg, yfinance)
+
+Safety layer in `execute_ratchet()`: ATR ≤0 → skip; ATR > 15% del prezzo → skip (volatilità estrema); sanity check livelli (new_sl < price < new_tp, new_sl > entry_price, gap SL-TP ≥0.5%, new_tp ≤ price×1.20). Post-PATCH: verifica i livelli effettivi con una seconda chiamata `get_bracket_legs()`, notifica Telegram se mismatch. Se SL PATCH fallisce dopo TP già aggiornato → notifica Telegram "RATCHET CRITICO". DB sempre aggiornato anche in caso di fallimento Alpaca.
 
 ### Perché extract_content_safe() con fallback
 Trafilatura fallisce su ~15% delle pagine (paywall, JS rendering, 403). `extract_content_safe()` prova: trafilatura full-text → RSS summary → stringa vuota. Questo garantisce che anche se l'estrazione fallisce, almeno il summary RSS viene conservato.

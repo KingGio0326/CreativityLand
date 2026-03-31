@@ -313,6 +313,28 @@ def notify_drawdown(
     notify(msg)
 
 
+def notify_ratchet(
+    ticker: str,
+    ratchet_count: int,
+    old_sl: float,
+    new_sl: float,
+    old_tp: float,
+    new_tp: float,
+    progress_pct: float,
+    paper: bool = True,
+) -> None:
+    """Send Telegram notification when a ratchet is executed."""
+    mode = "PAPER" if paper else "LIVE"
+    msg = (
+        f"\U0001f504 <b>RATCHET #{ratchet_count}</b> [{mode}]\n\n"
+        f"\U0001f4b9 <b>{ticker}</b> — avanzamento {progress_pct:.1f}%\n"
+        f"\u2022 SL: <b>${old_sl:.4f}</b> \u2192 <b>${new_sl:.4f}</b>\n"
+        f"\u2022 TP: <b>${old_tp:.4f}</b> \u2192 <b>${new_tp:.4f}</b>\n"
+        f"\n\u23f0 {datetime.utcnow().strftime('%d/%m %H:%M UTC')}"
+    )
+    notify(msg)
+
+
 def format_error_message(error: str, step: str) -> str:
     now = datetime.utcnow().strftime('%d/%m %H:%M UTC')
     return (
