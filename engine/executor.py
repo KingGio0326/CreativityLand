@@ -37,6 +37,7 @@ MIN_CONSENSUS = "moderate"      # Skip "weak" consensus
 STALE_PRICE_PCT = 5.0           # Skip if price moved > 5% since signal
 ORDER_COOLDOWN_HOURS = 6        # Max 1 order per ticker every N hours
 MAX_DRAWDOWN_PCT = 15.0         # Close all if equity drops > 15% from peak
+MIN_SHORT_CONFIDENCE = 0.60     # Shorts require higher confidence than longs
 
 
 class TradeExecutor:
@@ -199,17 +200,20 @@ class TradeExecutor:
         return result
 
     def _handle_sell(self, signal: dict, result: dict) -> dict:
-        """Handle a SELL signal — close existing LONG position."""
+        """Handle a SELL signal — close existing LONG or open SHORT."""
         ticker = signal["ticker"]
 
-        # Check if we have a position to close
+        # If there's an existing long position, close it
         pos = self.broker.get_position(ticker)
-        if not pos:
-            result["reason"] = "no open position to close"
-            logger.info("SELL %s skipped: no position", ticker)
-            return result
+        if pos and float(pos.get("qty", 0)) > 0:
+            return self._close_long_position(signal, result, pos)
 
-        # Close via broker
+        # No long position → open a new short
+        return self._open_short(signal, result)
+
+    def _close_long_position(self, signal: dict, result: dict, pos: dict) -> dict:
+        """Close an existing long position on SELL signal."""
+        ticker = signal["ticker"]
         try:
             order = self.broker.close_position(ticker)
             entry_price = float(pos.get("avg_entry_price", 0))
@@ -220,13 +224,12 @@ class TradeExecutor:
             result["action"] = "closed"
             result["order"] = order
             result["reason"] = (
-                f"SELL {qty:.4f} shares "
+                f"SELL (close long) {qty:.4f} shares "
                 f"(entry=${entry_price:.2f} → exit=${current_price:.2f}, "
                 f"P&L=${pnl:.2f})"
             )
-            logger.info("Executed SELL %s: %s", ticker, result["reason"])
+            logger.info("Executed SELL (close long) %s: %s", ticker, result["reason"])
 
-            # ── Update DB: close position + create trade ──
             self._close_position_db(
                 ticker=ticker,
                 exit_price=current_price,
@@ -236,7 +239,6 @@ class TradeExecutor:
                 signal_id_close=signal.get("signal_id"),
             )
 
-            # ── Telegram notification ──
             try:
                 notify_order_closed(
                     ticker=ticker, side="long",
@@ -248,10 +250,161 @@ class TradeExecutor:
                 pass
 
         except Exception as e:
-            result["reason"] = f"close failed: {e}"
-            logger.error("SELL %s failed: %s", ticker, e)
+            result["reason"] = f"close long failed: {e}"
+            logger.error("SELL (close long) %s failed: %s", ticker, e)
 
         return result
+
+    def _open_short(self, signal: dict, result: dict) -> dict:
+        """Open a new short (SELL) position."""
+        ticker = signal["ticker"]
+        confidence = signal.get("confidence", 0)
+        conf = confidence / 100 if confidence > 1 else confidence
+
+        # Block crypto shorts (no short selling for crypto on Alpaca paper)
+        if "-USD" in ticker:
+            result["reason"] = f"crypto shorts not supported ({ticker})"
+            logger.info("SHORT %s blocked: crypto not supported", ticker)
+            return result
+
+        # Higher confidence bar for shorts
+        if conf < MIN_SHORT_CONFIDENCE:
+            result["reason"] = (
+                f"short confidence too low "
+                f"({conf:.0%} < {MIN_SHORT_CONFIDENCE:.0%})"
+            )
+            logger.info("SHORT %s skipped: %s", ticker, result["reason"])
+            return result
+
+        # Earnings protection — never short into earnings
+        if self._has_upcoming_earnings(ticker):
+            result["reason"] = "earnings within 7 days — short blocked"
+            logger.info("SHORT %s blocked: upcoming earnings", ticker)
+            return result
+
+        # ── Pre-flight checks ──
+        checks = self._pre_flight_checks(signal)
+        if checks:
+            result["reason"] = checks
+            logger.info("SHORT %s skipped: %s", ticker, checks)
+            return result
+
+        # ── Position size (virtual $1k budget) ──
+        equity = self.broker.get_equity() / SCALE_FACTOR
+        if equity <= 0:
+            result["reason"] = "no equity available"
+            return result
+
+        pos_pct = signal.get("position_size_pct")
+        if pos_pct is None:
+            pos_pct = conf * 5
+        allocated = equity * (pos_pct / 100)
+
+        price = self.broker.get_latest_price(ticker)
+        if not price or price <= 0:
+            result["reason"] = "cannot determine current price"
+            return result
+
+        # Integer shares only for shorts (Alpaca bracket requires whole shares)
+        shares = int(allocated / price)
+        if shares < 1:
+            result["reason"] = f"short position too small ({shares} shares)"
+            return result
+
+        # ── SL/TP from ExitStrategyAgent (SHORT: TP < entry < SL) ──
+        exit_data = signal.get("exit_strategy", {})
+        sl = exit_data.get("stop_loss") or signal.get("stop_loss")
+        tp = exit_data.get("take_profit") or signal.get("take_profit")
+
+        # Validate SHORT direction; recalculate fallback if wrong
+        if sl is not None and tp is not None:
+            if not (tp < price < sl):
+                logger.error(
+                    "SHORT %s: SL/TP direction wrong "
+                    "(TP=%.4f, price=%.4f, SL=%.4f) — recalculating 2%%/4%%",
+                    ticker, tp, price, sl,
+                )
+                sl = round(price * 1.02, 2)
+                tp = round(price * 0.96, 2)
+
+        # ── Execute short order ──
+        try:
+            order = self.broker.submit_market_order(
+                ticker=ticker,
+                qty=float(shares),
+                side="sell",
+                stop_loss=sl,
+                take_profit=tp,
+            )
+            result["action"] = "opened_short"
+            result["order"] = order
+            result["reason"] = (
+                f"SHORT {shares} shares @ ~${price:.2f} "
+                f"(alloc=${allocated:.2f}, {pos_pct:.1f}%)"
+            )
+            logger.info("Executed SHORT %s: %s", ticker, result["reason"])
+
+            pos_id = self._save_position(
+                ticker=ticker,
+                side="short",
+                entry_price=price,
+                shares=float(shares),
+                allocated=allocated,
+                sl=sl,
+                tp=tp,
+                signal_id=signal.get("signal_id"),
+            )
+            result["position_id"] = pos_id
+
+            try:
+                notify_order_opened(
+                    ticker=ticker, side="sell",
+                    shares=float(shares), price=price,
+                    allocated=allocated, sl=sl, tp=tp,
+                    paper=self.paper,
+                )
+            except Exception:
+                pass
+
+        except Exception as e:
+            result["reason"] = f"short order failed: {e}"
+            logger.error("SHORT %s failed: %s", ticker, e)
+
+        return result
+
+    def _has_upcoming_earnings(self, ticker: str, days: int = 7) -> bool:
+        """Return True if the ticker has earnings within `days` calendar days."""
+        try:
+            import yfinance as yf
+            cal = yf.Ticker(ticker).calendar
+            if not cal:
+                return False
+            # calendar is a dict: {'Earnings Date': [Timestamp, ...], ...}
+            raw = None
+            if isinstance(cal, dict):
+                raw = cal.get("Earnings Date")
+            elif hasattr(cal, "__getitem__"):
+                try:
+                    raw = cal["Earnings Date"]
+                except (KeyError, TypeError):
+                    pass
+            if raw is None:
+                return False
+            today = datetime.now(timezone.utc).date()
+            items = raw if hasattr(raw, "__iter__") else [raw]
+            for d in items:
+                try:
+                    d_date = d.date() if hasattr(d, "date") else None
+                    if d_date is None:
+                        d_date = datetime.fromisoformat(str(d)[:10]).date()
+                    delta = (d_date - today).days
+                    if 0 <= delta <= days:
+                        return True
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning("Earnings check failed for %s: %s", ticker, e)
+        return False
 
     def _handle_hold(self, signal: dict, result: dict) -> dict:
         """Handle a HOLD signal — optionally tighten stop to break-even."""

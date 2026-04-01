@@ -44,12 +44,16 @@ RSI_THRESHOLD_CRYPTO = 82.0
 # ATR guard: skip if ATR > this fraction of price (extreme volatility)
 ATR_MAX_PRICE_PCT = 0.15
 
+# RSI floors for SHORT positions — below these, stock is oversold → take profit
+SHORT_RSI_FLOOR_STOCK  = 22.0
+SHORT_RSI_FLOOR_CRYPTO = 18.0
+
 # Post-PATCH verification tolerance (absolute price units)
 VERIFY_TOLERANCE = 0.02
 
 
 class RatchetManager:
-    """Checks open long positions and ratchets SL/TP where conditions are met."""
+    """Checks open positions (long and short) and ratchets SL/TP where conditions are met."""
 
     MAX_RATCHETS = 3
 
@@ -66,7 +70,7 @@ class RatchetManager:
     # ── Main entry point ─────────────────────────────────
 
     def check_all_positions(self) -> list[dict]:
-        """Check every open long position and ratchet where warranted.
+        """Check every open position (long and short) and ratchet where warranted.
 
         Returns a list of result dicts (one per position).
         """
@@ -75,7 +79,6 @@ class RatchetManager:
                 self.supabase.table("positions")
                 .select("*")
                 .eq("status", "open")
-                .eq("side", "long")
                 .execute()
             )
             positions = pos_result.data or []
@@ -84,19 +87,25 @@ class RatchetManager:
             return []
 
         if not positions:
-            logger.info("No open long positions to check")
+            logger.info("No open positions to check")
             return []
 
         results = []
         for pos in positions:
             ticker        = pos.get("ticker", "")
+            side          = pos.get("side", "long")
             entry_price   = float(pos.get("entry_price") or 0)
             current_sl    = float(pos.get("stop_loss")   or 0)
             current_tp    = float(pos.get("take_profit") or 0)
             ratchet_count = int(pos.get("ratchet_count") or 0)
             pos_id        = pos.get("id")
 
-            if not current_tp or current_tp <= entry_price:
+            # Validate TP direction per side
+            valid_tp = (
+                (current_tp > entry_price) if side == "long"
+                else (0 < current_tp < entry_price)
+            )
+            if not valid_tp:
                 results.append({"ticker": ticker, "action": "skip",
                                  "reason": "no valid TP set"})
                 continue
@@ -115,6 +124,7 @@ class RatchetManager:
                 closed = self._enforce_sl_tp(
                     ticker=ticker,
                     pos_id=pos_id,
+                    side=side,
                     current_price=current_price,
                     current_sl=current_sl,
                     current_tp=current_tp,
@@ -140,6 +150,7 @@ class RatchetManager:
 
             check = self.should_ratchet(
                 ticker=ticker,
+                side=side,
                 entry_price=entry_price,
                 current_price=current_price,
                 current_sl=current_sl,
@@ -153,6 +164,7 @@ class RatchetManager:
                 atr_14 = market_data.get("atr_14") or 0.0
                 res = self.execute_ratchet(
                     ticker=ticker,
+                    side=side,
                     current_tp=current_tp,
                     old_sl=current_sl,
                     atr_14=atr_14,
@@ -199,6 +211,7 @@ class RatchetManager:
         current_sl: float,
         current_tp: float,
         ratchet_count: int,
+        side: str = "long",
         opened_at: datetime | None = None,
         market_data: dict | None = None,
     ) -> dict:
@@ -206,6 +219,7 @@ class RatchetManager:
 
         Returns a dict with should_ratchet (bool) and diagnostic fields.
         Checks are evaluated cheapest-first to short-circuit early.
+        Supports both long and short positions.
         """
 
         def _no(reason, *, progress_pct=0.0, velocity_ok=None,
@@ -217,29 +231,36 @@ class RatchetManager:
                 "regime": regime,
             }
 
+        is_short = side == "short"
+
         # 1. Max ratchets guard (no I/O)
         if ratchet_count >= self.MAX_RATCHETS:
             return _no(
                 f"max ratchets reached ({ratchet_count}/{self.MAX_RATCHETS})"
             )
 
-        # 2. Price already above TP — possible missed execution
-        if current_price >= current_tp:
+        # 2. Price already past TP — possible missed execution
+        # LONG: price >= TP means TP order should have fired
+        # SHORT: price <= TP means TP order should have fired
+        tp_passed = (current_price <= current_tp) if is_short else (current_price >= current_tp)
+        if tp_passed:
             logger.warning(
-                "should_ratchet %s: price %.4f >= TP %.4f — possible unexecuted TP order",
-                ticker, current_price, current_tp,
+                "should_ratchet %s (%s): price %.4f past TP %.4f — possible unexecuted TP order",
+                ticker, side, current_price, current_tp,
             )
             try:
                 from bot_telegram.telegram_notifier import notify
+                cmp = "≤" if is_short else "≥"
                 notify(
                     f"\u26a0\ufe0f <b>TP NON ESEGUITO [{ticker}]</b>\n"
-                    f"Prezzo <b>${current_price:.4f}</b> \u2265 TP <b>${current_tp:.4f}</b>\n"
+                    f"Prezzo <b>${current_price:.4f}</b> {cmp} TP <b>${current_tp:.4f}</b>\n"
                     f"Verificare se l'ordine TP \u00e8 stato eseguito su Alpaca!"
                 )
             except Exception:
                 pass
             return _no(
-                f"prezzo {current_price:.4f} >= TP {current_tp:.4f} — ordine TP non eseguito?",
+                f"prezzo {current_price:.4f} {'<=' if is_short else '>='} TP {current_tp:.4f} "
+                f"— ordine TP non eseguito?",
                 regime="unknown",
             )
 
@@ -250,11 +271,24 @@ class RatchetManager:
                        regime=regime)
 
         # 4. Proximity check (arithmetic, no I/O)
-        tp_distance = current_tp - entry_price
-        if tp_distance <= 0:
-            return _no("invalid: TP <= entry_price", regime=regime)
+        # LONG: tp_distance = TP - entry (positive), progress = (price - entry) / tp_distance
+        # SHORT: tp_distance = entry - TP (positive), progress = (entry - price) / tp_distance
+        if is_short:
+            tp_distance = entry_price - current_tp
+        else:
+            tp_distance = current_tp - entry_price
 
-        progress = (current_price - entry_price) / tp_distance
+        if tp_distance <= 0:
+            return _no(
+                "invalid: TP on wrong side of entry" if is_short else "invalid: TP <= entry_price",
+                regime=regime,
+            )
+
+        if is_short:
+            progress = (entry_price - current_price) / tp_distance
+        else:
+            progress = (current_price - entry_price) / tp_distance
+
         progress_pct = round(progress * 100, 1)
         threshold = PROXIMITY_BEAR if regime == "bear" else PROXIMITY_NORMAL
         if progress < threshold:
@@ -276,9 +310,15 @@ class RatchetManager:
         rsi       = market_data.get("rsi", 50.0)
         volume_ok = market_data.get("volume_ok", True)
 
-        is_crypto   = "-USD" in ticker
-        rsi_cap     = RSI_THRESHOLD_CRYPTO if is_crypto else RSI_THRESHOLD_STOCK
-        momentum_ok = rsi < rsi_cap
+        is_crypto = "-USD" in ticker
+        if is_short:
+            # SHORT: RSI too low = oversold = possible bounce → take profit instead
+            rsi_floor   = SHORT_RSI_FLOOR_CRYPTO if is_crypto else SHORT_RSI_FLOOR_STOCK
+            momentum_ok = rsi > rsi_floor
+        else:
+            # LONG: RSI too high = overbought → take profit instead
+            rsi_cap     = RSI_THRESHOLD_CRYPTO if is_crypto else RSI_THRESHOLD_STOCK
+            momentum_ok = rsi < rsi_cap
 
         if not velocity_ok:
             return _no(
@@ -288,8 +328,12 @@ class RatchetManager:
             )
 
         if not momentum_ok:
+            if is_short:
+                msg = f"RSI {rsi:.1f} <= {rsi_floor} (oversold — take profit instead)"
+            else:
+                msg = f"RSI {rsi:.1f} >= {rsi_cap} (overbought — take profit instead)"
             return _no(
-                f"RSI {rsi:.1f} >= {rsi_cap} (overbought — take profit instead)",
+                msg,
                 progress_pct=progress_pct, velocity_ok=velocity_ok,
                 momentum_ok=False, volume_ok=volume_ok, regime=regime,
             )
@@ -324,15 +368,21 @@ class RatchetManager:
         atr_14: float,
         regime: str,
         position_id: str,
+        side: str = "long",
         current_price: float = 0.0,
         entry_price: float = 0.0,
     ) -> dict:
-        """Execute the ratchet: old TP → new SL, new TP = old TP + ATR × mult.
+        """Execute the ratchet: old TP → new SL, new TP extends further.
+
+        LONG: new_sl = old_tp, new_tp = old_tp + ATR × mult
+        SHORT: new_sl = old_tp, new_tp = old_tp − ATR × mult
 
         Safety order: TP PATCH first (safe), SL PATCH second (risky).
         Sanity-checks levels before touching Alpaca, then verifies post-PATCH.
         Always updates Supabase even if Alpaca PATCH(es) failed.
         """
+
+        is_short = side == "short"
 
         # ── ATR protection ────────────────────────────────────
         if atr_14 <= 0:
@@ -354,24 +404,45 @@ class RatchetManager:
 
         atr_mult = REGIME_ATR_MULT.get(regime, 2.0)
         new_sl   = round(current_tp, 4)
-        new_tp   = round(current_tp + atr_14 * atr_mult, 4)
+        if is_short:
+            # SHORT: TP moves lower (more profit), SL moves lower (locking profit)
+            new_tp = round(current_tp - atr_14 * atr_mult, 4)
+        else:
+            # LONG: TP moves higher, SL moves higher (locking profit)
+            new_tp = round(current_tp + atr_14 * atr_mult, 4)
 
         # ── Sanity checks on computed levels ─────────────────
-        # NOTE: new_sl = current_tp > current_price (ratchet fires BEFORE hitting TP),
-        # so the check new_sl < current_price is intentionally absent here.
         skip_reason: str | None = None
-        if entry_price > 0 and new_sl <= entry_price:
-            skip_reason = (
-                f"new_sl {new_sl} <= entry_price {entry_price} — no locked profit"
-            )
-        elif new_tp <= new_sl * 1.005:
-            skip_reason = (
-                f"new_tp {new_tp} not > new_sl {new_sl} × 1.005 (< 0.5% gap)"
-            )
-        elif current_price > 0 and new_tp <= current_price:
-            skip_reason = (
-                f"new_tp {new_tp} <= current_price {current_price:.4f} — TP already passed"
-            )
+        if is_short:
+            # SHORT: new_sl = old_tp (below entry), new_tp even lower
+            # new_sl must be below entry (profit locked)
+            if entry_price > 0 and new_sl >= entry_price:
+                skip_reason = (
+                    f"new_sl {new_sl} >= entry_price {entry_price} — no locked profit (short)"
+                )
+            elif new_tp >= new_sl * 0.995:
+                skip_reason = (
+                    f"new_tp {new_tp} not < new_sl {new_sl} × 0.995 (< 0.5% gap)"
+                )
+            elif current_price > 0 and new_tp >= current_price:
+                skip_reason = (
+                    f"new_tp {new_tp} >= current_price {current_price:.4f} — TP already passed (short)"
+                )
+        else:
+            # LONG sanity checks (original)
+            # NOTE: new_sl = current_tp > current_price (ratchet fires BEFORE hitting TP)
+            if entry_price > 0 and new_sl <= entry_price:
+                skip_reason = (
+                    f"new_sl {new_sl} <= entry_price {entry_price} — no locked profit"
+                )
+            elif new_tp <= new_sl * 1.005:
+                skip_reason = (
+                    f"new_tp {new_tp} not > new_sl {new_sl} × 1.005 (< 0.5% gap)"
+                )
+            elif current_price > 0 and new_tp <= current_price:
+                skip_reason = (
+                    f"new_tp {new_tp} <= current_price {current_price:.4f} — TP already passed"
+                )
 
         if skip_reason:
             logger.warning("Ratchet sanity check failed for %s: %s", ticker, skip_reason)
@@ -529,14 +600,23 @@ class RatchetManager:
         current_price: float,
         current_sl: float,
         current_tp: float,
+        side: str = "long",
     ) -> dict | None:
         """Close a position if price has violated SL or TP stored in Supabase.
 
         Used for fractional orders that have no Alpaca bracket leg.
+        Supports both long and short positions.
         Returns a result dict if the position was closed, else None.
         """
-        sl_hit = current_sl > 0 and current_price <= current_sl
-        tp_hit = current_tp > 0 and current_price >= current_tp
+        is_short = side == "short"
+        if is_short:
+            # SHORT: SL is above entry, TP is below entry
+            sl_hit = current_sl > 0 and current_price >= current_sl
+            tp_hit = current_tp > 0 and current_price <= current_tp
+        else:
+            # LONG: SL is below entry, TP is above entry
+            sl_hit = current_sl > 0 and current_price <= current_sl
+            tp_hit = current_tp > 0 and current_price >= current_tp
 
         if not sl_hit and not tp_hit:
             return None

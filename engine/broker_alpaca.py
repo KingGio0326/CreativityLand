@@ -114,13 +114,24 @@ class AlpacaBroker:
             "time_in_force": tif,
         }
 
-        # Bracket order only for whole-share orders
+        # Bracket order only for whole-share orders with valid direction
         has_bracket = False
         if not is_fractional and stop_loss is not None and take_profit is not None:
-            body["order_class"] = "bracket"
-            body["stop_loss"] = {"stop_price": str(round(stop_loss, 2))}
-            body["take_profit"] = {"limit_price": str(round(take_profit, 2))}
-            has_bracket = True
+            # BUY bracket: SL < price < TP; SELL bracket: TP < price < SL
+            bracket_valid = (
+                (side == "buy" and stop_loss < take_profit) or
+                (side == "sell" and take_profit < stop_loss)
+            )
+            if not bracket_valid:
+                logger.warning(
+                    "Bracket direction invalid for %s %s: SL=%.4f, TP=%.4f — skipping bracket",
+                    side.upper(), symbol, stop_loss, take_profit,
+                )
+            else:
+                body["order_class"] = "bracket"
+                body["stop_loss"] = {"stop_price": str(round(stop_loss, 2))}
+                body["take_profit"] = {"limit_price": str(round(take_profit, 2))}
+                has_bracket = True
 
         if is_fractional:
             logger.info(

@@ -48,6 +48,7 @@ Ultimo aggiornamento: 2026-03-30.
 - [x] Pipeline principale aggiornata da ogni 6h a ogni 2h: cron `0 */2 * * *` in `bot.yml`. Più segnali giornalieri (12 run/die vs 4), timing sfalsato rispetto al position manager. (2026-03-31)
 - [x] Position Manager workflow ogni 1h (`position_manager.yml`, cron `30 * * * *`): ratchet check SL/TP con conflict guard (skip se posizione aperta < 10 min), trailing stop check (chiusura manuale se trailing activation raggiunta senza bracket leg), orphan position check (confronto Alpaca vs Supabase con notifica Telegram). Script test locale `scripts/run_position_manager.py`. (2026-03-31)
 - [x] Ratcheting Take Profit dinamico: `engine/ratchet_manager.py` — vecchio TP diventa nuovo SL (profitto lock-in), nuovo TP = vecchio TP + ATR × regime_mult. 6 condizioni in ordine cheapest-first (max ratchets, price≥TP, regime, proximity 80%/90%, velocity, RSI+volume). Safety: ATR≤0 → skip, ATR>15% prezzo → skip, sanity check livelli (price tra SL/TP, SL>entry, gap≥0.5%, TP≤120% price). PATCH Alpaca TP-first poi SL, post-PATCH verification, notifica Telegram per ratchet + alert critici (SL non aggiornato, verifica fallita). 3 nuove colonne `positions`: `ratchet_count`, `last_ratchet_at`, `ratchet_history`. `notify_ratchet()` in telegram_notifier. 20 test unitari. (2026-03-31)
+- [x] Short Selling bidirectional: `engine/executor.py` — `_handle_sell()` distingue close-long vs open-short. `_open_short()` con crypto block, `MIN_SHORT_CONFIDENCE=0.60`, earnings protection via `_has_upcoming_earnings()` (yfinance calendar, 7 giorni). Integer shares only per bracket support. Validazione direzione SL/TP (TP<entry<SL) con fallback 2%/4%. `engine/broker_alpaca.py`: validazione direzione bracket (BUY: SL<TP, SELL: TP<SL) prima di inviare ordine Alpaca. `engine/ratchet_manager.py`: ratchet bidirezionale — SHORT progress=(entry−price)/(entry−tp), SHORT ratchet: new_tp=current_tp−ATR×mult, SHORT RSI floor (22 stocks/18 crypto), SHORT enforce_sl_tp invertito (sl_hit=price≥sl, tp_hit=price≤tp). `agents/exit_strategy_agent.py`: validazione direzione post-calcolo (return None se invertito), fix log sign SHORT (+sl_pct, -tp_pct). 31 test unitari in `tests/test_short_selling.py`. (2026-04-01)
 
 ---
 
@@ -94,7 +95,7 @@ Ultimo aggiornamento: 2026-03-30.
 
 ## PROSSIMI STEP (priorità)
 
-### 1. Score composito unificato gauge
+### 0. Score composito unificato gauge
 - Creare un singolo "health score" che combina hit rate, avg score, alpha, consensus
 - Visualizzare come gauge/meter nella homepage dashboard
 - Utile per capire a colpo d'occhio se il sistema sta performando

@@ -96,6 +96,22 @@ def calculate_exit_levels(
     # Trailing level = break-even when trailing activates
     trailing_level = entry_price
 
+    # Validate direction: BUY → SL < entry < TP; SELL → TP < entry < SL
+    if signal == "BUY" and not (stop_loss < entry_price < take_profit):
+        logger.error(
+            "ExitStrategyAgent: invalid BUY levels for %s — "
+            "SL=%.4f, entry=%.4f, TP=%.4f",
+            ticker, stop_loss, entry_price, take_profit,
+        )
+        return None
+    if signal == "SELL" and not (take_profit < entry_price < stop_loss):
+        logger.error(
+            "ExitStrategyAgent: invalid SELL levels for %s — "
+            "TP=%.4f, entry=%.4f, SL=%.4f",
+            ticker, take_profit, entry_price, stop_loss,
+        )
+        return None
+
     return {
         "stop_loss": round(stop_loss, 4),
         "take_profit": round(take_profit, 4),
@@ -131,11 +147,14 @@ def exit_strategy_agent(state) -> dict:
 
     if levels:
         state["exit_strategy"] = levels
+        # For SHORT, SL is above entry (+) and TP is below entry (-)
+        sl_sign = "+" if signal == "SELL" else "-"
+        tp_sign = "-" if signal == "SELL" else "+"
         state["reasoning"].append(
             f"ExitStrategyAgent: SL=${levels['stop_loss']:.2f} "
-            f"(-{levels['sl_percentage']:.1f}%) | "
+            f"({sl_sign}{levels['sl_percentage']:.1f}%) | "
             f"TP=${levels['take_profit']:.2f} "
-            f"(+{levels['tp_percentage']:.1f}%) | "
+            f"({tp_sign}{levels['tp_percentage']:.1f}%) | "
             f"R:R={levels['risk_reward_ratio']:.1f} | "
             f"ATR={levels['atr_14']:.2f} x{levels['regime_multiplier']}"
         )

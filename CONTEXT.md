@@ -1,7 +1,7 @@
 # CONTEXT.md
 
 Documento di continuità per riprendere lo sviluppo del progetto **CreativityLand Trading Bot** in una nuova sessione.
-Ultimo aggiornamento: 2026-03-31.
+Ultimo aggiornamento: 2026-04-01.
 
 ---
 
@@ -427,11 +427,23 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 ### TradeExecutor (`engine/executor.py`)
 Esegue segnali BUY/SELL tramite Alpaca REST. **Trading disabilitato per default** (`TRADING_ENABLED=false`).
 
-### Pre-flight checks (9 controlli)
+### Gestione segnali SELL
+Il metodo `_handle_sell()` distingue due casi:
+1. **Esiste una posizione long** (`qty > 0`) → `_close_long_position()`: chiude la posizione e notifica Telegram
+2. **Nessuna posizione aperta** → `_open_short()`: apre una posizione short (vendita allo scoperto)
+
+**Guard per short selling:**
+- **Crypto bloccata**: short non supportato su crypto (BTC-USD, ETH-USD, etc.)
+- **Confidence minima**: `MIN_SHORT_CONFIDENCE=0.60` (vs 0.55 per long) — shorts più selettivi
+- **Earnings protection**: `_has_upcoming_earnings(ticker, days=7)` via yfinance → blocca short 7 giorni prima degli earnings
+- **Integer shares only**: short usa solo azioni intere (no frazioni) per supportare bracket orders su Alpaca
+- **Validazione SL/TP direzione**: per SHORT, deve valere `TP < entry < SL`; se invertito → fallback 2%/4%
+
+### Pre-flight checks (9 controlli, per BUY e _open_short)
 | # | Check | Soglia | Azione |
 |---|-------|--------|--------|
 | 1 | Posizione già aperta | - | Skip |
-| 2 | Confidence troppo bassa | < 55% | Skip |
+| 2 | Confidence troppo bassa | < 55% (BUY) / < 60% (SHORT) | Skip |
 | 3 | Consensus troppo debole | weak | Skip (richiede moderate+) |
 | 4 | Troppe posizioni aperte | >= 10 | Skip |
 | 5 | **Circuit breaker** | daily loss > -5% | Blocca + notifica Telegram |
@@ -680,7 +692,21 @@ Quando il prezzo si avvicina velocemente al TP con momentum forte, chiudere la p
 5. **Velocity** (raggiunta proximity in <50% del max holding time 168h)
 6. **Momentum + Volume** (RSI <78 stocks/<82 crypto, volume > 20-bar avg, yfinance)
 
-Safety layer in `execute_ratchet()`: ATR ≤0 → skip; ATR > 15% del prezzo → skip (volatilità estrema); sanity check livelli (new_sl < price < new_tp, new_sl > entry_price, gap SL-TP ≥0.5%, new_tp ≤ price×1.20). Post-PATCH: verifica i livelli effettivi con una seconda chiamata `get_bracket_legs()`, notifica Telegram se mismatch. Se SL PATCH fallisce dopo TP già aggiornato → notifica Telegram "RATCHET CRITICO". DB sempre aggiornato anche in caso di fallimento Alpaca.
+Safety layer in `execute_ratchet()`: ATR ≤0 → skip; ATR > 15% del prezzo → skip (volatilità estrema); sanity check livelli (new_sl > entry_price per LONG, new_sl < entry_price per SHORT, gap SL-TP ≥0.5%). Post-PATCH: verifica i livelli effettivi con una seconda chiamata `get_bracket_legs()`, notifica Telegram se mismatch. Se SL PATCH fallisce dopo TP già aggiornato → notifica Telegram "RATCHET CRITICO". DB sempre aggiornato anche in caso di fallimento Alpaca.
+
+**Bidirectional ratcheting (LONG e SHORT):**
+- `check_all_positions()` interroga **entrambi** i lati (rimosse `.eq("side","long")`)
+- LONG progress: `(price − entry) / (tp − entry)` → ratchet quando ≥80%
+- SHORT progress: `(entry − price) / (entry − tp)` → ratchet quando ≥80%
+- SHORT execute: `new_sl = current_tp`, `new_tp = current_tp − ATR × mult` (direzione invertita)
+- SHORT RSI: RSI < 22 (stocks) / 18 (crypto) = oversold → take profit invece di ratchettare
+- SHORT `_enforce_sl_tp()`: `sl_hit = price >= sl`, `tp_hit = price <= tp` (invertito rispetto a LONG)
+
+### Perché SHORT selling con barriera confidence più alta (0.60 vs 0.55)
+I segnali SELL per short selling sono intrinsecamente più rischiosi dei BUY: le perdite su short sono teoricamente illimitate (il prezzo può salire indefinitamente), mentre le perdite su long sono limitate al 100% del capitale investito. La soglia `MIN_SHORT_CONFIDENCE=0.60` richiede un sistema più convinto prima di aprire una short. Analogamente, la protezione earnings (`_has_upcoming_earnings`) è specifica per short: gli earnings sono la principale causa di gap up improvvisi che possono generare perdite massive su short. Crypto shorts sono bloccati del tutto perché Alpaca paper non le supporta e la volatilità crypto è incompatibile con la gestione del rischio attuale.
+
+### Perché validazione direzione SL/TP in broker_alpaca.py
+Alpaca accetta bracket orders per BUY con `stop_loss < take_profit` e per SELL con `take_profit < stop_loss`. Se la direzione è invertita (es. ExitStrategyAgent calcola livelli sbagliati), l'ordine Alpaca viene rifiutato con 422. La validazione in `submit_market_order()` verifica la direzione prima di inviare l'ordine, evitando il fallimento silenzioso del bracket.
 
 ### Perché extract_content_safe() con fallback
 Trafilatura fallisce su ~15% delle pagine (paywall, JS rendering, 403). `extract_content_safe()` prova: trafilatura full-text → RSS summary → stringa vuota. Questo garantisce che anche se l'estrazione fallisce, almeno il summary RSS viene conservato.
