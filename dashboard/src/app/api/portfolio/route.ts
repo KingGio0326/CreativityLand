@@ -151,7 +151,9 @@ export async function GET(request: NextRequest) {
     const account = {
       equity: Math.round((equityRaw / SCALE_FACTOR) * 100) / 100,
       cash: Math.round((cashRaw / SCALE_FACTOR) * 100) / 100,
-      buying_power: Math.round((buyingPowerRaw / SCALE_FACTOR) * 100) / 100,
+      // Alpaca paper è account a margine (buying_power = cash × 2).
+      // Per la simulazione $1k non usiamo margine → buying power = cash.
+      buying_power: Math.round((cashRaw / SCALE_FACTOR) * 100) / 100,
       daily_pl: Math.round(dailyPl * 100) / 100,
       daily_pl_pct: Math.round(dailyPlPct * 100) / 100,
       total_pl: Math.round(totalPl * 100) / 100,
