@@ -1,7 +1,7 @@
 # ROADMAP.md
 
 Roadmap di sviluppo del progetto **CreativityLand Trading Bot**.
-Ultimo aggiornamento: 2026-03-30.
+Ultimo aggiornamento: 2026-04-01.
 
 ---
 
@@ -52,71 +52,49 @@ Ultimo aggiornamento: 2026-03-30.
 
 ---
 
-## IN ATTESA
-
-| Cosa | Quando | Condizione |
-|------|--------|------------|
-| Score 168h disponibili | ~25 marzo 2026 | Primi segnali con 7 giorni di eta |
-| Audit bias segnali | Fine marzo 2026 | Servono 50+ segnali BUY/SELL valutati |
-| Ribilanciamento pesi agenti | Aprile 2026 | Dopo audit bias con dati reali |
-
----
-
-## COMPLETATO QUESTA SESSIONE (2026-03-23)
-
-### ~~Step 1: Regime Detection automatico~~ ✅
-- `engine/regime_detector.py`: VIX + SPY trend/SMA + TLT flight-to-safety → bull/bear/neutral/crisis
-- Nodo `regime` come primo step nel grafo LangGraph (20 nodi totali)
-- Pesi agenti regolati per regime: crisis (sentiment 1.5x, macro 2.0x, momentum 0.5x), bear (sentiment 1.3x, macro 1.5x, momentum 0.7x), bull (momentum 1.3x, ml 1.2x, fundamental 1.2x)
-- Cache 6h in tabella Supabase `market_regime`
-- `market_regime` e `regime_confidence` esposti nel risultato di `decide()`
-- Regime integrato nel reasoning: `RegimeDetector: BEAR (50%)` + `WeightedVote: ... regime=BEAR [...]`
-
-### ~~Step 2: Pattern Matching performance tracking~~ ✅
-- Tabella `pattern_evaluations` con signal_id, prediction, boost, regime, actual_return, pattern_correct
-- `save_pattern_evaluation()` in `scoring_engine.py` — salva dopo ogni segnale se patterns_matched > 0
-- `evaluate_pattern_performance()` — valuta dopo 168h: correct se bullish+return>0 o bearish+return<0
-- `save_signal()` ora ritorna il signal UUID
-- `pattern_data` dict nel risultato dell'orchestrator (prediction, boost, patterns_matched, regime)
-- Integrato nel workflow `bot.yml` (step 4b: save, step 7b: evaluate)
-
-### ~~Step 3: Regime nei messaggi Telegram~~ ✅
-- Run message: header `🔴 Mercato: BEAR (50%) -- VIX 29.7 | SPY 30d -5.0%` + nota modifier pesi
-- Weekly report: regime prevalente, VIX range min-max, distribuzione per regime
-- Bot inline: regime nel dettaglio ticker (`_get_regime_line()`)
-- Bottone `🌍 Regime` nel menu principale con dettaglio indicatori
-
-### ~~Step 4: Dashboard Pattern Performance~~ ✅
-- API route `/api/patterns-performance`: hit_rate, by_regime, by_prediction, recent 20
-- Sezione UI in `/patterns/page.tsx`: stat cards (Hit Rate, Avg Boost, Bullish/Bearish Acc.), bar chart per regime, tabella valutazioni
-- Empty state con messaggio "risultati dal ~30 marzo"
-
----
-
 ## PROSSIMI STEP (priorità)
 
-### 0. Score composito unificato gauge
-- Creare un singolo "health score" che combina hit rate, avg score, alpha, consensus
-- Visualizzare come gauge/meter nella homepage dashboard
-- Utile per capire a colpo d'occhio se il sistema sta performando
+### 1. Monitoring portafoglio reale (1-2 settimane)
+- Il trading è ATTIVO su Alpaca paper ($1k virtuali). Pipeline ogni 2h, position manager ogni 1h.
+- Monitorare l'equity curve nella pagina /portfolio
+- Verificare che: SL/TP scattino correttamente, ratcheting funzioni, short funzionino, ordini frazionari passino
+- Osservare win rate reale, distribuzione SL hit vs TP hit vs ratchet, P&L per ticker
+- Nessun intervento sul codice — solo osservazione e raccolta dati
+- **Condizione di successo**: equity curve in crescita o almeno non in drawdown costante dopo 50+ trade chiusi
+- **Effort**: 0 prompt, solo pazienza
+
+### 2. Analisi risultati e tuning (dopo monitoring)
+- Analizzare i trade chiusi dal portafoglio Alpaca: win rate, avg P&L, SL/TP/ratchet hit distribution
+- Confrontare performance per ticker: rimuovere ticker non profittevoli (es. GLD se confermato 0%)
+- Decidere se ribilanciare i pesi agenti basandosi sui TRADE REALI, non sullo scoring 168h
+- Calibrare soglie: ±0.15 per BUY/SELL, MIN_CONFIDENCE 55%/60%, regime multiplier
 - **Effort**: ~2 prompt
 
-### 2. Discovery automatico nuovi ticker
+### 3. Backtest SL/TP optimization
+- Dopo 2+ settimane di trade reali, testare parametri ATR multiplier e R:R ratio diversi
+- Usare i trade chiusi reali come dataset di validazione
+- Trovare la combinazione ottimale per regime
+- **Effort**: ~3 prompt
+
+### 4. Discovery automatico nuovi ticker
 - Analizzare trending topics dalle fonti scraper
 - Suggerire ticker non monitorati che stanno generando buzz
 - Notificare via Telegram quando un ticker sconosciuto ha 5+ articoli
 - **Effort**: ~3 prompt
 
-### 3. Backtest SL/TP optimization
-- Testare diversi multiplier ATR (1.0x, 1.5x, 2.0x, 2.5x, 3.0x) e R:R ratio (1.5, 2.0, 2.5, 3.0)
-- Trovare la combinazione ottimale per massimizzare il portfolio value nel SL/TP managed chart
-- Confrontare win rate e R:R con diversi regime multiplier
+### 5. Health gauge basato su portafoglio (opzionale)
+- Singolo indicatore 0-100 visibile in homepage
+- Basato su metriche REALI del portafoglio: equity trend, win rate trade chiusi, drawdown corrente, Sharpe ratio
+- NON basato su scoring 168h
+- **Effort**: ~2 prompt
+
+### 6. Dashboard mobile
+- Riscrittura interfaccia con mcp figma
 - **Effort**: ~3 prompt
 
-### 4. Versione locale/VPS
-- Quando il sistema mostra edge positivo consistente (hit rate >55% su 168h)
-- Migrare da GitHub Actions a cron locale o VPS
-- Paper trading via Alpaca già implementato (Fase 3-5)
+### 7. Versione locale/VPS (solo se necessario)
+- Solo se GitHub Actions diventa limitante o serve latenza più bassa per il position manager
+- La repo è pubblica → GitHub Actions illimitato, quindi non urgente
 - **Effort**: ~3 prompt
 
 ---
@@ -126,10 +104,11 @@ Ultimo aggiornamento: 2026-03-30.
 | Voce | Costo |
 |------|-------|
 | Supabase (free tier) | €0/mese |
-| GitHub Actions | €0/mese |
+| GitHub Actions | €0/mese (illimitato, repo pubblica) |
 | Vercel (free tier) | €0/mese |
 | NewsAPI (free tier) | €0/mese |
 | OpenRouter (attuale) | €0/mese (crediti gratuiti) |
+| Alpaca Paper Trading | €0/mese |
 | **TOTALE ATTUALE** | **€0/mese** |
 
 ### Target futuri

@@ -576,10 +576,14 @@ schedule:
 
 ---
 
-## 7. Stato Attuale del Sistema (2026-03-30)
+## 7. Stato Attuale del Sistema (2026-04-01)
 
 | Metrica | Valore |
 |---------|--------|
+| Agenti attivi | 19 agenti, 22 nodi LangGraph |
+| Pipeline | Ogni 2h (`0 */2 * * *`) — 12 run/die |
+| Position Manager | Ogni 1h al :30 (`30 * * * *`) |
+| Trading | **ATTIVO** su Alpaca paper — $1k virtuali (SCALE_FACTOR=100) |
 | Ticker monitorati | 43 (AAPL, TSLA, NVDA, MSFT, AMZN, GOOG, META, AMD, INTC, AVGO, TSM, MU, JPM, GS, BAC, V, MA, XOM, CVX, COP, OXY, LMT, RTX, NOC, JNJ, PFE, LLY, WMT, COST, DIS, GLD, SPY, QQQ, XLE, XLF, SLV, USO, TLT, BTC-USD, ETH-USD, SOL-USD, XRP-USD, DOGE-USD) |
 
 ### Fonti Scraper Attive
@@ -595,26 +599,23 @@ schedule:
 
 ## 8. Bugs Noti / Fix Pendenti
 
-1. **score_168h sempre 0**: Nessun segnale ha ancora 7 giorni di età. I primi score reali a 168h saranno disponibili dal ~25 marzo 2026. Non è un bug, è il sistema che si sta "scaldando".
+1. **CNBC contenuto variabile**: Alcuni articoli CNBC vengono scartati da trafilatura (`discarding data`). Il fallback RSS summary funziona ma il contenuto è più corto.
 
-2. **CNBC contenuto variabile**: Alcuni articoli CNBC vengono scartati da trafilatura (`discarding data`). Il fallback RSS summary funziona ma il contenuto è più corto.
+2. **Encoding cp1252**: Su Windows, print() con emoji Unicode può fallire. I file usano escape sequences (`\U0001f7e2`) per evitare il problema. Se si aggiungono nuovi print con emoji dirette, usare escape sequences.
 
-3. **Encoding cp1252**: Su Windows, print() con emoji Unicode può fallire. I file usano escape sequences (`\U0001f7e2`) per evitare il problema. Se si aggiungono nuovi print con emoji dirette, usare escape sequences.
-
-4. **`total_weight` nei pesi**: La somma dei WEIGHTS è 1.06 (non 1.0). Funziona perché il codice normalizza dividendo per `total_weight`, ma potrebbe confondere chi legge i pesi come percentuali.
+3. **`total_weight` nei pesi**: La somma dei WEIGHTS è 1.06 (non 1.0). Funziona perché il codice normalizza dividendo per `total_weight`, ma potrebbe confondere chi legge i pesi come percentuali.
 
 ---
 
 ## 9. Roadmap (Priorità)
 
-1. **Attendere score_168h** (~25 marzo) → verificare che le performance stats e hit rate siano corrette sulla dashboard e nel report settimanale
-2. **Score composito unificato** → Gauge/meter in homepage che combina hit rate, avg score, alpha, consensus
-3. **Discovery automatico nuovi ticker** → Trending topics dallo scraper → suggerimenti via Telegram
-4. **Alpha calculation** → Implementare il calcolo dell'alpha (vs SPY) nella `agent_performance` table
-5. **Backtest integration** → La tabella `backtest_results` esiste ma non è popolata dal workflow
-6. **Dashboard mobile** → La FloatingSidebar non è ottimizzata per mobile
-7. **Rate limiting scraper** → Aggiungere retry con backoff per le fonti che occasionalmente falliscono
-8. **Agent-level scoring** → Le colonne `agent_scores` in `signal_evaluations` contengono solo confidence, non score reali per agente
+1. **Monitoring portafoglio reale** (1-2 settimane) → osservare equity curve su /portfolio, verificare SL/TP/ratchet/short, raccogliere dati su 50+ trade chiusi. Nessun intervento sul codice.
+2. **Analisi e tuning** → win rate reale, SL/TP/ratchet hit distribution, ribilanciamento pesi agenti e soglie basato su trade reali
+3. **Backtest SL/TP optimization** → ATR multiplier e R:R ratio diversi usando i trade chiusi come dataset
+4. **Discovery automatico nuovi ticker** → Trending topics dalle fonti scraper → notifica Telegram se ticker sconosciuto ha 5+ articoli
+5. **Health gauge portafoglio** → Indicatore 0-100 in homepage basato su equity trend, win rate, drawdown, Sharpe reali
+6. **Dashboard mobile** → riscrittura interfaccia con mcp figma
+7. **Versione locale/VPS** → solo se GitHub Actions diventa limitante (repo pubblica = Actions illimitato)
 
 ---
 
