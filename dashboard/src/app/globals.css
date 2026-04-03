@@ -417,6 +417,149 @@ body {
 .data-table td { font-variant-numeric: tabular-nums; }
 .tabular-nums { font-variant-numeric: tabular-nums; }
 
+/* ── Premium Stat Cards ───────────────────────────────────── */
+
+.stat-card {
+  background: linear-gradient(135deg, #16163a 0%, #12122a 100%);
+  border: 1px solid rgba(139,92,246,0.15);
+  border-radius: 16px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #7c3aed, transparent);
+  opacity: 0.7;
+}
+.stat-card:hover {
+  border-color: rgba(139,92,246,0.3);
+  box-shadow: 0 0 24px rgba(124,58,237,0.1);
+}
+.stat-card.positive::before { background: linear-gradient(90deg, transparent, #10b981, transparent); }
+.stat-card.negative::before { background: linear-gradient(90deg, transparent, #ef4444, transparent); }
+
+.stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: var(--font-barlow-condensed), sans-serif;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.stat-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Section Cards ────────────────────────────────────────── */
+
+.section-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(139,92,246,0.12);
+  border-radius: 20px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.section-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.01);
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: var(--font-barlow-condensed), sans-serif;
+  color: var(--text-muted);
+}
+
+/* ── Progress Bar ─────────────────────────────────────────── */
+
+.progress-track {
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── Glow utilities ───────────────────────────────────────── */
+
+.glow-green { color: #10b981; text-shadow: 0 0 12px rgba(16,185,129,0.4); }
+.glow-red   { color: #ef4444; text-shadow: 0 0 12px rgba(239,68,68,0.4);  }
+.glow-purple{ color: #a855f7; text-shadow: 0 0 12px rgba(168,85,247,0.4); }
+
+/* ── Gradient text ────────────────────────────────────────── */
+
+.gradient-text {
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Ticker badge ─────────────────────────────────────────── */
+
+.ticker-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(124,58,237,0.12);
+  border: 1px solid rgba(124,58,237,0.25);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #c084fc;
+  letter-spacing: 0.04em;
+}
+
+/* ── Table rows ───────────────────────────────────────────── */
+
+.data-row {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.12s;
+}
+.data-row:hover { background: rgba(124,58,237,0.05); }
+.data-row:last-child { border-bottom: none; }
+
+/* ── Shimmer loading ──────────────────────────────────────── */
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite;
+}
+
 /* ── Reduced Motion ───────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

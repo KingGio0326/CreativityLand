@@ -11,7 +11,6 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { returnColor } from "@/lib/signal-styles";
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -111,29 +110,18 @@ function fmtXAxis(ts: number, period: PeriodKey): string {
   const d = new Date(ts * 1000);
   switch (period) {
     case "1D":
-      return d.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
+      return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
     case "1W":
       return (
         d.toLocaleDateString("en-US", { weekday: "short" }) +
         " " +
-        d.toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        })
+        d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
       );
     case "1M":
     case "3M":
       return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     case "ALL":
-      return d.toLocaleDateString("en-US", {
-        month: "short",
-        year: "numeric",
-      });
+      return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
   }
 }
 
@@ -153,6 +141,30 @@ function plColor(v: number): string {
   return "var(--text-secondary)";
 }
 
+function plGlow(v: number): string {
+  if (v > 0) return "0 0 12px rgba(16,185,129,0.35)";
+  if (v < 0) return "0 0 12px rgba(239,68,68,0.35)";
+  return "none";
+}
+
+/** Returns [pct, color] where pct is 0-100 showing price position between SL and TP */
+function calcSlTpProgress(
+  p: Position
+): { pct: number; color: string } | null {
+  const { stop_loss: sl, take_profit: tp, current_price: price, side } = p;
+  if (!sl || !tp) return null;
+  const isLong = side === "long" || side === "buy";
+  const lo = isLong ? sl : tp;
+  const hi = isLong ? tp : sl;
+  if (hi <= lo) return null;
+  const raw = ((price - lo) / (hi - lo)) * 100;
+  const pct = Math.max(0, Math.min(100, raw));
+  const color = isLong
+    ? pct > 60 ? "#10b981" : pct > 30 ? "#f59e0b" : "#ef4444"
+    : pct < 40 ? "#10b981" : pct < 70 ? "#f59e0b" : "#ef4444";
+  return { pct, color };
+}
+
 /* ── StatCard ──────────────────────────────────────────── */
 
 function StatCard({
@@ -160,56 +172,28 @@ function StatCard({
   value,
   sub,
   color,
+  variant = "neutral",
+  icon,
 }: {
   title: string;
   value: string;
   sub?: string;
   color?: string;
+  variant?: "positive" | "negative" | "neutral";
+  icon?: string;
 }) {
   return (
-    <div
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: 16,
-        padding: "18px 20px",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--text-muted)",
-          marginBottom: 6,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          fontFamily: "var(--font-barlow-condensed), sans-serif",
-          fontWeight: 600,
-        }}
-      >
-        {title}
+    <div className={`stat-card ${variant}`}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div className="stat-label">{title}</div>
+        {icon && (
+          <span style={{ fontSize: 14, opacity: 0.5 }}>{icon}</span>
+        )}
       </div>
-      <div
-        style={{
-          fontSize: 28,
-          fontWeight: 700,
-          color: color ?? "var(--text-primary)",
-          lineHeight: 1,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
+      <div className="stat-value" style={{ color: color ?? "var(--text-primary)" }}>
         {value}
       </div>
-      {sub && (
-        <div
-          style={{
-            fontSize: 11,
-            color: "var(--text-secondary)",
-            marginTop: 4,
-          }}
-        >
-          {sub}
-        </div>
-      )}
+      {sub && <div className="stat-sub">{sub}</div>}
     </div>
   );
 }
@@ -217,21 +201,24 @@ function StatCard({
 /* ── Side Badge ────────────────────────────────────────── */
 
 function SideBadge({ side }: { side: string }) {
-  const isBuy = side.toLowerCase() === "buy" || side.toLowerCase() === "long";
+  const isLong = side.toLowerCase() === "buy" || side.toLowerCase() === "long";
   return (
     <span
-      className="px-2 py-0.5 rounded text-[10px] font-bold border"
       style={{
-        color: isBuy ? "#10b981" : "#ef4444",
-        borderColor: isBuy
-          ? "rgba(16,185,129,0.3)"
-          : "rgba(239,68,68,0.3)",
-        background: isBuy
-          ? "rgba(16,185,129,0.1)"
-          : "rgba(239,68,68,0.1)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "2px 8px",
+        borderRadius: 5,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.06em",
+        border: `1px solid ${isLong ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`,
+        background: isLong ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
+        color: isLong ? "#10b981" : "#ef4444",
       }}
     >
-      {side.toUpperCase()}
+      {isLong ? "▲" : "▼"} {side.toUpperCase()}
     </span>
   );
 }
@@ -252,29 +239,22 @@ function ChartTooltip({
   return (
     <div
       style={{
-        background: "rgba(15,15,20,0.95)",
-        border: "1px solid rgba(168,85,247,0.3)",
-        borderRadius: 10,
+        background: "rgba(10,10,20,0.97)",
+        border: "1px solid rgba(168,85,247,0.35)",
+        borderRadius: 12,
         padding: "10px 14px",
         fontSize: 12,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
       }}
     >
-      <div style={{ color: "var(--text-muted)", marginBottom: 4 }}>
+      <div style={{ color: "var(--text-muted)", marginBottom: 6, fontSize: 11 }}>
         {fmtTooltipTime(d.timestamp)}
       </div>
-      <div style={{ fontWeight: 700, fontSize: 16, color: "#e0e0ff" }}>
+      <div style={{ fontWeight: 700, fontSize: 17, color: "#e0e0ff", fontVariantNumeric: "tabular-nums" }}>
         {fmtUsd(d.equity)}
       </div>
-      <div
-        style={{
-          color: plColor(pl),
-          fontSize: 11,
-          marginTop: 2,
-          fontWeight: 600,
-        }}
-      >
-        {pl >= 0 ? "+" : ""}
-        {fmtUsd(pl)} ({fmtPct(plPct)})
+      <div style={{ color: plColor(pl), fontSize: 11, marginTop: 3, fontWeight: 600 }}>
+        {pl >= 0 ? "+" : ""}{fmtUsd(pl)} ({fmtPct(plPct)})
       </div>
     </div>
   );
@@ -284,38 +264,87 @@ function ChartTooltip({
 
 function Skeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[...Array(5)].map((_, i) => (
-          <div
-            key={i}
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: 16,
-              padding: "18px 20px",
-              height: 88,
-            }}
-          />
+          <div key={i} className="shimmer" style={{ borderRadius: 16, height: 96 }} />
         ))}
       </div>
-      <div
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          borderRadius: 16,
-          height: 350,
-        }}
-      />
-      <div
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          borderRadius: 16,
-          height: 200,
-        }}
-      />
+      <div className="shimmer" style={{ borderRadius: 20, height: 370 }} />
+      <div className="shimmer" style={{ borderRadius: 20, height: 200 }} />
     </div>
+  );
+}
+
+/* ── Position Row ──────────────────────────────────────── */
+
+function PositionRow({ p }: { p: Position }) {
+  const progress = calcSlTpProgress(p);
+  const isLong = p.side === "long" || p.side === "buy";
+
+  return (
+    <tr className="data-row">
+      <td style={{ padding: "10px 16px" }}>
+        <span className="ticker-badge">{p.ticker}</span>
+      </td>
+      <td style={{ padding: "10px 16px", textAlign: "center" }}>
+        <SideBadge side={p.side} />
+      </td>
+      <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "var(--font-geist-mono)", fontSize: 12 }}>
+        {p.qty % 1 === 0 ? p.qty.toFixed(0) : p.qty.toFixed(4)}
+      </td>
+      <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "var(--font-geist-mono)", fontSize: 12, color: "var(--text-secondary)" }}>
+        {fmtUsd(p.entry_price)}
+      </td>
+      <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "var(--font-geist-mono)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+        {fmtUsd(p.current_price)}
+      </td>
+      <td style={{ padding: "10px 16px", textAlign: "right", fontFamily: "var(--font-geist-mono)", fontSize: 12, color: "var(--text-secondary)" }}>
+        {fmtUsd(p.market_value)}
+      </td>
+      <td style={{ padding: "10px 16px", textAlign: "right" }}>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono)",
+            fontSize: 12,
+            fontWeight: 700,
+            color: plColor(p.unrealized_pl),
+            textShadow: plGlow(p.unrealized_pl),
+          }}
+        >
+          {p.unrealized_pl >= 0 ? "+" : ""}{fmtUsd(p.unrealized_pl)}
+        </div>
+        <div style={{ fontSize: 10, color: plColor(p.unrealized_pl_pct), marginTop: 1 }}>
+          {fmtPct(p.unrealized_pl_pct)}
+        </div>
+      </td>
+      <td style={{ padding: "10px 16px", minWidth: 120 }}>
+        {progress ? (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginBottom: 4 }}>
+              <span style={{ color: "#ef4444" }}>SL</span>
+              <span style={{ color: "#10b981" }}>TP</span>
+            </div>
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${progress.pct}%`,
+                  background: progress.color,
+                  boxShadow: `0 0 6px ${progress.color}`,
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 3, fontFamily: "var(--font-geist-mono)" }}>
+              <span style={{ color: "#ef4444" }}>{fmtUsd(isLong ? p.stop_loss! : p.take_profit!)}</span>
+              <span style={{ color: "#10b981" }}>{fmtUsd(isLong ? p.take_profit! : p.stop_loss!)}</span>
+            </div>
+          </div>
+        ) : (
+          <span style={{ color: "var(--text-muted)", fontSize: 11 }}>—</span>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -348,32 +377,21 @@ export default function PortfolioPage() {
     }
   }, [equityPeriod]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Auto-refresh every 60s when market is open
   useEffect(() => {
     if (!data) return;
-
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-
-    if (data.is_market_open) {
-      intervalRef.current = setInterval(fetchData, 60_000);
-    }
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (data.is_market_open) { intervalRef.current = setInterval(fetchData, 60_000); }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [data, fetchData]);
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
+      <div className="space-y-5">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Portfolio</h1>
+        </div>
         <Skeleton />
       </div>
     );
@@ -381,46 +399,24 @@ export default function PortfolioPage() {
 
   if (error && !data) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
-        <div
-          style={{
-            background: "rgba(239,68,68,0.05)",
-            border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: 16,
-            padding: "24px 28px",
-            textAlign: "center",
-          }}
-        >
+      <div className="space-y-5">
+        <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Portfolio</h1>
+        <div style={{
+          background: "rgba(239,68,68,0.05)",
+          border: "1px solid rgba(239,68,68,0.25)",
+          borderRadius: 20,
+          padding: "32px",
+          textAlign: "center",
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
           <p style={{ color: "#ef4444", fontWeight: 600, fontSize: 14 }}>
-            Impossibile connettersi ad Alpaca
+            Cannot connect to Alpaca
           </p>
-          <p
-            style={{
-              color: "var(--text-muted)",
-              fontSize: 12,
-              marginTop: 6,
-            }}
-          >
-            {error}
-          </p>
+          <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6 }}>{error}</p>
           <button
-            onClick={() => {
-              setLoading(true);
-              setError(null);
-              fetchData();
-            }}
-            style={{
-              marginTop: 16,
-              padding: "8px 24px",
-              background: "#7c3aed",
-              color: "#fff",
-              border: "none",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            onClick={() => { setLoading(true); setError(null); fetchData(); }}
+            className="btn-primary"
+            style={{ marginTop: 20 }}
           >
             Retry
           </button>
@@ -429,21 +425,10 @@ export default function PortfolioPage() {
     );
   }
 
-  const account = data?.account ?? {
-    equity: 0,
-    cash: 0,
-    buying_power: 0,
-    daily_pl: 0,
-    daily_pl_pct: 0,
-    total_pl: 0,
-    total_pl_pct: 0,
-  };
+  const account = data?.account ?? { equity: 0, cash: 0, buying_power: 0, daily_pl: 0, daily_pl_pct: 0, total_pl: 0, total_pl_pct: 0 };
   const positions = data?.positions ?? [];
   const trades = data?.trades ?? [];
-  const equityHistory = data?.equity_history ?? {
-    timestamps: [],
-    equity: [],
-  };
+  const equityHistory = data?.equity_history ?? { timestamps: [], equity: [] };
   const isMarketOpen = data?.is_market_open ?? false;
 
   // Build chart data
@@ -453,647 +438,345 @@ export default function PortfolioPage() {
     equity: equityHistory.equity[i] ?? 0,
   }));
 
-  // Chart color: green if above baseline, red if below
-  const lastEquity =
-    chartData.length > 0
-      ? chartData[chartData.length - 1].equity
-      : INITIAL_EQUITY;
+  const lastEquity = chartData.length > 0 ? chartData[chartData.length - 1].equity : INITIAL_EQUITY;
   const isPositive = lastEquity >= INITIAL_EQUITY;
   const lineColor = isPositive ? "#10b981" : "#ef4444";
 
-  // Chart Y domain
   const equityValues = chartData.map((d) => d.equity).filter(Boolean);
-  const minEquity =
-    equityValues.length > 0
-      ? Math.min(...equityValues, INITIAL_EQUITY)
-      : INITIAL_EQUITY - 10;
-  const maxEquity =
-    equityValues.length > 0
-      ? Math.max(...equityValues, INITIAL_EQUITY)
-      : INITIAL_EQUITY + 10;
+  const minEquity = equityValues.length > 0 ? Math.min(...equityValues, INITIAL_EQUITY) : INITIAL_EQUITY - 10;
+  const maxEquity = equityValues.length > 0 ? Math.max(...equityValues, INITIAL_EQUITY) : INITIAL_EQUITY + 10;
   const yPad = Math.max((maxEquity - minEquity) * 0.15, 5);
   const yMin = Math.floor(minEquity - yPad);
   const yMax = Math.ceil(maxEquity + yPad);
 
-  // P&L from baseline
   const totalPlFromBase = lastEquity - INITIAL_EQUITY;
-  const totalPlPctFromBase =
-    ((lastEquity - INITIAL_EQUITY) / INITIAL_EQUITY) * 100;
+  const totalPlPctFromBase = ((lastEquity - INITIAL_EQUITY) / INITIAL_EQUITY) * 100;
+
+  const totalInvested = positions.reduce((s, p) => s + p.market_value, 0);
+  const totalUnrealizedPl = positions.reduce((s, p) => s + p.unrealized_pl, 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            padding: "3px 10px",
-            borderRadius: 6,
-            background: "rgba(124,58,237,0.15)",
-            color: "#a855f7",
-            border: "1px solid rgba(124,58,237,0.3)",
-          }}
-        >
+    <div className="space-y-5">
+      {/* ── Header ───────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", margin: 0 }}>
+          Portfolio
+        </h1>
+        <span style={{
+          fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+          padding: "3px 10px", borderRadius: 6,
+          background: "rgba(124,58,237,0.15)", color: "#a855f7",
+          border: "1px solid rgba(124,58,237,0.3)",
+        }}>
           PAPER
         </span>
         {isMarketOpen ? (
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              padding: "3px 10px",
-              borderRadius: 6,
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              background: "rgba(16,185,129,0.1)",
-              color: "#10b981",
-              border: "1px solid rgba(16,185,129,0.3)",
-            }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "#10b981",
-                boxShadow: "0 0 6px #10b981",
-              }}
-            />
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+            padding: "3px 10px", borderRadius: 6,
+            display: "flex", alignItems: "center", gap: 5,
+            background: "rgba(16,185,129,0.1)", color: "#10b981",
+            border: "1px solid rgba(16,185,129,0.3)",
+          }}>
+            <span className="live-pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", flexShrink: 0 }} />
             MARKET OPEN
           </span>
         ) : (
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              padding: "3px 10px",
-              borderRadius: 6,
-              background: "rgba(255,255,255,0.05)",
-              color: "var(--text-muted)",
-              border: "1px solid rgba(255,255,255,0.1)",
-            }}
-          >
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+            padding: "3px 10px", borderRadius: 6,
+            background: "rgba(255,255,255,0.05)", color: "var(--text-muted)",
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}>
             MARKET CLOSED
           </span>
         )}
-        {error && (
-          <span style={{ fontSize: 11, color: "#ef4444" }}>{error}</span>
-        )}
+        {error && <span style={{ fontSize: 11, color: "#ef4444", marginLeft: 4 }}>{error}</span>}
       </div>
 
-      {/* ── Stat Cards ──────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* ── Stat Cards ───────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatCard
           title="Equity"
           value={fmtUsd(account.equity)}
-          color={
-            account.equity >= INITIAL_EQUITY ? "#10b981" : "#ef4444"
-          }
+          sub={`Start: ${fmtUsd(INITIAL_EQUITY)}`}
+          color={account.equity >= INITIAL_EQUITY ? "#10b981" : "#ef4444"}
+          variant={account.equity >= INITIAL_EQUITY ? "positive" : "negative"}
+          icon="💼"
         />
         <StatCard
           title="Cash"
           value={fmtUsd(account.cash)}
           sub={`Buying power: ${fmtUsd(account.buying_power)}`}
+          icon="💵"
         />
         <StatCard
           title="Daily P&L"
           value={`${account.daily_pl >= 0 ? "+" : ""}${fmtUsd(account.daily_pl)}`}
           sub={fmtPct(account.daily_pl_pct)}
           color={plColor(account.daily_pl)}
+          variant={account.daily_pl > 0 ? "positive" : account.daily_pl < 0 ? "negative" : "neutral"}
+          icon="📅"
         />
         <StatCard
           title="Total P&L"
           value={`${account.total_pl >= 0 ? "+" : ""}${fmtUsd(account.total_pl)}`}
           sub={fmtPct(account.total_pl_pct)}
           color={plColor(account.total_pl)}
+          variant={account.total_pl > 0 ? "positive" : account.total_pl < 0 ? "negative" : "neutral"}
+          icon="📈"
         />
         <StatCard
           title="Positions"
           value={String(positions.length)}
-          sub={
-            positions.length > 0
-              ? `${fmtUsd(positions.reduce((s, p) => s + p.market_value, 0))} invested`
-              : "No open positions"
-          }
+          sub={positions.length > 0 ? `${fmtUsd(totalInvested)} invested` : "No open positions"}
+          icon="🎯"
         />
       </div>
 
-      {/* ── Equity Curve ────────────────────────────────── */}
-      <div
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          borderRadius: 16,
-          padding: "20px 20px 12px",
-          position: "relative",
-        }}
-      >
-        {/* Header row: title + period buttons */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 12,
-            marginBottom: 16,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              fontFamily: "var(--font-barlow-condensed), sans-serif",
-              color: "var(--text-muted)",
-            }}
-          >
-            Equity Curve
-          </div>
-
-          {/* Period selector */}
-          <div
-            style={{
-              display: "flex",
-              gap: 4,
-              overflowX: "auto",
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
-            {(Object.keys(PERIOD_CONFIG) as PeriodKey[]).map((key) => (
-              <button
-                key={key}
-                onClick={() => setEquityPeriod(key)}
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                  cursor: "pointer",
-                  border:
-                    equityPeriod === key
-                      ? "1px solid #7c3aed"
-                      : "1px solid rgba(255,255,255,0.12)",
-                  background:
-                    equityPeriod === key
-                      ? "rgba(124,58,237,0.2)"
-                      : "transparent",
-                  color:
-                    equityPeriod === key ? "#a855f7" : "var(--text-muted)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {key}
-              </button>
-            ))}
+      {/* ── Equity Curve ─────────────────────────────────── */}
+      <div className="section-card">
+        {/* Card header */}
+        <div style={{ padding: "16px 20px 0" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            {/* Left: title + summary */}
+            <div>
+              <div className="section-title" style={{ marginBottom: 8 }}>Equity Curve</div>
+              {chartData.length > 0 && (
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{
+                    fontSize: 28,
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    letterSpacing: "-0.02em",
+                    color: "var(--text-primary)",
+                  }}>
+                    {fmtUsd(lastEquity)}
+                  </span>
+                  <span style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: plColor(totalPlFromBase),
+                    textShadow: plGlow(totalPlFromBase),
+                  }}>
+                    {totalPlFromBase >= 0 ? "+" : ""}{fmtUsd(totalPlFromBase)} ({fmtPct(totalPlPctFromBase)})
+                  </span>
+                </div>
+              )}
+            </div>
+            {/* Right: period selector */}
+            <div style={{ display: "flex", gap: 3, padding: "2px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
+              {(Object.keys(PERIOD_CONFIG) as PeriodKey[]).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => setEquityPeriod(key)}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: 8,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    cursor: "pointer",
+                    border: "none",
+                    background: equityPeriod === key ? "rgba(124,58,237,0.35)" : "transparent",
+                    color: equityPeriod === key ? "#c084fc" : "var(--text-muted)",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {key}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Stat overlay — top right */}
-        {chartData.length > 0 && (
-          <div
-            style={{
-              position: "absolute",
-              top: 56,
-              right: 28,
-              textAlign: "right",
-              zIndex: 10,
-              pointerEvents: "none",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                fontVariantNumeric: "tabular-nums",
-                color: plColor(totalPlFromBase),
-                lineHeight: 1,
-              }}
-            >
-              {totalPlFromBase >= 0 ? "+" : ""}
-              {fmtUsd(totalPlFromBase)}
-            </div>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: plColor(totalPlFromBase),
-                marginTop: 2,
-              }}
-            >
-              {fmtPct(totalPlPctFromBase)}
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--text-muted)",
-                marginTop: 6,
-              }}
-            >
-              {fmtUsd(lastEquity)}
-            </div>
-          </div>
-        )}
-
         {/* Chart */}
-        {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={320} minHeight={300}>
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient
-                  id="equityGradPos"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop
-                    offset="0%"
-                    stopColor="#10b981"
-                    stopOpacity={0.3}
-                  />
-                  <stop
-                    offset="100%"
-                    stopColor="#10b981"
-                    stopOpacity={0}
-                  />
-                </linearGradient>
-                <linearGradient
-                  id="equityGradNeg"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop
-                    offset="0%"
-                    stopColor="#ef4444"
-                    stopOpacity={0.3}
-                  />
-                  <stop
-                    offset="100%"
-                    stopColor="#ef4444"
-                    stopOpacity={0}
-                  />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.04)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="timestamp"
-                tickFormatter={(ts: number) => fmtXAxis(ts, equityPeriod)}
-                stroke="rgba(255,255,255,0.15)"
-                tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                minTickGap={50}
-              />
-              <YAxis
-                domain={[yMin, yMax]}
-                stroke="rgba(255,255,255,0.15)"
-                tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) =>
-                  `$${v.toLocaleString("en-US", { minimumFractionDigits: 0 })}`
-                }
-                width={70}
-              />
-              <Tooltip content={<ChartTooltip />} />
-              <ReferenceLine
-                y={INITIAL_EQUITY}
-                stroke="#6b7280"
-                strokeDasharray="6 4"
-                label={{
-                  value: "Start",
-                  fill: "#6b7280",
-                  fontSize: 10,
-                  position: "left",
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="equity"
-                stroke={lineColor}
-                strokeWidth={2}
-                fill={
-                  isPositive
-                    ? "url(#equityGradPos)"
-                    : "url(#equityGradNeg)"
-                }
-                dot={false}
-                activeDot={{
-                  r: 4,
-                  stroke: lineColor,
-                  strokeWidth: 2,
-                  fill: "#0f0f14",
-                }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <div
-            style={{
-              height: 320,
-              minHeight: 300,
+        <div style={{ padding: "12px 0 4px" }}>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300} minHeight={260}>
+              <AreaChart data={chartData} margin={{ left: 0, right: 16, top: 8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradPos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradNeg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                <XAxis
+                  dataKey="timestamp"
+                  tickFormatter={(ts: number) => fmtXAxis(ts, equityPeriod)}
+                  stroke="rgba(255,255,255,0.08)"
+                  tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={50}
+                />
+                <YAxis
+                  domain={[yMin, yMax]}
+                  stroke="rgba(255,255,255,0.08)"
+                  tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v: number) => `$${v.toLocaleString("en-US", { minimumFractionDigits: 0 })}`}
+                  width={68}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <ReferenceLine
+                  y={INITIAL_EQUITY}
+                  stroke="rgba(139,92,246,0.3)"
+                  strokeDasharray="6 4"
+                  label={{ value: "$1k", fill: "rgba(139,92,246,0.6)", fontSize: 10, position: "left" }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="equity"
+                  stroke={lineColor}
+                  strokeWidth={2}
+                  fill={isPositive ? "url(#gradPos)" : "url(#gradNeg)"}
+                  dot={false}
+                  activeDot={{ r: 5, stroke: lineColor, strokeWidth: 2, fill: "#07070f" }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{
+              height: 300,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               color: "var(--text-muted)",
               gap: 8,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 600 }}>
-              Dati disponibili dal 30 marzo 2026
+              padding: "0 20px",
+            }}>
+              <div style={{ fontSize: 36, opacity: 0.3 }}>📊</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Dati disponibili dal 30 marzo 2026</div>
+              <div style={{ fontSize: 12, opacity: 0.6, textAlign: "center" }}>
+                L&apos;equity curve apparira quando Alpaca avra dati nel periodo selezionato
+              </div>
             </div>
-            <div style={{ fontSize: 12, opacity: 0.6 }}>
-              L&apos;equity curve apparira quando Alpaca avra dati nel periodo
-              selezionato
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* ── Open Positions ──────────────────────────────── */}
-      <div
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          borderRadius: 16,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            padding: "14px 20px",
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
+      {/* ── Open Positions ───────────────────────────────── */}
+      <div className="section-card">
+        <div className="section-header">
           {positions.length > 0 && (
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: "#10b981",
-                boxShadow: "0 0 8px #10b981",
-              }}
-            />
+            <span className="live-pulse-dot" style={{
+              width: 7, height: 7, borderRadius: "50%",
+              background: "#10b981", boxShadow: "0 0 8px #10b981", flexShrink: 0,
+            }} />
           )}
-          <span
-            style={{
-              fontSize: 13,
+          <span className="section-title">Open Positions</span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 2 }}>({positions.length})</span>
+          {positions.length > 0 && totalUnrealizedPl !== 0 && (
+            <span style={{
+              marginLeft: "auto",
+              fontSize: 12,
               fontWeight: 700,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              fontFamily: "var(--font-barlow-condensed), sans-serif",
-              color: "var(--text-muted)",
-            }}
-          >
-            Open Positions
-          </span>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            ({positions.length})
-          </span>
+              color: plColor(totalUnrealizedPl),
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              Unrealized: {totalUnrealizedPl >= 0 ? "+" : ""}{fmtUsd(totalUnrealizedPl)}
+            </span>
+          )}
         </div>
 
         {positions.length > 0 ? (
-          <div className="overflow-auto">
-            <table className="w-full text-xs">
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px solid rgba(255,255,255,0.07)",
-                    background: "rgba(255,255,255,0.02)",
-                  }}
-                >
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
-                    Ticker
-                  </th>
-                  <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">
-                    Side
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    Qty
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    Entry
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    Current
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    Mkt Value
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    P&L ($)
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    P&L (%)
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    SL
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    TP
-                  </th>
+                <tr style={{ background: "rgba(255,255,255,0.02)" }}>
+                  {["Ticker", "Side", "Qty", "Entry", "Current", "Mkt Value", "P&L", "SL → TP"].map((h, i) => (
+                    <th key={h} style={{
+                      padding: "9px 16px",
+                      textAlign: i === 0 ? "left" : i === 1 ? "center" : i === 7 ? "left" : "right",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "var(--text-muted)",
+                      fontFamily: "var(--font-barlow-condensed), sans-serif",
+                      borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {positions.map((p) => (
-                  <tr
-                    key={p.ticker}
-                    style={{
-                      borderBottom: "1px solid rgba(255,255,255,0.04)",
-                    }}
-                    className="hover:bg-muted/20 transition-colors"
-                  >
-                    <td className="px-4 py-2.5 font-mono font-bold">
-                      {p.ticker}
-                    </td>
-                    <td className="px-4 py-2.5 text-center">
-                      <SideBadge side={p.side} />
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono">
-                      {p.qty.toFixed(4)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono">
-                      {fmtUsd(p.entry_price)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono">
-                      {fmtUsd(p.current_price)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono">
-                      {fmtUsd(p.market_value)}
-                    </td>
-                    <td
-                      className={`px-4 py-2.5 text-right font-mono font-bold ${returnColor(p.unrealized_pl)}`}
-                    >
-                      {p.unrealized_pl >= 0 ? "+" : ""}
-                      {fmtUsd(p.unrealized_pl)}
-                    </td>
-                    <td
-                      className={`px-4 py-2.5 text-right font-mono ${returnColor(p.unrealized_pl_pct)}`}
-                    >
-                      {fmtPct(p.unrealized_pl_pct)}
-                    </td>
-                    <td
-                      className="px-4 py-2.5 text-right font-mono"
-                      style={{
-                        color: p.stop_loss ? "#ef4444" : "var(--text-muted)",
-                      }}
-                    >
-                      {p.stop_loss ? fmtUsd(p.stop_loss) : "\u2014"}
-                    </td>
-                    <td
-                      className="px-4 py-2.5 text-right font-mono"
-                      style={{
-                        color: p.take_profit
-                          ? "#10b981"
-                          : "var(--text-muted)",
-                      }}
-                    >
-                      {p.take_profit ? fmtUsd(p.take_profit) : "\u2014"}
-                    </td>
-                  </tr>
+                  <PositionRow key={p.ticker} p={p} />
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <div style={{ padding: "40px 20px", textAlign: "center" }}>
-            <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-              Nessuna posizione aperta
-            </p>
-            <p
-              style={{
-                color: "var(--text-muted)",
-                fontSize: 11,
-                marginTop: 4,
-                opacity: 0.6,
-              }}
-            >
+          <div style={{ padding: "48px 20px", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.25 }}>📭</div>
+            <p style={{ color: "var(--text-muted)", fontSize: 13, fontWeight: 600 }}>Nessuna posizione aperta</p>
+            <p style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 5, opacity: 0.6 }}>
               Le posizioni appariranno qui quando il bot eseguira trade
             </p>
           </div>
         )}
       </div>
 
-      {/* ── Trade History ───────────────────────────────── */}
-      <div
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          borderRadius: 16,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            padding: "14px 20px",
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              fontFamily: "var(--font-barlow-condensed), sans-serif",
-              color: "var(--text-muted)",
-            }}
-          >
-            Trade History
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              color: "var(--text-muted)",
-              marginLeft: 8,
-            }}
-          >
-            ({trades.length})
-          </span>
+      {/* ── Trade History ────────────────────────────────── */}
+      <div className="section-card">
+        <div className="section-header">
+          <span className="section-title">Trade History</span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 2 }}>({trades.length})</span>
         </div>
 
         {trades.length > 0 ? (
-          <div className="overflow-auto">
-            <table className="w-full text-xs">
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px solid rgba(255,255,255,0.07)",
-                    background: "rgba(255,255,255,0.02)",
-                  }}
-                >
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
-                    Date
-                  </th>
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
-                    Ticker
-                  </th>
-                  <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">
-                    Side
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    Qty
-                  </th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
-                    Price
-                  </th>
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
-                    Type
-                  </th>
+                <tr style={{ background: "rgba(255,255,255,0.02)" }}>
+                  {["Date", "Ticker", "Side", "Qty", "Price", "Type"].map((h, i) => (
+                    <th key={h} style={{
+                      padding: "9px 16px",
+                      textAlign: i === 0 || i === 1 || i === 5 ? "left" : i === 2 ? "center" : "right",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "var(--text-muted)",
+                      fontFamily: "var(--font-barlow-condensed), sans-serif",
+                      borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {trades.map((t) => (
-                  <tr
-                    key={t.id}
-                    style={{
-                      borderBottom: "1px solid rgba(255,255,255,0.04)",
-                    }}
-                    className="hover:bg-muted/20 transition-colors"
-                  >
-                    <td className="px-4 py-2.5 font-mono text-muted-foreground">
-                      {t.filled_at ? fmtDate(t.filled_at) : "\u2014"}
+                  <tr key={t.id} className="data-row">
+                    <td style={{ padding: "9px 16px", color: "var(--text-muted)", fontSize: 11, fontFamily: "var(--font-geist-mono)" }}>
+                      {t.filled_at ? fmtDate(t.filled_at) : "—"}
                     </td>
-                    <td className="px-4 py-2.5 font-mono font-bold">
-                      {t.ticker}
+                    <td style={{ padding: "9px 16px" }}>
+                      <span className="ticker-badge">{t.ticker}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-center">
+                    <td style={{ padding: "9px 16px", textAlign: "center" }}>
                       <SideBadge side={t.side} />
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono">
-                      {t.qty.toFixed(4)}
+                    <td style={{ padding: "9px 16px", textAlign: "right", fontFamily: "var(--font-geist-mono)" }}>
+                      {t.qty % 1 === 0 ? t.qty.toFixed(0) : t.qty.toFixed(4)}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono">
+                    <td style={{ padding: "9px 16px", textAlign: "right", fontFamily: "var(--font-geist-mono)", fontWeight: 600 }}>
                       {fmtUsd(t.filled_price)}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-muted-foreground">
+                    <td style={{ padding: "9px 16px", color: "var(--text-secondary)", fontFamily: "var(--font-geist-mono)", fontSize: 11 }}>
                       {t.type}
                     </td>
                   </tr>
@@ -1102,20 +785,11 @@ export default function PortfolioPage() {
             </table>
           </div>
         ) : (
-          <div style={{ padding: "40px 20px", textAlign: "center" }}>
-            <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-              Nessun trade eseguito
-            </p>
-            <p
-              style={{
-                color: "var(--text-muted)",
-                fontSize: 11,
-                marginTop: 4,
-                opacity: 0.6,
-              }}
-            >
-              I trade appariranno qui quando il bot aprira e chiudera
-              posizioni
+          <div style={{ padding: "48px 20px", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.25 }}>🔄</div>
+            <p style={{ color: "var(--text-muted)", fontSize: 13, fontWeight: 600 }}>Nessun trade eseguito</p>
+            <p style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 5, opacity: 0.6 }}>
+              I trade appariranno qui quando il bot aprira e chiudera posizioni
             </p>
           </div>
         )}

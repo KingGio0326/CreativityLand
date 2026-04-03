@@ -387,23 +387,23 @@ export default function DashboardPage() {
 
       {/* ── Quick Links ─────────────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
-          Quick links
-        </h2>
+        <div className="section-title" style={{ marginBottom: 12 }}>Quick links</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {QUICK_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="group card-gradient rounded-2xl p-5 transition-all hover:border-[rgba(139,92,246,0.4)] hover:shadow-[0_0_24px_rgba(124,58,237,0.12)] no-underline"
+              style={{ textDecoration: "none" }}
             >
-              <span className="text-3xl block mb-3">{link.icon}</span>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-light)] transition-colors">
-                {link.title}
-              </h3>
-              <p className="text-[11px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                {link.desc}
-              </p>
+              <div className="stat-card" style={{ cursor: "pointer", height: "100%" }}>
+                <span style={{ fontSize: 28, display: "block", marginBottom: 12 }}>{link.icon}</span>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
+                  {link.title}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  {link.desc}
+                </div>
+              </div>
             </Link>
           ))}
         </div>
@@ -429,34 +429,23 @@ function StatCard({
   sub: string;
   trend: "up" | "down" | "neutral";
 }) {
+  const variant = trend === "up" ? "positive" : trend === "down" ? "negative" : "";
   return (
-    <div className="card-gradient rounded-2xl p-4 flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <span
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-base"
-          style={{ background: iconBg }}
-        >
+    <div className={`stat-card ${variant}`}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, background: iconBg }}>
           {icon}
         </span>
-        <span
-          className={`text-xs font-bold ${
-            trend === "up"
-              ? "text-[var(--green)]"
-              : trend === "down"
-                ? "text-[var(--red)]"
-                : "text-[var(--text-muted)]"
-          }`}
-        >
+        <span style={{
+          fontSize: 11, fontWeight: 700,
+          color: trend === "up" ? "var(--green)" : trend === "down" ? "var(--red)" : "var(--text-muted)",
+        }}>
           {trend === "up" ? "▲" : trend === "down" ? "▼" : "—"}
         </span>
       </div>
-      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">
-        {label}
-      </p>
-      <p className="text-2xl font-bold text-[var(--text-primary)] font-mono leading-none tabular-nums">
-        {value}
-      </p>
-      <p className="text-[10px] text-[var(--text-secondary)]">{sub}</p>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-sub">{sub}</div>
     </div>
   );
 }

@@ -169,101 +169,43 @@ function StatCard({
   formula: string;
 }) {
   const [showInfo, setShowInfo] = useState(false);
+  const isPositive = color === "#10b981" || color === "var(--green)";
+  const isNegative = color === "#ef4444" || color === "var(--red)";
 
   return (
-    <div
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid",
-        borderRadius: 16,
-        padding: 20,
-        position: "relative",
-        transition: "border-color 0.2s",
-        borderColor: showInfo
-          ? "rgba(124,58,237,0.3)"
-          : "rgba(255,255,255,0.07)",
-      }}
-    >
+    <div className={`stat-card ${isPositive ? "positive" : isNegative ? "negative" : ""}`} style={{ padding: 20, position: "relative" }}>
       <button
         onClick={() => setShowInfo(!showInfo)}
         style={{
-          position: "absolute",
-          top: 14,
-          right: 14,
-          width: 22,
-          height: 22,
-          borderRadius: "50%",
+          position: "absolute", top: 14, right: 14,
+          width: 22, height: 22, borderRadius: "50%",
           border: "1px solid rgba(255,255,255,0.15)",
-          background: showInfo
-            ? "rgba(124,58,237,0.3)"
-            : "rgba(255,255,255,0.05)",
+          background: showInfo ? "rgba(124,58,237,0.3)" : "rgba(255,255,255,0.05)",
           color: showInfo ? "var(--accent-light)" : "var(--text-muted)",
-          fontSize: 12,
-          fontWeight: 700,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: "all 0.2s",
-          lineHeight: 1,
+          fontSize: 12, fontWeight: 700, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all 0.2s", lineHeight: 1,
         }}
       >
         i
       </button>
 
-      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
-        {title}
-      </div>
-      <div
-        style={{
-          fontSize: 36,
-          fontWeight: 700,
-          color,
-          marginBottom: 4,
-          lineHeight: 1,
-        }}
-      >
+      <div className="stat-label">{title}</div>
+      <div style={{ fontSize: 34, fontWeight: 700, color, marginBottom: 4, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
         {value}
       </div>
-      <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{subtitle}</div>
+      <div className="stat-sub">{subtitle}</div>
 
-      <div
-        style={{
-          maxHeight: showInfo ? 300 : 0,
-          overflow: "hidden",
-          transition: "max-height 0.35s cubic-bezier(0.4,0,0.2,1)",
-        }}
-      >
-        <div
-          style={{
-            marginTop: 16,
-            paddingTop: 14,
-            borderTop: "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
-          <div
-            style={{
-              background: "var(--bg-primary)",
-              borderRadius: 8,
-              padding: "8px 12px",
-              fontFamily: "monospace",
-              fontSize: 12,
-              color: "var(--accent-light)",
-              marginBottom: 10,
-              border: "1px solid rgba(124,58,237,0.2)",
-              letterSpacing: "0.02em",
-            }}
-          >
+      <div style={{ maxHeight: showInfo ? 300 : 0, overflow: "hidden", transition: "max-height 0.35s cubic-bezier(0.4,0,0.2,1)" }}>
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{
+            background: "var(--bg-primary)", borderRadius: 8, padding: "8px 12px",
+            fontFamily: "monospace", fontSize: 12, color: "var(--accent-light)",
+            marginBottom: 10, border: "1px solid rgba(124,58,237,0.2)", letterSpacing: "0.02em",
+          }}>
             {formula}
           </div>
-          <p
-            style={{
-              fontSize: 12,
-              color: "var(--text-secondary)",
-              lineHeight: 1.7,
-              margin: 0,
-            }}
-          >
+          <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.7, margin: 0 }}>
             {explanation}
           </p>
         </div>

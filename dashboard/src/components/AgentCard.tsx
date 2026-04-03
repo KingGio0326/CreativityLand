@@ -61,39 +61,67 @@ export default function AgentCard({
   const hasDetails = Object.keys(details).length > 0;
   const showRawByDefault = !hasDetails && reasoning.length > 0;
 
+  const confPct = confidence != null ? Math.round(confidence * 100) : 50;
+  const voteBarColor = vote === "BUY" ? "#10b981" : vote === "SELL" ? "#ef4444" : "#f59e0b";
+
   return (
-    <div className="rounded-2xl border bg-gradient-to-br from-[#1a1040] to-[#0e0e1a] border-[rgba(124,58,237,0.2)] overflow-hidden transition-all duration-300 hover:border-[rgba(124,58,237,0.5)] hover:shadow-[0_0_20px_rgba(124,58,237,0.1)]">
+    <div style={{
+      borderRadius: 20,
+      background: "linear-gradient(135deg, #1a1040 0%, #0e0e1a 100%)",
+      border: "1px solid rgba(124,58,237,0.2)",
+      overflow: "hidden",
+      transition: "border-color 0.2s, box-shadow 0.2s",
+    }}
+    onMouseEnter={(e) => {
+      (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(124,58,237,0.45)";
+      (e.currentTarget as HTMLDivElement).style.boxShadow = "0 0 24px rgba(124,58,237,0.1)";
+    }}
+    onMouseLeave={(e) => {
+      (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(124,58,237,0.2)";
+      (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
+    }}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(139,92,246,0.12)]">
-        <div
-          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-          style={{ backgroundColor: avatarBg, color: avatarColor, boxShadow: `0 0 10px ${avatarBg}40` }}
-        >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid rgba(139,92,246,0.1)" }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 12, fontWeight: 700,
+          backgroundColor: avatarBg, color: avatarColor,
+          boxShadow: `0 0 14px ${avatarBg}55`,
+        }}>
           {initials}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{name}</p>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {name}
+          </div>
         </div>
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[rgba(124,58,237,0.15)] text-[#a855f7] border border-[rgba(124,58,237,0.3)]">
+        <span style={{
+          fontSize: 10, fontFamily: "var(--font-geist-mono)", padding: "2px 8px",
+          borderRadius: 99, background: "rgba(124,58,237,0.15)", color: "#a855f7",
+          border: "1px solid rgba(124,58,237,0.3)", whiteSpace: "nowrap",
+        }}>
           {weightLabel}
         </span>
       </div>
 
       {/* Vote bar */}
-      <div className={`flex items-center gap-2 px-4 py-2.5 border-b border-[rgba(139,92,246,0.12)]`}>
-        <span className={`rounded-full px-3 py-0.5 text-xs font-bold tracking-wide ${v.bg} ${v.text}`}>{vote}</span>
-        <div className="flex-1 h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${confidence != null ? Math.round(confidence * 100) : 50}%`,
-              background: "linear-gradient(90deg, #7c3aed, #a855f7)",
-            }}
-          />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px 10px", borderBottom: "1px solid rgba(139,92,246,0.1)" }}>
+        <span className={`${v.bg} ${v.text}`} style={{ borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em" }}>
+          {vote}
+        </span>
+        <div style={{ flex: 1, height: 4, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+          <div style={{
+            height: "100%", borderRadius: 99,
+            width: `${confPct}%`,
+            background: `linear-gradient(90deg, ${voteBarColor}88, ${voteBarColor})`,
+            boxShadow: `0 0 8px ${voteBarColor}66`,
+            transition: "width 0.5s cubic-bezier(0.4,0,0.2,1)",
+          }} />
         </div>
         {confidence != null && (
-          <span className={`text-[10px] font-mono font-medium ${v.text}`}>
-            {Math.round(confidence * 100)}%
+          <span className={v.text} style={{ fontSize: 11, fontFamily: "var(--font-geist-mono)", fontWeight: 700, minWidth: 32, textAlign: "right" }}>
+            {confPct}%
           </span>
         )}
       </div>
