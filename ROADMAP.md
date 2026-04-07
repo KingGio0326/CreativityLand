@@ -1,7 +1,7 @@
 # ROADMAP.md
 
 Roadmap di sviluppo del progetto **CreativityLand Trading Bot**.
-Ultimo aggiornamento: 2026-04-01.
+Ultimo aggiornamento: 2026-04-07.
 
 ---
 
@@ -52,50 +52,65 @@ Ultimo aggiornamento: 2026-04-01.
 
 ---
 
-## PROSSIMI STEP (priorità)
+## PROSSIMI STEP
 
-### 1. Monitoring portafoglio reale (1-2 settimane)
+> **Priorità strategica:** osservare e validare il sistema attuale prima di aumentare la complessità.
+> Non aggiungere nuovi mercati, leva o broker finché il comportamento reale su Alpaca paper non è validato.
+> Non migrare a locale/VPS finché GitHub Actions non diventa un vero collo di bottiglia.
+
+---
+
+### Fase 1 — Adesso: monitoraggio (1–2 settimane)
+
 - Il trading è ATTIVO su Alpaca paper ($1k virtuali). Pipeline ogni 2h, position manager ogni 1h.
-- Monitorare l'equity curve nella pagina /portfolio
-- Verificare che: SL/TP scattino correttamente, ratcheting funzioni, short funzionino, ordini frazionari passino
-- Osservare win rate reale, distribuzione SL hit vs TP hit vs ratchet, P&L per ticker
-- Nessun intervento sul codice — solo osservazione e raccolta dati
-- **Condizione di successo**: equity curve in crescita o almeno non in drawdown costante dopo 50+ trade chiusi
-- **Effort**: 0 prompt, solo pazienza
+- Osservare senza intervenire sul codice. Raccogliere evidenza su trade reali prima di qualsiasi tuning.
+- Verificare il comportamento reale di:
+  - esecuzioni ordini (market, fractional, interi, short)
+  - SL/TP: scattano al momento giusto e ai livelli corretti?
+  - ratchet e trailing: funzionano su posizioni reali?
+  - signal evaluations: il sistema si autovaluta correttamente a 6h/24h/72h/168h?
+  - coerenza dashboard portfolio: equity, cash, P&L, posizioni
+- **Condizione di successo**: ≥50 trade chiusi con comportamento del sistema comprensibile e prevedibile
+- **Effort**: 0 prompt — solo osservazione
 
-### 2. Analisi risultati e tuning (dopo monitoring)
-- Analizzare i trade chiusi dal portafoglio Alpaca: win rate, avg P&L, SL/TP/ratchet hit distribution
-- Confrontare performance per ticker: rimuovere ticker non profittevoli (es. GLD se confermato 0%)
-- Decidere se ribilanciare i pesi agenti basandosi sui TRADE REALI, non sullo scoring 168h
-- Calibrare soglie: ±0.15 per BUY/SELL, MIN_CONFIDENCE 55%/60%, regime multiplier
-- **Effort**: ~2 prompt
+### Fase 2 — Tuning sulla base dei dati reali
 
-### 3. Backtest SL/TP optimization
-- Dopo 2+ settimane di trade reali, testare parametri ATR multiplier e R:R ratio diversi
-- Usare i trade chiusi reali come dataset di validazione
-- Trovare la combinazione ottimale per regime
+- Analizzare i trade chiusi: win rate, avg P&L, distribuzione SL/TP/ratchet hit
+- Confrontare performance per ticker: rimuovere ticker non profittevoli se confermato dai dati
+- Calibrare soglie di confidence, pesi agenti, regime multiplier basandosi sui trade reali
+- Ottimizzare ATR multiplier e R:R ratio usando i trade chiusi come dataset di validazione
+- Non basare il tuning sullo scoring 168h come unica metrica — usare i trade reali
+- **Effort**: ~3–5 prompt
+
+### Fase 3 — Solo dopo baseline stabile: espansione broker/mercati
+
+- Valutare solo dopo ≥3 mesi di track record reale con P&L positivo o breakeven
+- Candidati principali:
+  - **OANDA** — forex con leva, spread fissi, paper mode, API REST documentata
+  - **Kraken Futures** — crypto con leva, costi bassissimi, funding ogni 8h
+- Prerequisito tecnico: `BrokerAdapter` minimo in `executor.py` prima di aggiungere il 2° broker
+- Riferimento completo: `docs/BROKER_EXPANSION_STRATEGY.md` (costi, confronto, ordine di espansione)
+- **Effort**: ~5 prompt per broker
+
+### Fase 4 — Più avanti: broker abstraction e IBKR
+
+- Introdurre `BrokerAdapter` con `capability_flags` quando ci sono ≥2 broker attivi
+- Integrare Interactive Brokers solo con ticket medio >€500, capitale >€5k, track record >6 mesi
+- Aprire a futures/opzioni/global equities solo dopo IBKR consolidato
+
+### Fase 5 — Locale/VPS solo se necessario
+
+- **Non è la priorità immediata.** GitHub Actions è gratuito su repo pubblica e sufficiente per cicli da 2h.
+- Migrare solo se emerge un vero limite operativo: latenza critica sul position manager, rate limit Actions, o necessità di connessione persistente.
 - **Effort**: ~3 prompt
 
-### 4. Discovery automatico nuovi ticker
-- Analizzare trending topics dalle fonti scraper
-- Suggerire ticker non monitorati che stanno generando buzz
-- Notificare via Telegram quando un ticker sconosciuto ha 5+ articoli
-- **Effort**: ~3 prompt
+---
 
-### 5. Health gauge basato su portafoglio (opzionale)
-- Singolo indicatore 0-100 visibile in homepage
-- Basato su metriche REALI del portafoglio: equity trend, win rate trade chiusi, drawdown corrente, Sharpe ratio
-- NON basato su scoring 168h
-- **Effort**: ~2 prompt
+### Backlog (secondaria priorità)
 
-### 6. Dashboard mobile
-- Riscrittura interfaccia con mcp figma
-- **Effort**: ~3 prompt
-
-### 7. Versione locale/VPS (solo se necessario)
-- Solo se GitHub Actions diventa limitante o serve latenza più bassa per il position manager
-- La repo è pubblica → GitHub Actions illimitato, quindi non urgente
-- **Effort**: ~3 prompt
+- Discovery automatico nuovi ticker da trending scraper (notifica Telegram se 5+ articoli su ticker sconosciuto)
+- Health gauge portfolio: singolo indicatore 0–100 in homepage basato su equity trend, win rate, drawdown, Sharpe
+- Dashboard mobile ottimizzata
 
 ---
 

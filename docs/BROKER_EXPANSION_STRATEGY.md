@@ -69,10 +69,16 @@ un nuovo adapter, non toccare la pipeline.
 
 ## 5. Ordine Consigliato di Espansione
 
+> **Nota priorità (2026-04-07):** La Fase 0 è ancora in corso e va completata prima di procedere.
+> Il passo immediato è osservare il comportamento reale del sistema su Alpaca paper (≥50 trade chiusi),
+> poi fare tuning sulla base dei dati reali. L'espansione broker non è il next step — viene solo dopo
+> una baseline stabile. Riferimento: sezione "Fase 1–2" in `ROADMAP.md`.
+
 | Fase | Azione | Prerequisito | Stima impatto |
 |------|--------|--------------|---------------|
-| **0 — Attuale** | Consolidare Alpaca: ottimizzare segnali, ratcheting, scoring | — | Nessuno — già attivo |
-| **1 — Breve termine** | Track record reale ≥3 mesi con P&L positivo o breakeven | Capital live (anche €1k) su Alpaca | Baseline per validare la pipeline |
+| **0 — Attuale** | Osservare e validare il sistema su Alpaca paper: esecuzioni, SL/TP, ratchet, short, signal evaluations | — | Nessuno — solo raccolta dati |
+| **0b — Tuning** | Analizzare trade chiusi reali e calibrare parametri (confidence, pesi agenti, ATR multiplier) | ≥50 trade chiusi | Miglioramento segnali senza infrastruttura nuova |
+| **1 — Breve termine** | Track record reale ≥3 mesi con P&L positivo o breakeven | Tuning completato su Alpaca | Baseline per validare la pipeline prima di broker aggiuntivi |
 | **2 — Medio termine** | Aggiungere OANDA (forex) **oppure** Kraken Futures (crypto leveraged) | Broker abstraction minima in `executor.py` | +1 adapter, +1 set di agenti specializzati |
 | **3 — Medio termine** | Introdurre `BrokerAdapter` con `capability_flags` | Almeno 2 broker attivi | Refactor executor; nessuna modifica agli agenti |
 | **4 — Lungo termine** | Integrare Interactive Brokers | Ticket medio >€500, capitale >€5k, track record >6 mesi | Adapter complesso; accesso a azioni globali e futures |
