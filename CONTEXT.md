@@ -133,7 +133,7 @@ progetto_stef/
 │           └── supabase.ts        # Client Supabase
 │
 ├── .github/workflows/
-│   ├── bot.yml                    # Pipeline principale (ogni 6h)
+│   ├── bot.yml                    # Pipeline principale (ogni 2h)
 │   ├── test.yml                   # CI: lint + test
 │   └── deploy.yml                 # Deploy dashboard su Vercel
 │
@@ -501,18 +501,18 @@ TELEGRAM_CHAT_IDS=         # Comma-separated: 584291386,543687292
 ### Timing
 | Workflow | Cron | Minuto | Frequenza |
 |----------|------|--------|-----------|
-| `bot.yml` | `0 */2 * * *` | `:00` | Ogni 2h (00:00, 02:00, …, 22:00 UTC) |
-| `position_manager.yml` | `30 * * * *` | `:30` | Ogni 1h |
-| `bot.yml` domenica | `0 2 * * 0` | `:00` | Domenica 02:00 UTC |
+| `bot.yml` | `37 1-23/2 * * *` | `:37` | Ogni 2h (01:37, 03:37, …, 23:37 UTC) |
+| `position_manager.yml` | `17 * * * *` | `:17` | Ogni 1h |
+| `bot.yml` domenica | `47 2 * * 0` | `:47` | Domenica 02:47 UTC |
 
-I due workflow non si sovrappongono: `bot.yml` dura ~12 min e finisce prima del `:30` di `position_manager.yml`. Il position manager gira sempre al `:30`, anche nelle ore pari in cui gira bot.yml.
+I due workflow non si sovrappongono: `bot.yml` parte al `:37` e dura ~12–15 min (finisce ~:50). Il position manager gira al `:17` di ogni ora — sempre prima che bot.yml parta, e di nuovo al `:17` dell'ora successiva quando bot.yml è già terminato da ~25 min.
 
 ### `bot.yml` — Pipeline principale (ogni 2h)
 
 ```yaml
 schedule:
-  - cron: "0 */2 * * *"   # Ogni 2 ore
-  - cron: "0 2 * * 0"     # Domenica alle 02:00 UTC
+  - cron: "37 1-23/2 * * *"   # Ogni 2 ore al :37 (evita :00 congestionato su GH Actions)
+  - cron: "47 2 * * 0"        # Domenica alle 02:47 UTC (retrain ML + weekly report)
 ```
 
 ### Job `run-bot` (ogni 2h)
@@ -521,7 +521,7 @@ schedule:
 | 1. Scrape news | `python -m scraper.news_scraper` | Multi-source RSS + API |
 | 2. Process Sentiment | `SentimentAnalyzer().process_unanalyzed()` | FinBERT batch |
 | 3. Process Embeddings | `EmbeddingEngine().process_unembedded()` | MiniLM 384-dim |
-| 4. Run multi-agent | `TradingOrchestrator().decide(ticker)` | 8 ticker × 20 nodi (regime → ... → critic) |
+| 4. Run multi-agent | `TradingOrchestrator().decide(ticker)` | 47 ticker × 22 nodi (regime → ... → critic) |
 | 4b. Save pattern evals | `save_pattern_evaluation()` | Solo se patterns_matched > 0 |
 | 4c. Execute trades | `TradeExecutor().execute_signal()` | Solo se `TRADING_ENABLED=true`. Paper/live via `PAPER_TRADING` |
 | 5. Evaluate signals | `ScoringEngine().evaluate_pending()` | 6h/24h/72h/168h |
@@ -544,11 +544,11 @@ Ricostruisce i pattern storici per tutti i ticker da Alpha Vantage.
 ### Error handling
 Step finale `Notify Telegram Error` con `if: failure()` per notificare errori.
 
-### `position_manager.yml` — Gestione posizioni (ogni ora al :30)
+### `position_manager.yml` — Gestione posizioni (ogni ora al :17)
 
 ```yaml
 schedule:
-  - cron: "30 * * * *"   # Ogni ora al minuto 30
+  - cron: "17 * * * *"   # Ogni ora al minuto 17 (sfalsato rispetto a bot.yml al :37)
 ```
 
 | Step | Operazione | Note |
@@ -568,8 +568,8 @@ schedule:
 | Metrica | Valore |
 |---------|--------|
 | Agenti attivi | 19 agenti, 22 nodi LangGraph |
-| Pipeline | Ogni 2h (`0 */2 * * *`) — 12 run/die |
-| Position Manager | Ogni 1h al :30 (`30 * * * *`) |
+| Pipeline | Ogni 2h (`37 1-23/2 * * *`) — 12 run/die |
+| Position Manager | Ogni 1h al :17 (`17 * * * *`) |
 | Trading | **ATTIVO** su Alpaca paper — $1k virtuali (SCALE_FACTOR=100) |
 | Ticker monitorati | 47 (AAPL, TSLA, NVDA, MSFT, AMZN, GOOG, META, AMD, INTC, AVGO, TSM, MU, JPM, GS, BAC, V, MA, XOM, CVX, COP, OXY, EOG, LNG, LMT, RTX, NOC, JNJ, PFE, LLY, WMT, COST, DIS, AAL, UAL, GLD, SPY, QQQ, XLE, XLF, SLV, USO, TLT, BTC-USD, ETH-USD, SOL-USD, XRP-USD, DOGE-USD) |
 

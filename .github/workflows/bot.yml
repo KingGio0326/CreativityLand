@@ -155,7 +155,7 @@ jobs:
                   os.getenv('SUPABASE_URL', ''),
                   os.getenv('SUPABASE_KEY', ''),
               )
-              # Finestra 6h: il pipeline puo' impiegare 2-3h per 43 ticker
+              # Finestra 6h: il pipeline puo' impiegare 2-3h per 47 ticker
               cutoff = (datetime.now() - timedelta(hours=6)).isoformat()
               result = supabase.table('signals') \
                   .select('*') \
