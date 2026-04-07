@@ -71,6 +71,16 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function formatConfidenceLabel(isoStr: string): string {
+  const d = new Date(isoStr);
+  const hh = d.getHours().toString().padStart(2, "0");
+  const mm = d.getMinutes().toString().padStart(2, "0");
+  if (d.toDateString() === new Date().toDateString()) return `${hh}:${mm}`;
+  const day = d.getDate();
+  const month = d.toLocaleString("en-US", { month: "short" });
+  return `${day} ${month}`;
+}
+
 /* ── Component ─────────────────────────────────────────── */
 
 export default function DashboardPage() {
@@ -78,61 +88,60 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [selectedTicker, setSelectedTicker] = useState("AAPL");
   const [chartData, setChartData] = useState<{ day: string; confidence: number }[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartEmpty, setChartEmpty] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/signals");
       const data = await res.json();
-      const sigs: Signal[] = Array.isArray(data) ? data : [];
-      setSignals(sigs);
-
-      // Build chart data from last 7 unique signals per ticker (or mock)
-      const tickerSigs = sigs
-        .filter((s) => s.ticker === selectedTicker)
-        .slice(0, 7)
-        .reverse();
-
-      if (tickerSigs.length > 0) {
-        setChartData(
-          tickerSigs.map((s, i) => ({
-            day: `Run ${i + 1}`,
-            confidence: Math.round((s.confidence ?? 0) * 100),
-          })),
-        );
-      } else {
-        // Mock data when no real data
-        setChartData([
-          { day: "Mon", confidence: 62 },
-          { day: "Tue", confidence: 58 },
-          { day: "Wed", confidence: 71 },
-          { day: "Thu", confidence: 65 },
-          { day: "Fri", confidence: 74 },
-          { day: "Sat", confidence: 69 },
-          { day: "Sun", confidence: 78 },
-        ]);
-      }
+      setSignals(Array.isArray(data) ? data : []);
     } catch {
-      // Mock fallback
-      setChartData([
-        { day: "Mon", confidence: 62 },
-        { day: "Tue", confidence: 58 },
-        { day: "Wed", confidence: 71 },
-        { day: "Thu", confidence: 65 },
-        { day: "Fri", confidence: 74 },
-        { day: "Sat", confidence: 69 },
-        { day: "Sun", confidence: 78 },
-      ]);
+      // signals table stays empty on error
     } finally {
       setLoading(false);
     }
-  }, [selectedTicker]);
+  }, []);
+
+  const fetchChartData = useCallback(async (ticker: string) => {
+    setChartLoading(true);
+    try {
+      const res = await fetch(`/api/signals?ticker=${encodeURIComponent(ticker)}&limit=10`);
+      if (!res.ok) throw new Error("API error");
+      const data = await res.json();
+      const sigs: Signal[] = Array.isArray(data) ? data : [];
+      // API returns descending order — reverse for chronological display
+      const chronological = [...sigs].reverse();
+      if (chronological.length >= 2) {
+        setChartData(
+          chronological.map((s) => ({
+            day: formatConfidenceLabel(s.created_at),
+            confidence: Math.round((s.confidence ?? 0) * 100),
+          })),
+        );
+        setChartEmpty(false);
+      } else {
+        setChartData([]);
+        setChartEmpty(true);
+      }
+    } catch {
+      setChartData([]);
+      setChartEmpty(true);
+    } finally {
+      setChartLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5 * 60 * 1000);
+    fetchChartData(selectedTicker);
+    const interval = setInterval(() => {
+      fetchData();
+      fetchChartData(selectedTicker);
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [selectedTicker, fetchData, fetchChartData]);
 
   /* Compute stats */
   const latestPerTicker = TICKERS.map((t) => signals.find((s) => s.ticker === t)).filter(Boolean) as Signal[];
@@ -323,52 +332,66 @@ export default function DashboardPage() {
               </p>
             </div>
             <span className="font-mono text-lg font-bold text-[var(--accent-light)]">
-              {selectedSignal ? `${Math.round((selectedSignal.confidence ?? 0) * 100)}%` : "—"}
+              {chartData.length > 0
+                ? `${chartData[chartData.length - 1].confidence}%`
+                : selectedSignal
+                  ? `${Math.round((selectedSignal.confidence ?? 0) * 100)}%`
+                  : "—"}
             </span>
           </div>
           <div className="flex-1 min-h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a855f7" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke={GRID_STROKE}
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="day"
-                  tick={{ fontSize: 11, fill: "#4a4a6a" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  tick={{ fontSize: 11, fill: "#4a4a6a" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={30}
-                />
-                <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  labelStyle={TOOLTIP_LABEL_STYLE}
-                  formatter={(value: number) => [`${value}%`, "Confidence"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="confidence"
-                  stroke="#a855f7"
-                  strokeWidth={2}
-                  fill="url(#purpleGradient)"
-                  dot={{ r: 3, fill: "#a855f7", strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: "#a855f7", stroke: "#12122a", strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {chartLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="h-4 w-40 rounded bg-[rgba(255,255,255,0.04)] animate-pulse" />
+              </div>
+            ) : chartEmpty ? (
+              <div className="h-full flex items-center justify-center text-[12px] text-[var(--text-muted)] text-center px-4">
+                Not enough recent runs to show a trend
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#a855f7" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={GRID_STROKE}
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 11, fill: "#4a4a6a" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    tick={{ fontSize: 11, fill: "#4a4a6a" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={30}
+                  />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
+                    formatter={(value: number) => [`${value}%`, "Confidence"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="confidence"
+                    stroke="#a855f7"
+                    strokeWidth={2}
+                    fill="url(#purpleGradient)"
+                    dot={{ r: 3, fill: "#a855f7", strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#a855f7", stroke: "#12122a", strokeWidth: 2 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>

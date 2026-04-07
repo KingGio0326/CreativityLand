@@ -1,15 +1,25 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabase
+    const ticker = request.nextUrl.searchParams.get("ticker");
+    const limitParam = request.nextUrl.searchParams.get("limit");
+    const limit = limitParam ? Math.min(parseInt(limitParam, 10) || 50, 100) : 50;
+
+    let query = supabase
       .from('signals')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(limit);
+
+    if (ticker) {
+      query = query.eq('ticker', ticker);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Supabase error:', error)
