@@ -76,7 +76,9 @@ const INITIAL_EQUITY = 1000;
 const PERIOD_CONFIG = {
   "1D": { period: "1D", timeframe: "5Min" },
   "1W": { period: "1W", timeframe: "15Min" },
-  "1M": { period: "1M", timeframe: "1H" },
+  // 1H timeframe on a paper account <30 days old can return empty/error from Alpaca.
+  // Using 1D timeframe for the 1M view is more reliable and readable.
+  "1M": { period: "1M", timeframe: "1D" },
   "3M": { period: "3M", timeframe: "1D" },
   ALL: { period: "all", timeframe: "1D" },
 } as const;
@@ -382,7 +384,14 @@ export default function PortfolioPage() {
   useEffect(() => {
     if (!data) return;
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    if (data.is_market_open) { intervalRef.current = setInterval(fetchData, 60_000); }
+    // Crypto positions trade 24/7 — keep refreshing even when the US cash market is closed.
+    // 60 s during market hours, 5 min outside (crypto still moves, no need to hammer the API).
+    const hasCryptoPositions = data.positions.some((p) => p.ticker.includes("-USD"));
+    if (data.is_market_open) {
+      intervalRef.current = setInterval(fetchData, 60_000);
+    } else if (hasCryptoPositions) {
+      intervalRef.current = setInterval(fetchData, 5 * 60_000);
+    }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [data, fetchData]);
 

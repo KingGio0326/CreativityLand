@@ -8,6 +8,7 @@ const ALPACA_BASE = "https://paper-api.alpaca.markets";
 // Alpaca paper = $100k fissi. Scaliamo tutto a $1k (SCALE_FACTOR=100) per simulazione realistica
 // Il portafoglio parte dal 30 marzo 2026, tutto ciò che è prima va scartato
 const SCALE_FACTOR = 100;
+const INITIAL_EQUITY_RAW = 100_000; // saldo iniziale del paper account Alpaca
 const PORTFOLIO_START_TS = new Date("2026-03-30T00:00:00Z").getTime() / 1000;
 
 function alpacaHeaders(): Record<string, string> {
@@ -98,13 +99,19 @@ export async function GET(request: NextRequest) {
     const period = request.nextUrl.searchParams.get("period") || "1M";
     const timeframe = request.nextUrl.searchParams.get("timeframe") || "1H";
 
+    // For intraday timeframes, use continuous reporting so crypto equity is tracked 24/7.
+    // Without this, Alpaca only reports equity during US market hours (9:30-16:00 ET).
+    const isIntraday = timeframe !== "1D";
+    const historyParams = new URLSearchParams({ period, timeframe });
+    if (isIntraday) historyParams.set("intraday_reporting", "continuous");
+
     // Fire all Alpaca requests in parallel
     const [acctRaw, positionsRaw, historyRaw, ordersRaw, clockRaw] =
       await Promise.all([
         alpacaFetch<AlpacaAccount | null>("/v2/account", null),
         alpacaFetch<AlpacaPosition[]>("/v2/positions", []),
         alpacaFetch<PortfolioHistory | null>(
-          `/v2/account/portfolio/history?period=${period}&timeframe=${timeframe}`,
+          `/v2/account/portfolio/history?${historyParams}`,
           null,
         ),
         alpacaFetch<AlpacaOrder[]>(
@@ -141,12 +148,13 @@ export async function GET(request: NextRequest) {
     const cashRaw = parseFloat(acctRaw.cash || "0");
     const buyingPowerRaw = parseFloat(acctRaw.buying_power || "0");
     const lastEquityRaw = parseFloat(acctRaw.last_equity || "0");
+    // daily_pl: today's move vs yesterday's close (last_equity = prior trading day close)
     const dailyPl = lastEquityRaw > 0 ? (equityRaw - lastEquityRaw) / SCALE_FACTOR : 0;
     const dailyPlPct = lastEquityRaw > 0 ? ((equityRaw - lastEquityRaw) / lastEquityRaw) * 100 : 0;
-    const portfolioValueRaw = parseFloat(acctRaw.portfolio_value || "0");
-    const totalPl = (portfolioValueRaw - lastEquityRaw) / SCALE_FACTOR;
-    const totalPlPct =
-      lastEquityRaw > 0 ? ((portfolioValueRaw - lastEquityRaw) / lastEquityRaw) * 100 : 0;
+    // total_pl: cumulative P&L vs Alpaca paper starting balance ($100k → $1k scaled).
+    // Using last_equity here would give daily P&L again — we want inception-to-date.
+    const totalPl = (equityRaw - INITIAL_EQUITY_RAW) / SCALE_FACTOR;
+    const totalPlPct = ((equityRaw - INITIAL_EQUITY_RAW) / INITIAL_EQUITY_RAW) * 100;
 
     const account = {
       equity: Math.round((equityRaw / SCALE_FACTOR) * 100) / 100,
@@ -235,6 +243,17 @@ export async function GET(request: NextRequest) {
         filteredEq.push(rawEq[i] / SCALE_FACTOR);
       }
     }
+    // Append a "live" point with the current equity so the chart's last value always
+    // matches the Equity card. Alpaca portfolio history can be stale by minutes/hours
+    // (especially outside market hours), causing the chart overlay and the card to diverge.
+    // Only append if the last history point is more than 60 s old (or history is empty).
+    const nowTs = Math.floor(Date.now() / 1000);
+    const lastHistTs = filteredTs.length > 0 ? filteredTs[filteredTs.length - 1] : 0;
+    if (nowTs - lastHistTs > 60) {
+      filteredTs.push(nowTs);
+      filteredEq.push(Math.round((equityRaw / SCALE_FACTOR) * 100) / 100);
+    }
+
     const equityHistory = {
       timestamps: filteredTs,
       equity: filteredEq,
