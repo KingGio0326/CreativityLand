@@ -435,6 +435,7 @@ function buildCards(data: ApiData): AgentCardProps[] {
       // Pass research papers for ResearchAgent
       ...(agent.prefix === "ResearchAgent" ? {
         researchPapers: data.research?.papers ?? [],
+        researchPapersCount: data.research?.papers_count ?? 0,
         researchContext: data.research?.context ?? "",
       } : {}),
     };

@@ -27,6 +27,7 @@ export interface AgentCardProps {
   reasoning: string[];
   topArticles?: TopArticle[];
   researchPapers?: ResearchPaper[];
+  researchPapersCount?: number;
   researchContext?: string;
 }
 
@@ -44,6 +45,7 @@ export default function AgentCard({
   reasoning,
   topArticles,
   researchPapers,
+  researchPapersCount,
   researchContext,
 }: AgentCardProps) {
   const [open, setOpen] = useState(false);
@@ -157,25 +159,34 @@ export default function AgentCard({
       {/* Research papers (ResearchAgent only) */}
       {researchPapers !== undefined && (
         <div className="px-4 py-3 border-b border-[rgba(139,92,246,0.12)] space-y-2">
-          <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-medium">
-            arXiv papers analyzed: {researchPapers.length}
-          </p>
-          {researchPapers.length === 0 && (
-            <p className="text-[11px] text-[var(--text-muted)]">
-              No papers found — arXiv unreachable
-            </p>
-          )}
-          {researchPapers.map((p, i) => (
-            <a
-              key={i}
-              href={p.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-[11px] text-sky-400 hover:text-sky-300 truncate transition-colors"
-            >
-              {p.title.length > 70 ? p.title.substring(0, 70) + "…" : p.title}
-            </a>
-          ))}
+          {(() => {
+            // Single source of truth: prefer explicit count from reasoning log,
+            // fall back to array length only if count was never provided.
+            const displayCount = researchPapersCount ?? researchPapers.length;
+            return (
+              <>
+                <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-medium">
+                  arXiv papers analyzed: {displayCount}
+                </p>
+                {displayCount === 0 && (
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    No papers found — arXiv unreachable
+                  </p>
+                )}
+                {researchPapers.map((p, i) => (
+                  <a
+                    key={i}
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-[11px] text-sky-400 hover:text-sky-300 truncate transition-colors"
+                  >
+                    {p.title.length > 70 ? p.title.substring(0, 70) + "…" : p.title}
+                  </a>
+                ))}
+              </>
+            );
+          })()}
         </div>
       )}
 
