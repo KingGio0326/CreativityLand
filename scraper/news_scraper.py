@@ -93,13 +93,13 @@ MONITORED_TICKERS = [
     # Finanziari
     "JPM", "GS", "BAC", "V", "MA",
     # Energia
-    "XOM", "CVX", "COP", "OXY",
+    "XOM", "CVX", "COP", "OXY", "EOG", "LNG",
     # Difesa
     "LMT", "RTX", "NOC",
     # Healthcare
     "JNJ", "PFE", "LLY",
-    # Retail / Consumer
-    "WMT", "COST", "DIS",
+    # Retail / Consumer / Travel
+    "WMT", "COST", "DIS", "AAL", "UAL",
     # ETF macro
     "GLD", "SPY", "QQQ", "XLE", "XLF", "SLV", "USO", "TLT",
     # Crypto
@@ -133,6 +133,8 @@ TICKER_KEYWORDS: dict[str, list[str]] = {
     "CVX": ["chevron", "cvx"],
     "COP": ["conocophillips", "cop", "conoco"],
     "OXY": ["occidental", "oxy", "occidental petroleum"],
+    "EOG": ["eog resources", "eog"],
+    "LNG": ["cheniere", "cheniere energy"],
     # Difesa
     "LMT": ["lockheed", "lmt", "lockheed martin", "f-35"],
     "RTX": ["raytheon", "rtx", "pratt & whitney"],
@@ -141,10 +143,12 @@ TICKER_KEYWORDS: dict[str, list[str]] = {
     "JNJ": ["johnson & johnson", "jnj", "j&j"],
     "PFE": ["pfizer", "pfe"],
     "LLY": ["eli lilly", "lly", "lilly", "mounjaro", "ozempic"],
-    # Retail / Consumer
+    # Retail / Consumer / Travel
     "WMT": ["walmart", "wmt"],
     "COST": ["costco", "cost"],
     "DIS": ["disney", "dis", "walt disney"],
+    "AAL": ["american airlines", "aal", "american airlines group"],
+    "UAL": ["united airlines", "ual", "united continental"],
     # ETF macro
     "GLD": ["gold", "gld", "precious metal", "gold etf", "oro"],
     "SPY": ["s&p 500", "spy", "s&p500"],
