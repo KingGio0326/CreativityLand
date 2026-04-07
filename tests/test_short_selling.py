@@ -259,8 +259,8 @@ class TestHasUpcomingEarnings:
 
 class TestBracketDirectionValidation:
 
-    def _submit(self, side, sl, tp):
-        """Submit a market order with mocked httpx.Client."""
+    def _make_broker(self):
+        """Return (broker, mock_client) with patched httpx.Client."""
         fake_response = MagicMock()
         fake_response.is_success = True
         fake_response.json.return_value = {"id": "o1", "status": "accepted"}
@@ -268,43 +268,81 @@ class TestBracketDirectionValidation:
         mock_client_instance = MagicMock()
         mock_client_instance.post.return_value = fake_response
 
+        import importlib
+        import engine.broker_alpaca
         with patch("engine.broker_alpaca.httpx.Client", return_value=mock_client_instance):
-            from engine.broker_alpaca import AlpacaBroker
-            import importlib
-            import engine.broker_alpaca
             importlib.reload(engine.broker_alpaca)
             b = engine.broker_alpaca.AlpacaBroker(paper=True)
-            b._client = mock_client_instance  # override post-init
+            b._client = mock_client_instance
+        return b, mock_client_instance
 
-            b.submit_market_order(
-                ticker="AAPL", qty=10, side=side,
-                stop_loss=sl, take_profit=tp,
-            )
-            return mock_client_instance
+    def _submit(self, side, sl, tp, ticker="AAPL", qty=10):
+        b, client = self._make_broker()
+        b.submit_market_order(ticker=ticker, qty=qty, side=side,
+                              stop_loss=sl, take_profit=tp)
+        return client
+
+    # ── Equity bracket tests ─────────────────────────────
 
     def test_buy_valid_bracket(self):
-        """BUY: SL=48 < TP=55 → valid bracket."""
+        """Equity BUY: SL=48 < TP=55 → valid bracket, TIF=gtc."""
         client = self._submit("buy", sl=48.0, tp=55.0)
         body = client.post.call_args[1]["json"]
         assert body.get("order_class") == "bracket"
+        assert body["time_in_force"] == "gtc"
 
     def test_buy_invalid_bracket_skipped(self):
-        """BUY: SL=55 > TP=48 → bracket skipped."""
+        """Equity BUY: SL=55 > TP=48 → bracket skipped."""
         client = self._submit("buy", sl=55.0, tp=48.0)
         body = client.post.call_args[1]["json"]
         assert "order_class" not in body
 
     def test_sell_valid_bracket(self):
-        """SELL: TP=46 < SL=53 → valid bracket."""
+        """Equity SELL: TP=46 < SL=53 → valid bracket, TIF=gtc."""
         client = self._submit("sell", sl=53.0, tp=46.0)
         body = client.post.call_args[1]["json"]
         assert body.get("order_class") == "bracket"
+        assert body["time_in_force"] == "gtc"
 
     def test_sell_invalid_bracket_skipped(self):
-        """SELL: TP=55 > SL=48 → invalid direction → bracket skipped."""
+        """Equity SELL: TP=55 > SL=48 → invalid direction → bracket skipped."""
         client = self._submit("sell", sl=48.0, tp=55.0)
         body = client.post.call_args[1]["json"]
         assert "order_class" not in body
+
+    # ── TIF tests ────────────────────────────────────────
+
+    def test_equity_fractional_uses_day(self):
+        """Equity fractional qty → TIF=day, no bracket."""
+        client = self._submit("buy", sl=48.0, tp=55.0, ticker="AAPL", qty=0.5)
+        body = client.post.call_args[1]["json"]
+        assert body["time_in_force"] == "day"
+        assert "order_class" not in body
+
+    def test_equity_whole_share_uses_gtc(self):
+        """Equity whole-share qty → TIF=gtc."""
+        client = self._submit("buy", sl=48.0, tp=55.0, ticker="AAPL", qty=5)
+        body = client.post.call_args[1]["json"]
+        assert body["time_in_force"] == "gtc"
+
+    def test_crypto_fractional_uses_gtc_not_day(self):
+        """Crypto fractional qty → TIF=gtc (not day), no bracket.
+
+        Regression for: 422 invalid crypto time_in_force
+        """
+        client = self._submit("buy", sl=None, tp=None, ticker="ETH-USD", qty=0.05)
+        body = client.post.call_args[1]["json"]
+        assert body["time_in_force"] == "gtc", (
+            f"Expected gtc for crypto, got {body['time_in_force']!r}"
+        )
+        assert "order_class" not in body
+
+    def test_crypto_whole_unit_uses_gtc_no_bracket(self):
+        """Crypto whole-unit qty → TIF=gtc, bracket NOT attached even if SL/TP given."""
+        client = self._submit("buy", sl=1800.0, tp=2200.0, ticker="ETH-USD", qty=1)
+        body = client.post.call_args[1]["json"]
+        assert body["time_in_force"] == "gtc"
+        assert "order_class" not in body, "Crypto must never have bracket orders"
 
 
 # ── RatchetManager: short ratcheting ──────────────────────────────────────

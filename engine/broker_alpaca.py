@@ -86,25 +86,36 @@ class AlpacaBroker:
     ) -> dict:
         """Submit a market order, optionally with bracket SL/TP.
 
-        Fractional quantities (qty < 1 or non-integer) require TIF=day and
-        do NOT support bracket orders on Alpaca.  SL/TP for fractional orders
-        are managed by position_manager.yml via Supabase.
+        TIF rules:
+        - Crypto (*-USD): always "gtc" — "day" is invalid for crypto on Alpaca.
+        - Equity fractional (qty < 1 or non-integer): "day" required; no bracket.
+        - Equity whole-share: "gtc"; bracket supported if SL/TP direction is valid.
+
+        SL/TP for fractional/crypto orders are managed externally via
+        position_manager.yml and Supabase.
 
         Args:
-            ticker: Symbol (e.g. "AAPL")
-            qty: Number of shares (can be fractional)
+            ticker: Symbol (e.g. "AAPL" or "ETH-USD")
+            qty: Number of shares/units (can be fractional)
             side: "buy" or "sell"
-            stop_loss: Stop loss price (ignored for fractional orders)
-            take_profit: Take profit price (ignored for fractional orders)
+            stop_loss: Stop loss price (ignored for fractional and crypto orders)
+            take_profit: Take profit price (ignored for fractional and crypto orders)
 
         Returns:
             Alpaca order response dict
         """
         symbol = ticker.replace("-", "")
 
-        # Alpaca: fractional orders must use TIF=day and cannot have brackets
+        is_crypto = "-USD" in ticker
         is_fractional = (qty % 1 != 0) or qty < 1
-        tif = "day" if is_fractional else "gtc"
+
+        # Crypto requires gtc; equity fractional requires day; equity whole uses gtc
+        if is_crypto:
+            tif = "gtc"
+        elif is_fractional:
+            tif = "day"
+        else:
+            tif = "gtc"
 
         body: dict = {
             "symbol": symbol,
@@ -114,9 +125,10 @@ class AlpacaBroker:
             "time_in_force": tif,
         }
 
-        # Bracket order only for whole-share orders with valid direction
+        # Bracket order only for whole-share equity orders with valid direction.
+        # Crypto does not support bracket orders on Alpaca.
         has_bracket = False
-        if not is_fractional and stop_loss is not None and take_profit is not None:
+        if not is_fractional and not is_crypto and stop_loss is not None and take_profit is not None:
             # BUY bracket: SL < price < TP; SELL bracket: TP < price < SL
             bracket_valid = (
                 (side == "buy" and stop_loss < take_profit) or
@@ -133,9 +145,15 @@ class AlpacaBroker:
                 body["take_profit"] = {"limit_price": str(round(take_profit, 2))}
                 has_bracket = True
 
-        if is_fractional:
+        if is_fractional and not is_crypto:
             logger.info(
-                "Fractional order %.6f shares — no bracket, TIF=day. "
+                "Fractional equity order %.6f shares — no bracket, TIF=day. "
+                "SL/TP will be managed by position_manager",
+                qty,
+            )
+        elif is_crypto:
+            logger.info(
+                "Crypto order %.6f units — TIF=gtc (day invalid for crypto), no bracket. "
                 "SL/TP will be managed by position_manager",
                 qty,
             )
