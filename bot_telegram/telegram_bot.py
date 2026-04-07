@@ -27,10 +27,10 @@ TICKERS = [
     'AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMZN', 'GOOG', 'META',
     'AMD', 'INTC', 'AVGO', 'TSM', 'MU',
     'JPM', 'GS', 'BAC', 'V', 'MA',
-    'XOM', 'CVX', 'COP', 'OXY',
+    'XOM', 'CVX', 'COP', 'OXY', 'EOG', 'LNG',    # energy: shale + LNG
     'LMT', 'RTX', 'NOC',
     'JNJ', 'PFE', 'LLY',
-    'WMT', 'COST', 'DIS',
+    'WMT', 'COST', 'DIS', 'AAL', 'UAL',            # consumer/travel: airlines
     'GLD', 'SPY', 'QQQ', 'XLE', 'XLF', 'SLV', 'USO', 'TLT',
     'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD',
 ]

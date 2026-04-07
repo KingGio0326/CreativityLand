@@ -571,7 +571,7 @@ schedule:
 | Pipeline | Ogni 2h (`0 */2 * * *`) — 12 run/die |
 | Position Manager | Ogni 1h al :30 (`30 * * * *`) |
 | Trading | **ATTIVO** su Alpaca paper — $1k virtuali (SCALE_FACTOR=100) |
-| Ticker monitorati | 43 (AAPL, TSLA, NVDA, MSFT, AMZN, GOOG, META, AMD, INTC, AVGO, TSM, MU, JPM, GS, BAC, V, MA, XOM, CVX, COP, OXY, LMT, RTX, NOC, JNJ, PFE, LLY, WMT, COST, DIS, GLD, SPY, QQQ, XLE, XLF, SLV, USO, TLT, BTC-USD, ETH-USD, SOL-USD, XRP-USD, DOGE-USD) |
+| Ticker monitorati | 47 (AAPL, TSLA, NVDA, MSFT, AMZN, GOOG, META, AMD, INTC, AVGO, TSM, MU, JPM, GS, BAC, V, MA, XOM, CVX, COP, OXY, EOG, LNG, LMT, RTX, NOC, JNJ, PFE, LLY, WMT, COST, DIS, AAL, UAL, GLD, SPY, QQQ, XLE, XLF, SLV, USO, TLT, BTC-USD, ETH-USD, SOL-USD, XRP-USD, DOGE-USD) |
 
 ### Fonti Scraper Attive
 **Stocks:** CNBC, Motley Fool, AP News (via Google RSS), NewsAPI, Finnhub, Alpha Vantage
