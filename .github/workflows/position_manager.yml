@@ -2,7 +2,7 @@ name: Position Manager
 
 on:
   schedule:
-    - cron: "30 * * * *"   # Ogni ora al :30 (sfalsato rispetto a bot.yml al :00)
+    - cron: "17 * * * *"   # Ogni ora al :17 (sfalsato rispetto a bot.yml al :37)
   workflow_dispatch:        # Trigger manuale
 
 jobs:
