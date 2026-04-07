@@ -14,7 +14,7 @@ Ultimo aggiornamento: 2026-04-01.
 - [x] Geopolitica weighting (high 2.0x, medium 1.5x, low 1.2x + keyword expansion)
 - [x] Matrice correlazione cross-asset (aggiornata ogni run)
 - [x] Dark crypto theme + floating sidebar con icone custom PNG
-- [x] Pagine dashboard: `/agents` `/patterns` `/performance` `/correlation` `/guide` `/finbert` `/articles` `/backtest` `/search`
+- [x] Pagine dashboard: `/agents` `/patterns` `/performance` `/correlation` `/guide` `/finbert` `/articles` `/search`
 - [x] Performance con 4 orizzonti (6h / 24h / 72h / 168h) + StatCard collassabili con formula
 - [x] Telegram bot `@CreativityLand_bot` con inline keyboard (zero typing)
 - [x] Multi-user Telegram via `TELEGRAM_CHAT_IDS` (comma-separated)

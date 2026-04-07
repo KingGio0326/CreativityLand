@@ -12,7 +12,6 @@ icons = [
     ("dashboard",   0, 0),
     ("articles",    1, 0),
     ("finbert",     2, 0),
-    ("backtest",    3, 0),
     ("search",      4, 0),
     ("agents",      0, 1),
     ("patterns",    1, 1),

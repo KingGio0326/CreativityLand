@@ -15,7 +15,6 @@ const NAV_ITEMS = [
   { href: '/guide',       label: 'GUIDE',        icon: '/icons/guide.png'       },
   { href: '/articles',    label: 'ARTICLES',     icon: '/icons/articles.png'    },
   { href: '/finbert',     label: 'FINBERT',      icon: '/icons/finbert.png'     },
-  { href: '/backtest',    label: 'BACKTEST',     icon: '/icons/backtest.png'    },
   { href: '/search',      label: 'SEARCH',       icon: '/icons/search.png'      },
 ]
 

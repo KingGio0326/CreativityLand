@@ -115,7 +115,6 @@ progetto_stef/
 │       │   ├── guide/page.tsx     # Guida agenti con animazioni
 │       │   ├── articles/page.tsx  # Browser articoli
 │       │   ├── finbert/page.tsx   # Analisi FinBERT
-│       │   ├── backtest/page.tsx  # Risultati backtest
 │       │   ├── search/page.tsx    # Ricerca semantica
 │       │   ├── portfolio/page.tsx # Portfolio live (Alpaca) — equity curve, posizioni, trades
 │       │   ├── trades/page.tsx    # DEPRECATED: redirect a /portfolio
@@ -335,18 +334,6 @@ I pesi base degli agenti vengono moltiplicati per fattori regime-specifici prima
 | high_correlations | jsonb |
 | low_correlations | jsonb |
 | computed_at | timestamptz |
-
-### `backtest_results`
-| Colonna | Tipo |
-|---------|------|
-| id | uuid |
-| ticker | text |
-| start_date / end_date | date |
-| total_return | float8 |
-| sharpe_ratio | float8 |
-| max_drawdown | float8 |
-| win_rate | float8 |
-| trades_count | int |
 
 ### `ml_validation`
 | Colonna | Tipo |
