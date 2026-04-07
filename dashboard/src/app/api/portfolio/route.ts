@@ -143,29 +143,51 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // ── Account summary (scaled to $1k virtual budget) ──
-    const equityRaw = parseFloat(acctRaw.equity || "0");
-    const cashRaw = parseFloat(acctRaw.cash || "0");
-    const buyingPowerRaw = parseFloat(acctRaw.buying_power || "0");
+    // ── Virtual $1k portfolio model ───────────────────────────────────────────
+    //
+    // executor.py sizes every order at virtual scale:
+    //   virtual_equity = alpaca_equity / SCALE_FACTOR  (~$1,000)
+    //   allocated       = virtual_equity × pos_pct     (e.g. 3.75% → $37.50)
+    //   shares          = $37.50 / stock_price          (e.g. 0.25 shares of $150 stock)
+    //
+    // So Alpaca holds $37.50 worth of stock — already in the virtual $1k scale.
+    // position.market_value and unrealized_pl do NOT need SCALE_FACTOR.
+    //
+    // account.equity needs /SCALE_FACTOR because Alpaca reports the full $100k base.
+    // account.cash cannot be scaled the same way: cashRaw ≈ $99,963, and $99,963/100 ≈
+    // $999.63 "free" even when $37.50 is deployed — misleadingly close to the full $1k.
+    // We derive virtual_cash from virtual_equity minus current positions exposure instead,
+    // which gives the true "undeployed" portion of the virtual $1k budget.
+    //
+    // Identity preserved: virtual_cash + net_position_value == virtual_equity  ✓
+
+    const equityRaw    = parseFloat(acctRaw.equity       || "0");
     const lastEquityRaw = parseFloat(acctRaw.last_equity || "0");
-    // daily_pl: today's move vs yesterday's close (last_equity = prior trading day close)
-    const dailyPl = lastEquityRaw > 0 ? (equityRaw - lastEquityRaw) / SCALE_FACTOR : 0;
+
+    // Net position value in virtual dollars (computed from positionsRaw before mapping).
+    // market_value is positive for long, negative for short in Alpaca.
+    const netPositionValue = positionsRaw.reduce(
+      (s, p) => s + parseFloat(p.market_value || "0"), 0,
+    );
+
+    const virtualEquity = Math.round((equityRaw / SCALE_FACTOR) * 100) / 100;
+    const virtualCash   = Math.round((virtualEquity - netPositionValue) * 100) / 100;
+
+    // daily_pl: today's move vs yesterday's close (last_equity = prior trading day 16:00 ET)
+    const dailyPl    = lastEquityRaw > 0 ? (equityRaw - lastEquityRaw) / SCALE_FACTOR : 0;
     const dailyPlPct = lastEquityRaw > 0 ? ((equityRaw - lastEquityRaw) / lastEquityRaw) * 100 : 0;
-    // total_pl: cumulative P&L vs Alpaca paper starting balance ($100k → $1k scaled).
-    // Using last_equity here would give daily P&L again — we want inception-to-date.
-    const totalPl = (equityRaw - INITIAL_EQUITY_RAW) / SCALE_FACTOR;
+    // total_pl: inception-to-date vs Alpaca paper starting balance ($100k → $1k scaled)
+    const totalPl    = (equityRaw - INITIAL_EQUITY_RAW) / SCALE_FACTOR;
     const totalPlPct = ((equityRaw - INITIAL_EQUITY_RAW) / INITIAL_EQUITY_RAW) * 100;
 
     const account = {
-      equity: Math.round((equityRaw / SCALE_FACTOR) * 100) / 100,
-      cash: Math.round((cashRaw / SCALE_FACTOR) * 100) / 100,
-      // Alpaca paper è account a margine (buying_power = cash × 2).
-      // Per la simulazione $1k non usiamo margine → buying power = cash.
-      buying_power: Math.round((cashRaw / SCALE_FACTOR) * 100) / 100,
-      daily_pl: Math.round(dailyPl * 100) / 100,
-      daily_pl_pct: Math.round(dailyPlPct * 100) / 100,
-      total_pl: Math.round(totalPl * 100) / 100,
-      total_pl_pct: Math.round(totalPlPct * 100) / 100,
+      equity:        virtualEquity,
+      cash:          virtualCash,
+      buying_power:  Math.max(0, virtualCash),
+      daily_pl:      Math.round(dailyPl    * 100) / 100,
+      daily_pl_pct:  Math.round(dailyPlPct * 100) / 100,
+      total_pl:      Math.round(totalPl    * 100) / 100,
+      total_pl_pct:  Math.round(totalPlPct * 100) / 100,
     };
 
     // ── Positions + SL/TP lookup from Supabase ──
@@ -219,15 +241,18 @@ export async function GET(request: NextRequest) {
       const dbData = supabasePositions[p.symbol];
       return {
         ticker: p.symbol,
-        qty: parseFloat(p.qty),
+        qty: parseFloat(p.qty),             // actual share count — no scaling
         side: p.side,
-        entry_price: parseFloat(p.avg_entry_price),
-        current_price: parseFloat(p.current_price),
-        market_value: parseFloat(p.market_value),
-        unrealized_pl: parseFloat(p.unrealized_pl),
+        entry_price: parseFloat(p.avg_entry_price), // actual stock price — no scaling
+        current_price: parseFloat(p.current_price), // actual stock price — no scaling
+        // market_value / unrealized_pl are already in virtual $1k scale because the
+        // executor placed the order for (virtual_equity × pos_pct) dollars, not
+        // (alpaca_equity × pos_pct). No SCALE_FACTOR division needed here.
+        market_value:     parseFloat(p.market_value),
+        unrealized_pl:    parseFloat(p.unrealized_pl),
         unrealized_pl_pct: parseFloat(p.unrealized_plpc) * 100,
-        stop_loss: dbData?.stop_loss ?? null,
-        take_profit: dbData?.take_profit ?? null,
+        stop_loss:  dbData?.stop_loss  ?? null, // price level — no scaling
+        take_profit: dbData?.take_profit ?? null, // price level — no scaling
         trailing_activation: dbData?.trailing_activation ?? null,
       };
     });
