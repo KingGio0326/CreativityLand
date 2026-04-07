@@ -149,21 +149,31 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Extract research data from reasoning
+    // Extract research data — prefer saved DB fields (migration 010), fall back to reasoning parse
+    const signalRecord = signal as Record<string, unknown>;
     const researchLine = reasoning.find((l: string) => l.startsWith("ResearchAgent:")) ?? "";
     const paperCountMatch = researchLine.match(/(\d+)\s*paper\s*arXiv/i);
-    const researchPapersCount = paperCountMatch ? parseInt(paperCountMatch[1]) : 0;
 
-    // Extract research_context (the Claude insight text after the count prefix)
-    let researchContext = "";
-    const contextMatch = researchLine.match(/paper arXiv analizzati\.\s*(.*)/i);
-    if (contextMatch) {
-      researchContext = contextMatch[1].replace(/\.\.\.$/,"");
+    // papers_count: saved field (exact) > parsed from reasoning line
+    const researchPapersCount =
+      typeof signalRecord?.research_papers_count === "number"
+        ? (signalRecord.research_papers_count as number)
+        : (paperCountMatch ? parseInt(paperCountMatch[1]) : 0);
+
+    // research_context: saved field (full text) > truncated reasoning fallback
+    const savedContext = (signalRecord?.research_context as string) ?? "";
+    let researchContext = savedContext;
+    if (!researchContext) {
+      // Fallback: parse from truncated reasoning line (shows partial text only)
+      const contextMatch = researchLine.match(/paper arXiv analizzati\.\s*(.*)/i);
+      if (contextMatch) {
+        researchContext = contextMatch[1].replace(/\.\.\.$/,"");
+      }
     }
 
-    // Research papers are stored in the signal record if available
+    // research_papers: saved field (full list) > empty array
     const researchPapers: { title: string; url: string }[] =
-      (signal as Record<string, unknown>)?.research_papers as { title: string; url: string }[] ?? [];
+      signalRecord?.research_papers as { title: string; url: string }[] ?? [];
 
     // Extract liquidity data from reasoning
     const liquidityLine = reasoning.find((l: string) => l.startsWith("LiquidityAgent:")) ?? "";

@@ -216,4 +216,8 @@ class TradingOrchestrator:
                     and pattern_regime_info["regime_filter"] != "neutral"
                 ),
             },
+            # ResearchAgent outputs — full context, not the truncated reasoning line
+            "research_context": result.get("historical_context", "") or "",
+            "research_papers": result.get("research_papers", []) or [],
+            "research_papers_count": result.get("research_papers_count", 0) or 0,
         })

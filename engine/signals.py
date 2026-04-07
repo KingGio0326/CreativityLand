@@ -140,6 +140,8 @@ class SignalEngine:
             "dominant_factor", "market_regime", "vote_breakdown",
             "stop_loss", "take_profit", "sl_percentage", "tp_percentage",
             "risk_reward_ratio", "atr_14", "trailing_activation", "trailing_level",
+            # ResearchAgent: full LLM context + papers (migration 010)
+            "research_context", "research_papers", "research_papers_count",
         ]
         for field in optional_fields:
             val = signal.get(field)
