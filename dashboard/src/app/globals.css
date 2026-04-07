@@ -401,6 +401,7 @@ body {
     margin-left: 0;
     padding: 16px;
     padding-bottom: 80px;
+    overflow-x: hidden; /* allow full-bleed negative-margin chart */
   }
 }
 

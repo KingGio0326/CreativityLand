@@ -177,6 +177,35 @@ function timeAgoStr(d: Date): string {
   return `${Math.floor(s / 3600)}h ago`;
 }
 
+/** Next even-hour run estimate (pipeline runs every 2h at :00) */
+function nextRunIn(): string {
+  const now = new Date();
+  const h = now.getHours();
+  const nextEvenH = h % 2 === 0 ? h + 2 : h + 1;
+  const next = new Date(now);
+  next.setHours(nextEvenH, 0, 0, 0);
+  const diff = Math.floor((next.getTime() - now.getTime()) / 1000);
+  if (diff <= 0) return "soon";
+  const m = Math.floor(diff / 60);
+  if (m === 0) return "<1m";
+  if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  return `${m}m`;
+}
+
+/** Short human-readable names for common tickers */
+const TICKER_NAMES: Record<string, string> = {
+  AAPL: "Apple", MSFT: "Microsoft", GOOGL: "Alphabet", AMZN: "Amazon",
+  NVDA: "NVIDIA", META: "Meta", TSLA: "Tesla", JPM: "JPMorgan",
+  BAC: "Bank of America", GS: "Goldman Sachs", C: "Citigroup",
+  XOM: "Exxon Mobil", CVX: "Chevron", LMT: "Lockheed Martin",
+  RTX: "Raytheon", PFE: "Pfizer", JNJ: "J&J", WMT: "Walmart",
+  SPY: "S&P 500 ETF", QQQ: "Nasdaq ETF", GLD: "Gold ETF",
+  SLV: "Silver ETF", XLE: "Energy ETF", XLF: "Financial ETF",
+  USO: "Oil ETF", TLT: "Bond ETF",
+  "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum",
+  "SOL-USD": "Solana", "XRP-USD": "XRP", "DOGE-USD": "Dogecoin",
+};
+
 /* ── useIsMobile ───────────────────────────────────────── */
 
 function useIsMobile() {
@@ -365,84 +394,91 @@ function PositionRow({ p }: { p: Position }) {
   );
 }
 
-/* ── Mobile: position card ─────────────────────────────── */
+/* ── Mobile: position row (list-style, divider-based) ─── */
 
-function MobilePositionCard({ p }: { p: Position }) {
+function MobilePositionRow({ p }: { p: Position }) {
   const isLong = p.side === "long" || p.side === "buy";
   const progress = calcSlTpProgress(p);
+  const name = TICKER_NAMES[p.ticker];
 
   return (
     <div style={{
-      background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.07)",
-      borderRadius: 14,
-      padding: "14px 16px",
+      padding: "14px 0",
+      borderBottom: "1px solid rgba(255,255,255,0.06)",
     }}>
-      {/* Row 1: ticker + side badge + P&L */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+      {/* Row 1: ticker + badge | P&L amount */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 3 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{
-            fontSize: 15, fontWeight: 800, color: "#FAFAFA",
+            fontSize: 15, fontWeight: 800, color: "#F8F8FA",
             fontFamily: "var(--font-geist-mono)", letterSpacing: "0.01em",
           }}>
             {p.ticker}
           </span>
           <span style={{
             fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-            padding: "2px 7px", borderRadius: 4,
-            background: isLong ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+            padding: "2px 6px", borderRadius: 4,
+            background: isLong ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
             color: isLong ? "#10b981" : "#ef4444",
-            border: `1px solid ${isLong ? "rgba(16,185,129,0.22)" : "rgba(239,68,68,0.22)"}`,
           }}>
             {isLong ? "LONG" : "SHORT"}
           </span>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{
-            fontSize: 15, fontWeight: 700,
-            color: plColor(p.unrealized_pl),
-            fontVariantNumeric: "tabular-nums",
-            letterSpacing: "-0.01em",
-          }}>
-            {p.unrealized_pl >= 0 ? "+" : ""}{fmtUsd(p.unrealized_pl)}
-          </div>
-          <div style={{ fontSize: 11, color: plColor(p.unrealized_pl_pct), marginTop: 1, fontWeight: 600 }}>
-            {fmtPct(p.unrealized_pl_pct)}
-          </div>
+        <div style={{
+          fontSize: 15, fontWeight: 700,
+          color: plColor(p.unrealized_pl),
+          fontVariantNumeric: "tabular-nums",
+          letterSpacing: "-0.01em",
+        }}>
+          {p.unrealized_pl >= 0 ? "+" : ""}{fmtUsd(p.unrealized_pl)}
         </div>
       </div>
 
-      {/* Row 2: entry → current + qty */}
+      {/* Row 2: asset name | pct P&L */}
       <div style={{
-        marginTop: 8,
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-        fontSize: 11,
-        fontFamily: "var(--font-geist-mono)",
+        display: "flex", alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 8,
       }}>
-        <span style={{ color: "rgba(250,250,250,0.35)" }}>{fmtUsd(p.entry_price)}</span>
-        <span style={{ color: "rgba(250,250,250,0.2)" }}>→</span>
-        <span style={{ color: "rgba(250,250,250,0.7)", fontWeight: 600 }}>{fmtUsd(p.current_price)}</span>
-        <span style={{ marginLeft: "auto", color: "rgba(250,250,250,0.28)", fontSize: 10 }}>
+        <span style={{ fontSize: 11, color: "rgba(250,250,250,0.28)", letterSpacing: "0.01em" }}>
+          {name ?? ""}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: plColor(p.unrealized_pl_pct) }}>
+          {fmtPct(p.unrealized_pl_pct)}
+        </span>
+      </div>
+
+      {/* Row 3: entry → current | qty */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 5,
+        fontSize: 11, fontFamily: "var(--font-geist-mono)",
+        marginBottom: progress ? 10 : 0,
+      }}>
+        <span style={{ color: "rgba(250,250,250,0.28)" }}>{fmtUsd(p.entry_price)}</span>
+        <span style={{ color: "rgba(250,250,250,0.14)" }}>→</span>
+        <span style={{ color: "rgba(250,250,250,0.65)", fontWeight: 600 }}>{fmtUsd(p.current_price)}</span>
+        <span style={{ marginLeft: "auto", color: "rgba(250,250,250,0.2)", fontSize: 10 }}>
           {p.qty % 1 === 0 ? p.qty.toFixed(0) : p.qty.toFixed(4)}
         </span>
       </div>
 
       {/* SL → TP progress bar */}
       {progress && (
-        <div style={{ marginTop: 10 }}>
-          <div className="progress-track" style={{ height: 3 }}>
-            <div
-              className="progress-fill"
-              style={{ width: `${progress.pct}%`, background: progress.color }}
-            />
+        <div>
+          <div style={{
+            height: 2, background: "rgba(255,255,255,0.08)",
+            borderRadius: 2, overflow: "hidden",
+          }}>
+            <div style={{
+              height: "100%", width: `${progress.pct}%`,
+              background: progress.color, borderRadius: 2,
+            }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-            <span style={{ fontSize: 9, color: "#ef4444", fontFamily: "var(--font-geist-mono)" }}>
+            <span style={{ fontSize: 9, color: "#ef4444", fontFamily: "var(--font-geist-mono)", opacity: 0.65 }}>
               SL {fmtUsd(isLong ? p.stop_loss! : p.take_profit!)}
             </span>
-            <span style={{ fontSize: 9, color: "#10b981", fontFamily: "var(--font-geist-mono)" }}>
+            <span style={{ fontSize: 9, color: "#10b981", fontFamily: "var(--font-geist-mono)", opacity: 0.65 }}>
               TP {fmtUsd(isLong ? p.take_profit! : p.stop_loss!)}
             </span>
           </div>
@@ -562,11 +598,16 @@ export default function PortfolioPage() {
     if (isMobile) {
       return (
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "#FAFAFA", letterSpacing: "-0.01em" }}>Portfolio</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+            <span style={{
+              fontSize: 12, fontWeight: 700, letterSpacing: "0.1em",
+              textTransform: "uppercase", color: "rgba(250,250,250,0.35)",
+            }}>
+              Portfolio
+            </span>
             <div style={{ display: "flex", gap: 6 }}>
-              <div className="shimmer" style={{ width: 48, height: 22, borderRadius: 6 }} />
-              <div className="shimmer" style={{ width: 72, height: 22, borderRadius: 6 }} />
+              <div className="shimmer" style={{ width: 48, height: 20, borderRadius: 5 }} />
+              <div className="shimmer" style={{ width: 56, height: 20, borderRadius: 5 }} />
             </div>
           </div>
           <MobileSkeleton />
@@ -644,32 +685,28 @@ export default function PortfolioPage() {
   const totalUnrealizedPl = positions.reduce((s, p) => s + p.unrealized_pl, 0);
 
   /* ══════════════════════════════════════════════════════
-     MOBILE LAYOUT
-     A clean, finance-app experience built for scanning
-     portfolio health in seconds, not a compressed desktop.
+     MOBILE LAYOUT — premium finance-app, not desktop shrunk
   ══════════════════════════════════════════════════════ */
 
   if (isMobile) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column" }}>
 
-        {/* ── Header ─────────────────────────────────────── */}
+        {/* ── Header ────────────────────────────────────── */}
         <div style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 20,
+          marginBottom: 28,
         }}>
           <span style={{
-            fontSize: 15,
-            fontWeight: 700,
-            color: "#FAFAFA",
-            letterSpacing: "-0.01em",
+            fontSize: 12, fontWeight: 700,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            color: "rgba(250,250,250,0.35)",
           }}>
             Portfolio
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {/* PAPER badge — amber, not purple */}
             <span style={{
               fontSize: 9, fontWeight: 800, letterSpacing: "0.1em",
               padding: "3px 8px", borderRadius: 5,
@@ -679,7 +716,6 @@ export default function PortfolioPage() {
             }}>
               PAPER
             </span>
-            {/* Market status */}
             {isMarketOpen ? (
               <span style={{
                 fontSize: 9, fontWeight: 800, letterSpacing: "0.08em",
@@ -689,7 +725,10 @@ export default function PortfolioPage() {
                 color: "#10b981",
                 border: "1px solid rgba(16,185,129,0.22)",
               }}>
-                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#10b981", flexShrink: 0 }} />
+                <span style={{
+                  width: 5, height: 5, borderRadius: "50%",
+                  background: "#10b981", boxShadow: "0 0 5px #10b981", flexShrink: 0,
+                }} />
                 OPEN
               </span>
             ) : (
@@ -697,7 +736,7 @@ export default function PortfolioPage() {
                 fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
                 padding: "3px 8px", borderRadius: 5,
                 background: "rgba(255,255,255,0.05)",
-                color: "rgba(250,250,250,0.3)",
+                color: "rgba(250,250,250,0.28)",
                 border: "1px solid rgba(255,255,255,0.08)",
               }}>
                 CLOSED
@@ -706,93 +745,73 @@ export default function PortfolioPage() {
           </div>
         </div>
 
-        {/* ── Hero equity ────────────────────────────────── */}
-        <div style={{ marginBottom: 24 }}>
+        {/* ── Hero — equity is the focal point ─────────── */}
+        <div style={{ marginBottom: 28 }}>
           <div style={{
-            fontSize: 10,
-            fontWeight: 600,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "rgba(250,250,250,0.3)",
-            marginBottom: 6,
-          }}>
-            Total Equity
-          </div>
-          <div style={{
-            fontSize: 40,
-            fontWeight: 800,
-            color: "#FAFAFA",
-            letterSpacing: "-0.03em",
+            fontSize: 52, fontWeight: 800,
+            color: "#F8F8FA",
+            letterSpacing: "-0.04em",
             fontVariantNumeric: "tabular-nums",
             lineHeight: 1,
+            marginBottom: 12,
           }}>
             {fmtUsd(account.equity)}
           </div>
+
           {/* Total P&L */}
-          <div style={{ marginTop: 10, display: "flex", alignItems: "baseline", gap: 7 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
             <span style={{
-              fontSize: 17,
-              fontWeight: 700,
+              fontSize: 19, fontWeight: 700,
               color: plColor(account.total_pl),
               fontVariantNumeric: "tabular-nums",
-              letterSpacing: "-0.01em",
+              letterSpacing: "-0.02em",
             }}>
               {account.total_pl >= 0 ? "+" : ""}{fmtUsd(account.total_pl)}
             </span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: plColor(account.total_pl_pct) }}>
+            <span style={{
+              fontSize: 13, fontWeight: 600,
+              color: plColor(account.total_pl_pct),
+              opacity: 0.85,
+            }}>
               {fmtPct(account.total_pl_pct)}
             </span>
-            <span style={{ fontSize: 11, color: "rgba(250,250,250,0.28)", marginLeft: 1 }}>
+            <span style={{ fontSize: 11, color: "rgba(250,250,250,0.2)", marginLeft: 2 }}>
               all time
             </span>
           </div>
-          {/* Daily P&L — smaller, secondary */}
+
+          {/* Daily P&L — secondary */}
           {account.daily_pl !== 0 && (
-            <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ fontSize: 11, color: "rgba(250,250,250,0.3)" }}>Today</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: plColor(account.daily_pl), fontVariantNumeric: "tabular-nums" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 11, color: "rgba(250,250,250,0.25)" }}>Today</span>
+              <span style={{
+                fontSize: 12, fontWeight: 600,
+                color: plColor(account.daily_pl),
+                fontVariantNumeric: "tabular-nums",
+              }}>
                 {account.daily_pl >= 0 ? "+" : ""}{fmtUsd(account.daily_pl)}
               </span>
-              <span style={{ fontSize: 10, color: plColor(account.daily_pl_pct) }}>
+              <span style={{ fontSize: 11, color: plColor(account.daily_pl_pct), opacity: 0.8 }}>
                 {fmtPct(account.daily_pl_pct)}
               </span>
             </div>
           )}
         </div>
 
-        {/* ── Chart section ──────────────────────────────── */}
-        <div style={{
-          background: "rgba(255,255,255,0.025)",
-          border: "1px solid rgba(255,255,255,0.06)",
-          borderRadius: 16,
-          padding: "14px 0 8px",
-          marginBottom: 20,
-        }}>
+        {/* ── Chart — full-bleed, no container box ─────── */}
+        <div style={{ margin: "0 -16px", marginBottom: 28 }}>
           {/* Period tabs */}
-          <div style={{
-            display: "flex",
-            gap: 2,
-            padding: "0 14px",
-            marginBottom: 12,
-          }}>
+          <div style={{ display: "flex", gap: 2, padding: "0 12px", marginBottom: 8 }}>
             {MOBILE_PERIODS.map((key) => (
               <button
                 key={key}
                 onClick={() => setEquityPeriod(key)}
                 style={{
-                  padding: "5px 14px",
-                  borderRadius: 8,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                  cursor: "pointer",
-                  border: "none",
-                  background: equityPeriod === key
-                    ? "rgba(255,255,255,0.1)"
-                    : "transparent",
-                  color: equityPeriod === key
-                    ? "#FAFAFA"
-                    : "rgba(250,250,250,0.3)",
+                  padding: "5px 14px", borderRadius: 7,
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
+                  cursor: "pointer", border: "none",
+                  background: equityPeriod === key ? "rgba(255,255,255,0.1)" : "transparent",
+                  color: equityPeriod === key ? "#F8F8FA" : "rgba(250,250,250,0.25)",
                   transition: "all 0.15s",
                 }}
               >
@@ -801,28 +820,35 @@ export default function PortfolioPage() {
             ))}
           </div>
 
-          {/* Chart — axis-free, shape only */}
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={160}>
+            <ResponsiveContainer width="100%" height={190}>
               <AreaChart data={chartData} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
                 <defs>
                   <linearGradient id="mGradPos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.22} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.2} />
+                    <stop offset="80%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="mGradNeg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.22} />
-                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.2} />
+                    <stop offset="80%" stopColor="#ef4444" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                {/* Hidden Y axis to set the domain — needed for correct scaling */}
                 <YAxis domain={[yMin, yMax]} hide />
-                <Tooltip content={<MobileChartTooltip />} />
-                <ReferenceLine
-                  y={INITIAL_EQUITY}
-                  stroke="rgba(255,255,255,0.1)"
-                  strokeDasharray="4 3"
+                <XAxis
+                  dataKey="timestamp"
+                  tickFormatter={(ts: number) => fmtXAxis(ts, equityPeriod)}
+                  stroke="transparent"
+                  tick={{ fill: "rgba(255,255,255,0.18)", fontSize: 9 }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={60}
+                  height={18}
                 />
+                <Tooltip
+                  content={<MobileChartTooltip />}
+                  cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1, strokeDasharray: "4 3" }}
+                />
+                <ReferenceLine y={INITIAL_EQUITY} stroke="rgba(255,255,255,0.07)" strokeDasharray="4 3" />
                 <Area
                   type="monotone"
                   dataKey="equity"
@@ -836,54 +862,46 @@ export default function PortfolioPage() {
             </ResponsiveContainer>
           ) : (
             <div style={{
-              height: 160,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "rgba(250,250,250,0.2)",
-              fontSize: 12,
-              textAlign: "center",
-              padding: "0 24px",
+              height: 190,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "rgba(250,250,250,0.18)", fontSize: 12,
+              textAlign: "center", padding: "0 32px",
             }}>
               No chart data yet for this period
             </div>
           )}
         </div>
 
-        {/* ── Open positions ──────────────────────────────── */}
-        <div style={{ marginBottom: 20 }}>
+        {/* ── Open Positions ────────────────────────────── */}
+        <div style={{ marginBottom: 24 }}>
+          {/* Section header */}
           <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            marginBottom: 12,
+            display: "flex", alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 14,
           }}>
-            {positions.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              {positions.length > 0 && (
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: "#10b981", boxShadow: "0 0 6px #10b981",
+                  flexShrink: 0, display: "inline-block",
+                }} />
+              )}
               <span style={{
-                width: 6, height: 6, borderRadius: "50%",
-                background: "#10b981",
-                boxShadow: "0 0 7px #10b981",
-                flexShrink: 0,
-                display: "inline-block",
-              }} />
-            )}
-            <span style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: "rgba(250,250,250,0.38)",
-            }}>
-              Open Positions
-            </span>
-            <span style={{ fontSize: 11, color: "rgba(250,250,250,0.22)" }}>
-              ({positions.length})
-            </span>
+                fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.12em", textTransform: "uppercase",
+                color: "rgba(250,250,250,0.32)",
+              }}>
+                Open Positions
+              </span>
+              <span style={{ fontSize: 10, color: "rgba(250,250,250,0.18)" }}>
+                {positions.length}
+              </span>
+            </div>
             {positions.length > 0 && totalUnrealizedPl !== 0 && (
               <span style={{
-                marginLeft: "auto",
-                fontSize: 12,
-                fontWeight: 700,
+                fontSize: 13, fontWeight: 700,
                 color: plColor(totalUnrealizedPl),
                 fontVariantNumeric: "tabular-nums",
               }}>
@@ -892,41 +910,34 @@ export default function PortfolioPage() {
             )}
           </div>
 
+          {/* List with dividers */}
           {positions.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
               {positions.map((p) => (
-                <MobilePositionCard key={p.ticker} p={p} />
+                <MobilePositionRow key={p.ticker} p={p} />
               ))}
             </div>
           ) : (
             <div style={{
-              padding: "32px 0",
-              textAlign: "center",
-              color: "rgba(250,250,250,0.2)",
+              padding: "32px 0", textAlign: "center",
+              color: "rgba(250,250,250,0.18)",
             }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>—</div>
-              <div style={{ fontSize: 12 }}>No open positions</div>
+              <div style={{ fontSize: 12, letterSpacing: "0.04em" }}>No open positions</div>
             </div>
           )}
         </div>
 
-        {/* ── Footer status bar ───────────────────────────── */}
+        {/* ── Footer ────────────────────────────────────── */}
         <div style={{
           paddingTop: 14,
           borderTop: "1px solid rgba(255,255,255,0.06)",
-          display: "flex",
-          alignItems: "center",
+          display: "flex", alignItems: "center",
           justifyContent: "space-between",
-          fontSize: 10,
-          color: "rgba(250,250,250,0.25)",
+          fontSize: 10, color: "rgba(250,250,250,0.2)",
           letterSpacing: "0.02em",
         }}>
-          <span>
-            {lastUpdated ? `Updated ${timeAgoStr(lastUpdated)}` : "Loading…"}
-          </span>
-          <span>
-            {positions.length} open · {fmtUsd(account.cash)} cash
-          </span>
+          <span>{lastUpdated ? `Updated ${timeAgoStr(lastUpdated)}` : "—"}</span>
+          <span>Next run ~{nextRunIn()} · {fmtUsd(account.cash)} cash</span>
         </div>
 
         {error && (
