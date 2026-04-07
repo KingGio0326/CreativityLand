@@ -1,0 +1,20 @@
+{
+  "name": "TradingBot Portfolio",
+  "short_name": "Portfolio",
+  "description": "AI-powered trading bot — live portfolio monitor",
+  "start_url": "/portfolio",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0b",
+  "theme_color": "#0a0a0b",
+  "categories": ["finance", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/dashboard.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

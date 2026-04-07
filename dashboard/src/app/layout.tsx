@@ -23,6 +23,20 @@ const barlowCondensed = Barlow_Condensed({
 export const metadata: Metadata = {
   title: "TradingBot Dashboard",
   description: "AI-powered trading signals dashboard",
+  // PWA base — manifest + theme colour for mobile chrome
+  manifest: "/manifest.json",
+  themeColor: "#0a0a0b",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Portfolio",
+  },
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
 };
 
 export default function RootLayout({
