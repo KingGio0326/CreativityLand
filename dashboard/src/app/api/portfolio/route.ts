@@ -5,10 +5,13 @@ import { getSupabase } from "@/lib/supabase";
 
 const ALPACA_BASE = "https://paper-api.alpaca.markets";
 
-// Alpaca paper = $100k fissi. Scaliamo tutto a $1k (SCALE_FACTOR=100) per simulazione realistica
-// Il portafoglio parte dal 30 marzo 2026, tutto ciò che è prima va scartato
-const SCALE_FACTOR = 100;
-const INITIAL_EQUITY_RAW = 100_000; // saldo iniziale del paper account Alpaca
+// Alpaca paper account starts at $100k. The bot sizes orders using virtual $1k equity
+// (executor.py: virtual_equity = alpaca_equity / 100 at order time). This means Alpaca
+// position values are already in virtual $1k scale — no division needed for positions.
+// For account equity we use the delta model: virtual_equity = 1000 + (alpacaEquity - 100000)
+// This preserves full P&L magnitude: e.g. alpaca=100002.71 → virtual=1002.71 (not 1000.03)
+const INITIAL_EQUITY_RAW = 100_000;     // Alpaca paper starting balance
+const INITIAL_VIRTUAL_EQUITY = 1_000;  // virtual portfolio starting balance
 const PORTFOLIO_START_TS = new Date("2026-03-30T00:00:00Z").getTime() / 1000;
 
 function alpacaHeaders(): Record<string, string> {
@@ -146,23 +149,27 @@ export async function GET(request: NextRequest) {
     // ── Virtual $1k portfolio model ───────────────────────────────────────────
     //
     // executor.py sizes every order at virtual scale:
-    //   virtual_equity = alpaca_equity / SCALE_FACTOR  (~$1,000)
+    //   virtual_equity = alpaca_equity / 100  (~$1,000 at order time)
     //   allocated       = virtual_equity × pos_pct     (e.g. 3.75% → $37.50)
     //   shares          = $37.50 / stock_price          (e.g. 0.25 shares of $150 stock)
     //
     // So Alpaca holds $37.50 worth of stock — already in the virtual $1k scale.
-    // position.market_value and unrealized_pl do NOT need SCALE_FACTOR.
+    // position.market_value and unrealized_pl do NOT need scaling.
     //
-    // account.equity needs /SCALE_FACTOR because Alpaca reports the full $100k base.
-    // account.cash cannot be scaled the same way: cashRaw ≈ $99,963, and $99,963/100 ≈
-    // $999.63 "free" even when $37.50 is deployed — misleadingly close to the full $1k.
-    // We derive virtual_cash from virtual_equity minus current positions exposure instead,
+    // For account equity we use the DELTA model, not division:
+    //   virtual_equity = INITIAL_VIRTUAL_EQUITY + (alpacaEquity - INITIAL_EQUITY_RAW)
+    //   Example: alpaca=100002.71 → virtual=1000 + 2.71 = 1002.71  (not 100002.71/100 = 1000.03)
+    //
+    // Division by 100 would crush the P&L by 100x (2.71 → 0.03). The delta preserves it.
+    //
+    // account.cash is derived from virtual_equity minus current positions exposure,
     // which gives the true "undeployed" portion of the virtual $1k budget.
+    // (cashRaw / 100 ≈ $999.63 even with $37.50 deployed — misleadingly close to $1k)
     //
     // Identity preserved: virtual_cash + net_position_value == virtual_equity  ✓
 
-    const equityRaw    = parseFloat(acctRaw.equity       || "0");
-    const lastEquityRaw = parseFloat(acctRaw.last_equity || "0");
+    const equityRaw     = parseFloat(acctRaw.equity       || "0");
+    const lastEquityRaw = parseFloat(acctRaw.last_equity  || "0");
 
     // Net position value in virtual dollars (computed from positionsRaw before mapping).
     // market_value is positive for long, negative for short in Alpaca.
@@ -170,15 +177,19 @@ export async function GET(request: NextRequest) {
       (s, p) => s + parseFloat(p.market_value || "0"), 0,
     );
 
-    const virtualEquity = Math.round((equityRaw / SCALE_FACTOR) * 100) / 100;
+    // Delta model: preserve full P&L magnitude, do not divide by 100
+    const virtualEquity = Math.round((INITIAL_VIRTUAL_EQUITY + (equityRaw - INITIAL_EQUITY_RAW)) * 100) / 100;
     const virtualCash   = Math.round((virtualEquity - netPositionValue) * 100) / 100;
 
     // daily_pl: today's move vs yesterday's close (last_equity = prior trading day 16:00 ET)
-    const dailyPl    = lastEquityRaw > 0 ? (equityRaw - lastEquityRaw) / SCALE_FACTOR : 0;
-    const dailyPlPct = lastEquityRaw > 0 ? ((equityRaw - lastEquityRaw) / lastEquityRaw) * 100 : 0;
-    // total_pl: inception-to-date vs Alpaca paper starting balance ($100k → $1k scaled)
-    const totalPl    = (equityRaw - INITIAL_EQUITY_RAW) / SCALE_FACTOR;
-    const totalPlPct = ((equityRaw - INITIAL_EQUITY_RAW) / INITIAL_EQUITY_RAW) * 100;
+    // No division — the delta is already in virtual dollars (executor sized at virtual scale)
+    const dailyPl    = lastEquityRaw > 0 ? equityRaw - lastEquityRaw : 0;
+    const dailyPlPct = lastEquityRaw > 0
+      ? ((equityRaw - lastEquityRaw) / (INITIAL_VIRTUAL_EQUITY + (lastEquityRaw - INITIAL_EQUITY_RAW))) * 100
+      : 0;
+    // total_pl: inception-to-date vs virtual starting balance ($1k)
+    const totalPl    = equityRaw - INITIAL_EQUITY_RAW;
+    const totalPlPct = (totalPl / INITIAL_VIRTUAL_EQUITY) * 100;
 
     const account = {
       equity:        virtualEquity,
@@ -265,7 +276,8 @@ export async function GET(request: NextRequest) {
     for (let i = 0; i < rawTs.length; i++) {
       if (rawTs[i] >= PORTFOLIO_START_TS) {
         filteredTs.push(rawTs[i]);
-        filteredEq.push(rawEq[i] / SCALE_FACTOR);
+        // Delta model: virtual equity = 1000 + (alpacaEq - 100000)
+        filteredEq.push(INITIAL_VIRTUAL_EQUITY + (rawEq[i] - INITIAL_EQUITY_RAW));
       }
     }
     // Append a "live" point with the current equity so the chart's last value always
@@ -276,7 +288,7 @@ export async function GET(request: NextRequest) {
     const lastHistTs = filteredTs.length > 0 ? filteredTs[filteredTs.length - 1] : 0;
     if (nowTs - lastHistTs > 60) {
       filteredTs.push(nowTs);
-      filteredEq.push(Math.round((equityRaw / SCALE_FACTOR) * 100) / 100);
+      filteredEq.push(Math.round((INITIAL_VIRTUAL_EQUITY + (equityRaw - INITIAL_EQUITY_RAW)) * 100) / 100);
     }
 
     const equityHistory = {
