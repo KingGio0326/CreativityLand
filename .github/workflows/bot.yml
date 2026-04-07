@@ -336,7 +336,7 @@ jobs:
           print(f'Articoli >7 giorni rimossi: {deleted}')
           "
       - name: Retrain ML (domenica)
-        if: github.event.schedule == '0 2 * * 0'
+        if: github.event.schedule == '47 2 * * 0'
         run: |
           python -c "
           import os
@@ -377,7 +377,7 @@ jobs:
           print(safe_json_dumps(results, indent=2))
           "
       - name: Train Meta-Labeling model
-        if: github.event.schedule == '0 2 * * 0'
+        if: github.event.schedule == '47 2 * * 0'
         run: |
           python -c "
           from agents.meta_labeling_agent import MetaLabelingAgent
@@ -393,7 +393,7 @@ jobs:
                     f'(correct={result[\"n_correct\"]}, incorrect={result[\"n_incorrect\"]})')
           "
       - name: Weekly Telegram Report
-        if: github.event.schedule == '0 2 * * 0'
+        if: github.event.schedule == '47 2 * * 0'
         run: |
           python -c "
           import os
@@ -518,7 +518,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'schedule' &&
-       contains(github.event.schedule, '0 2 * * 0'))
+       contains(github.event.schedule, '47 2 * * 0'))
 
     steps:
       - uses: actions/checkout@v4
