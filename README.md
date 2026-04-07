@@ -174,4 +174,8 @@ cd dashboard && npm install && npm run dev
 
 ---
 
+**Strategia broker e roadmap di espansione mercati:** [`docs/BROKER_EXPANSION_STRATEGY.md`](docs/BROKER_EXPANSION_STRATEGY.md)
+
+---
+
 *~25,800 lines of code · 185 commits · 157 files*
