@@ -130,6 +130,7 @@ function NavItem({
 function MobileBottomNav() {
   const pathname = usePathname()
   const [moreOpen, setMoreOpen] = useState(false)
+  const isPortfolio = pathname === '/portfolio'
 
   const primary = NAV_ITEMS.slice(0, PRIMARY_COUNT)
   const secondary = NAV_ITEMS.slice(PRIMARY_COUNT)
@@ -141,6 +142,19 @@ function MobileBottomNav() {
   useEffect(() => {
     setMoreOpen(false)
   }, [pathname])
+
+  // Portfolio focus mode: hide the nav bar and remove the reserved bottom padding
+  useEffect(() => {
+    if (isPortfolio) {
+      document.body.setAttribute('data-focus-mode', 'true')
+    } else {
+      document.body.removeAttribute('data-focus-mode')
+    }
+    return () => document.body.removeAttribute('data-focus-mode')
+  }, [isPortfolio])
+
+  // On /portfolio mobile, render nothing — the page is a standalone focused screen
+  if (isPortfolio) return null
 
   return (
     <div className="mobile-bottom-nav">

@@ -403,6 +403,11 @@ body {
     padding-bottom: 80px;
     overflow-x: hidden; /* allow full-bleed negative-margin chart */
   }
+
+  /* Portfolio focus mode: no bottom nav bar, reclaim the reserved space */
+  body[data-focus-mode] .main-content {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
 }
 
 @media (max-width: 700px) {
