@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -49,7 +50,11 @@ class ScoringEngine:
             target_naive = target_date.replace(tzinfo=None)
             deltas = [(idx - target_naive).total_seconds() for idx in df.index]
             closest_idx = int(np.argmin([abs(d) for d in deltas]))
-            return float(df["Close"].values.flatten()[closest_idx])
+            value = float(df["Close"].values.flatten()[closest_idx])
+            if not math.isfinite(value):
+                logger.warning("Price NaN/inf for %s at %s — skip", ticker, target_date)
+                return None
+            return value
         except Exception as e:
             logger.warning("Price fetch error %s: %s", ticker, e)
             return None
@@ -190,17 +195,22 @@ class ScoringEngine:
                             f"target={target.isoformat()} "
                             f"price={'FOUND ' + str(price) if price else 'NOT FOUND'}"
                         )
-                        if price:
+                        if price is not None and math.isfinite(price):
                             ret = (price - entry_price) / entry_price * 100
-                            score = self.calculate_score(
-                                ev["signal_type"],
-                                ev["confidence"],
-                                ret,
-                            )
-                            updates[f"price_{label}"] = price
-                            updates[f"return_{label}"] = round(ret, 4)
-                            updates[f"score_{label}"] = score
-                            print(f"      => ret={ret:.4f}% score={score}")
+                            if not math.isfinite(ret):
+                                print(f"      => ret non-finite ({ret}) — skip {label}")
+                            else:
+                                score = self.calculate_score(
+                                    ev["signal_type"],
+                                    ev["confidence"],
+                                    ret,
+                                )
+                                updates[f"price_{label}"] = price
+                                updates[f"return_{label}"] = round(ret, 4)
+                                updates[f"score_{label}"] = score
+                                print(f"      => ret={ret:.4f}% score={score}")
+                        else:
+                            print(f"      => price invalid ({price}) — skip {label}")
                     else:
                         print(
                             f"    {label}: already done "
@@ -262,10 +272,18 @@ class ScoringEngine:
             if updates:
                 if all_done:
                     updates["fully_evaluated"] = True
-                print(f"    => UPDATING {list(updates.keys())}")
+                # Guard: strip any NaN/inf that would break JSON serialization
+                safe_updates = {
+                    k: v for k, v in updates.items()
+                    if not (isinstance(v, float) and not math.isfinite(v))
+                }
+                if len(safe_updates) != len(updates):
+                    dropped = set(updates) - set(safe_updates)
+                    logger.warning("Dropped non-finite fields before update: %s", dropped)
+                print(f"    => UPDATING {list(safe_updates.keys())}")
                 (
                     self.supabase.table("signal_evaluations")
-                    .update(updates)
+                    .update(safe_updates)
                     .eq("id", ev["id"])
                     .execute()
                 )
@@ -325,6 +343,9 @@ class ScoringEngine:
                 continue
 
             actual_return = (exit_price - entry_price) / entry_price * 100
+            if not math.isfinite(actual_return):
+                logger.warning("NaN/inf actual_return for %s — skip", ev["ticker"])
+                continue
             boost = ev.get("pattern_boost", 0.0)
             prediction = ev.get("pattern_prediction", "neutral")
 
