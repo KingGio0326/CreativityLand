@@ -144,4 +144,73 @@ E sottratto dal P&L lordo nello `ScoringEngine` prima di calcolare `return_Xh`.
 
 ---
 
+---
+
+## 8. Broker-Aware Market Data Routing (futura)
+
+> **Stato (2026-04-15):** decisione documentata, nessun codice modificato. Da implementare in Fase 3 quando si aggiunge il 2° broker.
+
+### Problema
+
+Il `position_manager.yml` (e più in generale ogni logica di prezzo live) deve sapere da quale fonte ottenere il prezzo corrente di una posizione. Questo non è banale quando ci sono più broker attivi con mercati diversi.
+
+Sintomi osservati in produzione paper:
+- yfinance timeout su alcuni ticker (V, LMT, BAC) → `get_latest_price()` restituisce `None` → posizione skippata silenziosamente nel position manager
+- La fonte corretta per una posizione Alpaca è **Alpaca Market Data**, non yfinance — Alpaca ha dati real-time, yfinance ha latenza e rate limit
+
+### Architettura proposta
+
+```python
+class MarketDataAdapter(Protocol):
+    """Fonte di prezzo per un broker specifico."""
+    def get_price(self, ticker: str) -> float | None: ...
+    def supports(self, ticker: str) -> bool: ...
+
+class AlpacaMarketDataAdapter:
+    """Usa Alpaca Market Data API — real-time, nessun rate limit."""
+    def get_price(self, ticker: str) -> float | None: ...
+
+class MetaTraderMarketDataAdapter:
+    """Usa MT5 terminal — richiede terminale MetaTrader attivo (VPS Windows)."""
+    def get_price(self, ticker: str) -> float | None: ...
+
+class YahooFinanceAdapter:
+    """Fallback — latenza alta, rate limit, non adatto per posizioni live."""
+    def get_price(self, ticker: str) -> float | None: ...
+
+class MarketDataRouter:
+    """Seleziona la fonte giusta in base al broker della posizione."""
+    def get_price(self, ticker: str, broker: str) -> float | None:
+        adapter = self._adapters.get(broker, self._fallback)
+        return adapter.get_price(ticker)
+```
+
+### Regole di routing
+
+| Broker posizione | Fonte primaria | Fallback |
+|-----------------|----------------|----------|
+| Alpaca | Alpaca Market Data (`AlpacaBroker.get_latest_price()`) | yfinance |
+| OANDA | OANDA price stream / REST | yfinance |
+| FTMO / MetaTrader | MT5 terminal | — (no fallback affidabile) |
+| Kraken Futures | Kraken API | yfinance |
+
+### Vincolo infrastrutturale FTMO/MT5
+
+MetaTrader 5 richiede:
+- Terminale MT5 installato e connesso attivamente al broker
+- Sessione persistente (no avvio/spegnimento per ogni check)
+- Sistema operativo Windows (MT5 non ha client Linux nativo)
+
+→ **GitHub Actions non è adatto** per MetaTrader come broker live. Un'integrazione FTMO richiederebbe VPS Windows dedicato (~€10-15/mese) con terminale MT5 sempre attivo.
+
+Questa è la ragione principale per cui FTMO non è nella lista broker prioritari nonostante condizioni interessanti (no commissioni, prop trading challenge).
+
+### Stato attuale (già corretto)
+
+`AlpacaBroker.get_latest_price()` usa già le Alpaca Market Data API, non yfinance. Il `position_manager.yml` usa `broker.get_latest_price()` — questo è il comportamento corretto.
+
+Il `MarketDataRouter` formale va implementato **solo quando si aggiunge il 2° broker** con mercato diverso da Alpaca.
+
+---
+
 *Documento operativo — aggiornare a ogni cambio di strategia broker o apertura di nuovo mercato.*

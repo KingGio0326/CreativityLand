@@ -112,6 +112,22 @@ Ultimo aggiornamento: 2026-04-07.
 - Health gauge portfolio: singolo indicatore 0–100 in homepage basato su equity trend, win rate, drawdown, Sharpe
 - Dashboard mobile ottimizzata
 
+### Infrastruttura futura — Market Data Routing
+
+**Non urgente.** Da affrontare in Fase 3 quando si aggiunge il 2° broker.
+
+Il `position_manager.yml` usa `broker.get_latest_price()` (Alpaca market data) per posizioni Alpaca — questo è corretto. Il problema emerge quando:
+- si aggiunge un 2° broker (FTMO/MetaTrader, OANDA) e le posizioni di quel broker vengono prezzate via yfinance invece della fonte nativa
+- yfinance timeout su ticker specifici causa skip silenzioso nel position manager (osservato su V/LMT/BAC in produzione paper)
+
+**Decisione architetturale futura:**
+- Alpaca market data = fonte primaria per posizioni Alpaca (già implementato via `AlpacaBroker.get_latest_price()`)
+- yfinance = fallback solo se Alpaca market data non disponibile (es. crypto nel weekend, mercato chiuso)
+- Futura integrazione FTMO/MetaTrader: MT5 come fonte primaria; richiede terminal MetaTrader attivo (VPS Windows — GitHub Actions non adatto)
+- Implementare `MarketDataAdapter` con `AlpacaMarketDataAdapter`, `MetaTraderMarketDataAdapter`, `YahooFinanceAdapter` (fallback) solo quando c'è effettiva necessità del 2° broker
+
+Riferimento: `docs/BROKER_EXPANSION_STRATEGY.md` Sezione 8.
+
 ---
 
 ## COSTI
