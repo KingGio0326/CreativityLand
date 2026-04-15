@@ -55,6 +55,7 @@ jobs:
         if: steps.conflict_check.outputs.skip_ratchet == 'false'
         run: |
           python -c "
+          import os
           from engine.ratchet_manager import RatchetManager
 
           manager = RatchetManager()
@@ -75,6 +76,10 @@ jobs:
                   print(f'{ticker}: no action — {reason}')
 
           print(f'Totale ratchet eseguiti: {ratcheted}/{len(results)}')
+          if os.environ.get('GITHUB_ENV'):
+              with open(os.environ['GITHUB_ENV'], 'a') as f:
+                  f.write(f'RATCHETS={ratcheted}\n')
+                  f.write(f'POSITIONS_CHECKED={len(results)}\n')
           "
 
       - name: Trailing stop check
@@ -88,6 +93,7 @@ jobs:
           supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
           paper   = os.getenv('PAPER_TRADING', 'true').lower() == 'true'
           broker  = AlpacaBroker(paper=paper)
+          manual_closures = 0
 
           # Posizioni aperte
           result = supabase.table('positions') \
@@ -148,21 +154,34 @@ jobs:
                       supabase.table('positions').update({
                           'status': 'closed',
                       }).eq('id', pos_id).execute()
-                      mode = 'PAPER' if paper else 'LIVE'
-                      notify(
-                          f'\U0001f4cc <b>TRAILING STOP [{mode}]</b>\n\n'
-                          f'\U0001f4b9 <b>{ticker}</b>\n'
-                          f'\u2022 Prezzo \${current_price:.4f} \u2265 '
-                          f'attivazione \${trailing_activation:.4f}\n'
-                          f'\u2022 Nessun bracket order \u2014 posizione chiusa manualmente\n'
-                          f'\u2022 Trailing level: \${trailing_level:.4f if trailing_level else \"N/A\"}'
-                      )
-                      print(f'{ticker}: chiuso, DB aggiornato, Telegram inviato')
+                      manual_closures += 1
+                      print(f'{ticker}: chiuso, DB aggiornato')
+                      # Notify in a separate try so a Telegram failure does NOT
+                      # mask the fact that close + DB update already succeeded.
+                      try:
+                          mode = 'PAPER' if paper else 'LIVE'
+                          tl_text = f'\${float(trailing_level):.4f}' if trailing_level is not None else 'N/A'
+                          notify(
+                              f'\U0001f4cc <b>TRAILING STOP [{mode}]</b>\n\n'
+                              f'\U0001f4b9 <b>{ticker}</b>\n'
+                              f'\u2022 Prezzo \${current_price:.4f} \u2265 '
+                              f'attivazione \${trailing_activation:.4f}\n'
+                              f'\u2022 Nessun bracket order \u2014 posizione chiusa manualmente\n'
+                              f'\u2022 Trailing level: {tl_text}'
+                          )
+                          print(f'{ticker}: Telegram inviato')
+                      except Exception as notify_err:
+                          print(f'{ticker}: notifica Telegram fallita (chiusura gia eseguita): {notify_err}')
                   else:
                       print(f'{ticker}: close_position ha restituito None '
                             f'(posizione gia chiusa su Alpaca?)')
               except Exception as e:
                   print(f'{ticker}: errore chiusura: {e}')
+
+          print(f'Trailing stop: {manual_closures} posizioni chiuse manualmente')
+          if os.environ.get('GITHUB_ENV'):
+              with open(os.environ['GITHUB_ENV'], 'a') as f:
+                  f.write(f'MANUAL_CLOSURES={manual_closures}\n')
           "
 
       - name: Orphan position check
@@ -226,7 +245,24 @@ jobs:
           if not only_alpaca and not only_db:
               print(f'Posizioni sincronizzate \u2713 '
                     f'({len(alpaca_tickers)} Alpaca = {len(db_tickers)} Supabase)')
+          if os.environ.get('GITHUB_ENV'):
+              with open(os.environ['GITHUB_ENV'], 'a') as f:
+                  f.write(f'ORPHAN_ALPACA={len(only_alpaca)}\n')
+                  f.write(f'ORPHAN_DB={len(only_db)}\n')
           "
+
+      - name: Position Manager Summary
+        if: always()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  POSITION MANAGER SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ratchets        = ${RATCHETS:-skipped}/${POSITIONS_CHECKED:-skipped}"
+          echo "  manual_closures = ${MANUAL_CLOSURES:-0}"
+          echo "  orphan_alpaca   = ${ORPHAN_ALPACA:-0}"
+          echo "  orphan_db       = ${ORPHAN_DB:-0}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Notify Telegram Error
         if: failure()
