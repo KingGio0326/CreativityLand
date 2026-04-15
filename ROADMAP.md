@@ -98,11 +98,64 @@ Ultimo aggiornamento: 2026-04-07.
 - Integrare Interactive Brokers solo con ticket medio >€500, capitale >€5k, track record >6 mesi
 - Aprire a futures/opzioni/global equities solo dopo IBKR consolidato
 
-### Fase 5 — Locale/VPS solo se necessario
+### Fase 5 — Hybrid Local/VPS Runtime (solo se necessario)
 
-- **Non è la priorità immediata.** GitHub Actions è gratuito su repo pubblica e sufficiente per cicli da 2h.
-- Migrare solo se emerge un vero limite operativo: latenza critica sul position manager, rate limit Actions, o necessità di connessione persistente.
-- **Effort**: ~3 prompt
+> **Non adesso.** Valutare solo dopo Fase 2 (tuning) completata e solo se emerge un vero limite operativo.
+
+GitHub Actions resta la piattaforma corretta per:
+- pipeline segnali ogni 2h (scraping, sentiment, LLM, agenti)
+- CI/CD, test, deploy dashboard
+- Alpaca paper trading in modalità batch
+- weekly report, retrain ML
+
+**Quando GitHub Actions non basta:**
+Il vincolo principale emerge con MetaTrader/FTMO: MT5 richiede terminale installato e sessione persistente (no Linux, no avvio a freddo). Per swing trading ogni 20 minuti su broker che richiedono connessione continua, serve un processo sempre attivo.
+
+**Architettura Hybrid Runtime (futura):**
+
+```
+GitHub Actions / Cloud     → cervello analitico (segnali, LLM, CI)
+Supabase                   → memoria condivisa (segnali, posizioni, log)
+Vercel                     → dashboard
+PC locale o VPS Windows    → execution daemon (legge Supabase, esegue ordini)
+```
+
+Il daemon locale legge i segnali `status='approved'` da Supabase e li esegue via MT5 o altro broker che richiede connessione persistente. I due runtime non si sovrappongono: GitHub Actions non esegue ordini MT5, il daemon locale non fa LLM.
+
+**PC portatile come prima fase sperimentale:**
+
+Prima di pagare un VPS, il proprio portatile può funzionare come execution host purché:
+- alimentazione sempre collegata
+- sleep e ibernazione disattivati
+- preferibilmente Ethernet (no Wi-Fi se possibile)
+- bot si avvia automaticamente all'accensione
+- restart automatico in caso di crash (systemd / Task Scheduler)
+- heartbeat ogni 5 minuti su Supabase + Telegram
+- alert se heartbeat assente da >15 minuti
+- Windows Update pianificato in orari fuori mercato
+
+Accettabile per swing trading ogni 20 minuti in fase demo/test **solo se**:
+- ogni posizione ha SL/TP broker-side verificati subito dopo apertura
+- nessun nuovo trade aperto se equity/account/broker status non leggibili
+- kill switch giornaliero configurato
+- max daily loss conservativo
+
+Per FTMO Challenge seria o capitale reale, VPS Windows (~€10-15/mese) resta preferibile ma non obbligatorio nella fase sperimentale.
+
+**Checklist Local Runtime Readiness** (prima di usare PC/VPS in produzione):
+
+- [ ] SL/TP confermati lato broker subito dopo ogni apertura posizione
+- [ ] Heartbeat ogni 5 minuti su Supabase (`runtime_heartbeat` table)
+- [ ] Alert Telegram se heartbeat assente da >15 minuti
+- [ ] Restart automatico bot (Task Scheduler / systemd)
+- [ ] Restart automatico MT5 se crash terminale
+- [ ] Log locale + copia su Supabase per ogni ordine
+- [ ] Test disconnessione internet (bot deve attendere, non crashare)
+- [ ] Test reboot macchina (bot si riavvia da solo)
+- [ ] Kill switch giornaliero (chiude tutto a fine sessione)
+- [ ] Blocco nuovi trade se equity/account/broker status non verificabile
+
+**Effort**: ~5-8 prompt per setup completo daemon + heartbeat + alert
 
 ---
 

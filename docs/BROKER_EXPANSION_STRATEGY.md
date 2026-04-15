@@ -201,9 +201,32 @@ MetaTrader 5 richiede:
 - Sessione persistente (no avvio/spegnimento per ogni check)
 - Sistema operativo Windows (MT5 non ha client Linux nativo)
 
-→ **GitHub Actions non è adatto** per MetaTrader come broker live. Un'integrazione FTMO richiederebbe VPS Windows dedicato (~€10-15/mese) con terminale MT5 sempre attivo.
+→ **GitHub Actions non è adatto** per MetaTrader come broker live. Un'integrazione FTMO richiederebbe un runtime Windows sempre attivo.
 
 Questa è la ragione principale per cui FTMO non è nella lista broker prioritari nonostante condizioni interessanti (no commissioni, prop trading challenge).
+
+### Opzione: PC locale come execution host (fase sperimentale)
+
+Prima di un VPS Windows dedicato (~€10-15/mese), è possibile usare un PC portatile come execution host per MT5 in fase demo/test, purché configurato come server locale:
+
+- alimentazione sempre collegata, sleep/ibernazione disattivati
+- bot e MT5 si avviano automaticamente (Task Scheduler)
+- restart automatico in caso di crash
+- heartbeat ogni 5 minuti su Supabase + alert Telegram se assente >15 min
+- ogni posizione ha SL/TP broker-side verificati subito dopo apertura
+- nessun nuovo trade se equity/account non leggibili
+- kill switch giornaliero + max daily loss conservativo
+
+Per swing trading ogni 20 minuti in modalità demo/test, questa configurazione è accettabile. Per FTMO Challenge seria o capitale reale, VPS Windows resta preferibile per stabilità e uptime garantito.
+
+Architettura target (Hybrid Runtime):
+```
+GitHub Actions  → segnali LLM, scraping, CI (non esegue su MT5)
+Supabase        → segnali approved, log posizioni (memoria condivisa)
+PC/VPS Windows  → execution daemon MT5 (legge Supabase, esegue ordini)
+```
+
+Riferimento dettagliato: `ROADMAP.md` — sezione "Fase 5 — Hybrid Local/VPS Runtime".
 
 ### Stato attuale (già corretto)
 
