@@ -236,4 +236,28 @@ Il `MarketDataRouter` formale va implementato **solo quando si aggiunge il 2° b
 
 ---
 
+## 9. Fork Local-First e MT5/FTMO
+
+Il progetto principale (cloud-first) usa Alpaca come unico broker. Per integrare MetaTrader 5
+e FTMO è necessaria un'architettura diversa, documentata nel fork sperimentale separato.
+
+**Riferimento completo:** `docs/LOCAL_FIRST_FORK_PLAN.md`
+
+Punti chiave rilevanti per la broker strategy:
+
+- **BrokerAdapter Protocol** — interfaccia comune per Alpaca, MT5, paper local (Sezione 7 del piano)
+- **MT5/FTMO sizing** — lot-based (non qty-based come Alpaca): `calculate_lots()` necessario (Sezione 9)
+- **FTMO risk rules** — daily loss -5%, max drawdown -10%, min 10 trading days monitorati in real-time (Sezione 9)
+- **MarketDataRouter** — MT5 feed come fonte primaria per posizioni MT5, yfinance solo fallback (Sezione 8)
+
+**Prerequisiti prima di integrare MT5:**
+- BrokerAdapter implementato e testato su Alpaca
+- Track record cloud ≥3 mesi
+- VPS Windows dedicato (non portatile personale per FTMO)
+
+**Ordine corretto:** Alpaca paper → Alpaca live opzionale → MT5 demo → FTMO Free Trial → FTMO Challenge.
+Non saltare fasi.
+
+---
+
 *Documento operativo — aggiornare a ogni cambio di strategia broker o apertura di nuovo mercato.*

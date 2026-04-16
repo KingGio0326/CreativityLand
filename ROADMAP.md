@@ -202,3 +202,32 @@ Riferimento: `docs/BROKER_EXPANSION_STRATEGY.md` Sezione 8.
 | StockNewsAPI (opzionale) | $9/mese |
 | VPS (se migrazione) | €5-10/mese |
 | **TARGET** | **€3-8/mese** (senza VPS) |
+
+---
+
+## Progetto sperimentale parallelo — CreativityLand Local (fork local-first)
+
+> **Separato dal progetto principale.** Il bot cloud (GitHub Actions + Supabase + Alpaca)
+> resta invariato e operativo. Il fork locale è sperimentale e progredisce in parallelo.
+
+Piano tecnico completo: `docs/LOCAL_FIRST_FORK_PLAN.md`
+
+**Obiettivo del fork:** versione del bot che gira interamente su PC Windows / VPS Windows,
+con DB locale (SQLite → PostgreSQL), scheduler locale (Task Scheduler / NSSM), dashboard
+su localhost, e broker abstraction pronta per MetaTrader 5 / FTMO.
+
+**Fasi principali (Q2-Q4 2026):**
+
+| Fase | Obiettivo | Quando |
+|------|-----------|--------|
+| 0-2 | Fork, DB locale, Data Access Layer | Dopo ≥50 trade cloud chiusi |
+| 3-5 | Scheduler locale, dashboard, position manager read-only | Q3 2026 |
+| 6-7 | BrokerAdapter, MT5 read-only demo | Q3 2026 |
+| 8 | MT5 demo execution (micro-lotti, SL/TP verificati) | Q4 2026 |
+| 9 | FTMO Free Trial | Q4 2026 (solo se Fase 8 stabile) |
+| 10 | FTMO Challenge | 2027+ (solo se Free Trial positivo) |
+
+**Prerequisiti prima di iniziare il fork:**
+- ≥50 trade Alpaca paper chiusi con comportamento stabile
+- Track record cloud ≥3 mesi
+- Nessuna modifica al progetto cloud durante le prime fasi
